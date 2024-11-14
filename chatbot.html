@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Online - AtecSeven Tecnologia</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 400px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background-color: #1E90FF;
+            color: white;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .chat-box {
+            height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .chat-input {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ccc;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .chat-input button {
+            background-color: #1E90FF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin-left: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .chat-input button:hover {
+            background-color: #004080;
+        }
+
+        .message {
+            margin: 10px 0;
+        }
+
+        .message.user {
+            text-align: right;
+            color: blue;
+        }
+
+        .message.bot {
+            text-align: left;
+            color: green;
+        }
+
+        .typing-indicator {
+            color: gray;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2> Suporte Tecnico </h2>
+        </div>
+        <div class="chat-box" id="chatBox"></div>
+        <div class="chat-input">
+            <input type="text" id="userInput" placeholder="Digite sua mensagem...">
+            <button onclick="sendMessage()">Enviar</button>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 0;
+
+        function sendMessage() {
+            const userInput = document.getElementById('userInput').value;
+            if (userInput.trim() === '') return;
+
+            const chatBox = document.getElementById('chatBox');
+
+            // Adiciona a mensagem do usuário
+            const userMessage = document.createElement('div');
+            userMessage.className = 'message user';
+            userMessage.textContent = userInput;
+            chatBox.appendChild(userMessage);
+
+            // Limpa o campo de entrada
+            document.getElementById('userInput').value = '';
+
+            // Simula um indicador de digitando do bot
+            const typingIndicator = document.createElement('div');
+            typingIndicator.className = 'message bot typing-indicator';
+            typingIndicator.textContent = 'Digitando...';
+            chatBox.appendChild(typingIndicator);
+
+            // Mantém a rolagem no final
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // Responde após 2 segundos
+            setTimeout(() => {
+                chatBox.removeChild(typingIndicator); // Remove o indicador de digitando
+
+                // Simula uma resposta do bot com base na etapa do atendimento
+                const botMessage = document.createElement('div');
+                botMessage.className = 'message bot';
+                
+                if (currentStep === 0) {
+                    botMessage.textContent = 'Oi! Como posso ajudar você hoje? Por favor, explique seu problema.';
+                    currentStep++;
+                } else if (currentStep === 1) {
+                    botMessage.textContent = 'Entendi. Qual é o seu nome?';
+                    currentStep++;
+                    window.userProblem = userInput; // Guarda o problema do usuário
+                } else if (currentStep === 2) {
+                    botMessage.textContent = 'Obrigado! Agora, por favor, informe seu número de contato.';
+                    currentStep++;
+                    window.userName = userInput; // Guarda o nome do usuário
+                } else if (currentStep === 3) {
+                    botMessage.textContent = 'Perfeito! Estamos encaminhando suas informações para um de nossos atendentes. Você será contatado em breve.';
+                    currentStep = 0; // Reseta o passo
+                    window.userContact = userInput; // Guarda o número de contato do usuário
+                    
+                    // Envia a mensagem para o número especificado
+                    const message = `Nome: ${window.userName}\nContato: ${window.userContact}\nProblema: ${window.userProblem}`;
+                    const encodedMessage = encodeURIComponent(message);
+                    const whatsappUrl = `https://wa.me/5564992952748?text=${encodedMessage}`;
+                    window.open(whatsappUrl, '_blank');
+                }
+
+                chatBox.appendChild(botMessage);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }, 2000); // Responde após 2 segundos
+        }
+    </script>
+</body>
+</html>
