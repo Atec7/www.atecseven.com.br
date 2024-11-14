@@ -3,181 +3,164 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AtecSeven Tecnologia</title>
-    <link rel="shortcut icon" href="logo3.png" />
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <title>Chat Online - AtecSeven Tecnologia</title>
     <style>
         body {
             font-family: 'Roboto', sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f0f0f0;
+            background-color: #f4f4f9;
             color: #333;
-        }
-        header {
-            background: linear-gradient(to right, #1E90FF, #1a1a1a);
-            color: white;
-            padding: 1em 0;
-            text-align: center;
-        }
-        nav{
-          background: linear-gradient(to right, #1E90FF, black);
-          text-align: center;
-        }
-        nav a {
-            color: white;
-            border-radius: 10px;
-            text-decoration: none;
-            margin: 0 1em;
-            padding: 0.5em 1em;
-            transition: background 0.3s, color 0.3s;
-        }
-        nav a:hover {
-            background-color: #004080;
-            color: #e6e6e6;
-        }
-        .container {
-            padding: 2em;
-            max-width: 1200px;
-            margin: auto;
-            background-color: white;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        .services, .about, .contact {
-            margin-bottom: 2em;
-        }
-        .services h2, .about h2, .contact h2 {
-            border-bottom: 2px solid #1E90FF;
-            padding-bottom: 0.5em;
-            color: #1E90FF;
-        }
-        h2{
-          border-bottom: 2px solid #1E90FF;
-            padding-bottom: 0.5em;
-            color: #1E90FF;
-        }
-        .logo{
-          border-radius: 50%;
-          width: 120px;
-        }
-        
-        .video{
-          text-align: center;
-          border-radius:10px;
-          border-style: solid;
-          border-color: linear-gradient(to right, #1E90FF, #1a1a1a);
-        }
-        .button{
-          background: linear-gradient(to right, #1E90FF, #000);
-          color: white;
-          border-radius: 10px;
-          border: none;
-          padding: 10px;
-          transition: background 0.3s, transform 0.3s;
-        }
-        .button a {
-          color: white;
-          text-decoration: none;
-          font-size: 15px;
-        }
-        .button:hover {
-          background: #004080;
-          transform: scale(1.1);
-        }
-        .social-links {
             display: flex;
+            align-items: center;
             justify-content: center;
-            gap: 15px;
-            flex-wrap: wrap;
+            height: 100vh;
+            margin: 0;
         }
-        .social-links a {
-            border-radius: 50%;
-            border: 2px solid white;
+
+        .chat-container {
+            width: 100%;
+            max-width: 400px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
             overflow: hidden;
-            transition: transform 0.3s, box-shadow 0.3s;
         }
-        .social-links a img {
-            width: 40px;
-            height: 40px;
-        }
-        .social-links a:hover {
-            transform: scale(1.2);
-            box-shadow: 0 0 10px rgba(30, 144, 255, 0.5);
-        }
-        footer {
-            background: linear-gradient(to right, #1E90FF, #000);
+
+        .chat-header {
+            background-color: #1E90FF;
             color: white;
+            padding: 15px;
             text-align: center;
-            padding: 1em 0;
+        }
+
+        .chat-box {
+            height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .chat-input {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ccc;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .chat-input button {
+            background-color: #1E90FF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin-left: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .chat-input button:hover {
+            background-color: #004080;
+        }
+
+        .message {
+            margin: 10px 0;
+        }
+
+        .message.user {
+            text-align: right;
+            color: blue;
+        }
+
+        .message.bot {
+            text-align: left;
+            color: green;
+        }
+
+        .typing-indicator {
+            color: gray;
+            font-style: italic;
         }
     </style>
 </head>
 <body>
-    <header>
-        <img class="logo" src="logo.jpg">
-        <h1>AtecSeven Tecnologia</h1>
-        <p>Nossos Clientes São Nosso Maior <br> Patrimônio</p>
-    </header>
-    <nav>
-        <a href="#about">Sobre</a>
-        <a href="servicos.html">Serviços</a>
-        <a href="https://wa.me/5564992952748?text=Ol%C3%A1%20AtecSeven%20Tecnologia!%20Estou%20vindo%20do%20seu%20site%20e%20gostaria%20de%20contratar%20alguns%20de%20seus%20servi%C3%A7os.%20Poderia%20me%20atender%20no%20momento%3F">Contato</a>
-    </nav>
-    <div class="container">
-        <section id="about" class="about">
-            <h2>Sobre Nós 👥</h2>
-            <p>A AtecSeven Tecnologia é uma empresa dedicada a oferecer soluções tecnológicas inovadoras e personalizadas para empresas de todos os tamanhos. Nossa missão é ajudar nossos clientes a alcançar seus objetivos de negócios por meio da tecnologia, proporcionando eficiência, segurança e inovação.</p>
-        </section>
-        <section id="services" class="services">
-            <h2>Serviços 🌐</h2>
-            <ul>
-                <li><strong>Consultoria e Desenvolvimento de Software:</strong> Soluções sob medida para atender às necessidades específicas de cada cliente.</li>
-                <li><strong>Infraestrutura de TI e Suporte Técnico:</strong> Gestão e manutenção de infraestruturas de TI.</li>
-                <li><strong>Segurança da Informação:</strong> Proteção avançada contra ameaças cibernéticas.</li>
-                <li><strong>Criação de Sites e Plataformas Digitais:</strong> Desenvolvimento de sites de delivery, lojas online e plataformas de assinaturas digitais.</li>
-                <li><strong>Marketing Digital e Tráfego Pago:</strong> Estratégias de marketing para aumentar a visibilidade.</li>
-                <li><strong>Serviços em Nuvem:</strong> Soluções de computação em nuvem flexíveis e seguras.</li>
-                <li><strong>Treinamentos e Capacitações:</strong> Capacitação contínua da equipe no uso eficaz das tecnologias.</li>
-            </ul>
-        </section>
-        <section>
-          <h2 class="service">Promoções⚠️</h2>
-<iframe width="100%" height="400" src="https://www.youtube.com/embed/P-xsfW_ums0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-        </section>
-        <section id="contact" class="contact">
-            <h2>Contato📞</h2>
-            <p>Entre em contato conosco para saber mais sobre nossos serviços:</p>
-            <p><strong>📩 Email:</strong> comercial@atecseven.com.br</p>
-            <p><strong>📲 Telefone:</strong> (64) 9 9295-2748</p>
-            <button class="button"> <a href="https://wa.me/5564992952748?text=Ol%C3%A1%20AtecSeven%20Tecnologia!%20Estou%20vindo%20do%20seu%20site%20e%20gostaria%20de%20contratar%20alguns%20de%20seus%20servi%C3%A7os.%20Poderia%20me%20atender%20no%20momento%3F">Solicitar Orçamento</a> </button>
-        </section>
-    </div>
-    <div id="cookie-banner" style="position: fixed; bottom: 0; width: 100%; background-color: #1E90FF; color: white; text-align: center; padding: 1em; box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1); z-index: 1000;">
-    <p>Este site utiliza cookies para melhorar a experiência do usuário<br> e
-    para analisar o tráfego do site.<br> Ao continuar navegando, você
-    concorda<br> com
-    o uso de cookies. <a href="cookies.html" style="color: #ffff00;
-    text-decoration: underline;">Saiba mais</a></p>
-    <button onclick="document.getElementById('cookie-banner').style.display='none';" style="background: #000; color: white; border: none; padding: 0.5em 1em; margin-top: 0.5em; cursor: pointer;">Aceitar</button>
-</div>
-    <section id="contact" class="container">
-        <div class="social-links">
-            <a href="https://wa.me/5564992952748?text=Ol%C3%A1%20AtecSeven%20Tecnologia!%20Estou%20vindo%20do%20seu%20site%20e%20gostaria%20de%20contratar%20alguns%20de%20seus%20servi%C3%A7os.%20Poderia%20me%20atender%20no%20momento%3F" target="_blank">
-                <img class="links" src="whatsaapp-logo.png" alt="WhatsApp">
-            </a>
-            <a href="https://www.instagram.com/atecseven_tecnologia/profilecard/?igsh=MTN5dTMwd3hmMmJ4ZQ==" target="_blank">
-                <img src="instagram-logo.png" alt="Instagram">
-            </a>
-            <a href="https://www.facebook.com/atecseven.tecnologia?mibextid=ZbWKwL" target="_blank">
-                <img src="facebook-logo.png" alt="Facebook">
-            </a>
-            <a href="https://www.linkedin.com/in/atecseven-tecnologia-9909a5337?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app" target="_blank">
-                <img src="linkedin-logo.png" alt="LinkedIn">
-            </a>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2> Suporte Tecnico </h2>
         </div>
-    </section>
-    <footer>
-        <p>&copy; 2019 AtecSeven Tecnologia. Todos os direitos reservados.</p>
-    </footer>
+        <div class="chat-box" id="chatBox"></div>
+        <div class="chat-input">
+            <input type="text" id="userInput" placeholder="Digite sua mensagem...">
+            <button onclick="sendMessage()">Enviar</button>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 0;
+
+        function sendMessage() {
+            const userInput = document.getElementById('userInput').value;
+            if (userInput.trim() === '') return;
+
+            const chatBox = document.getElementById('chatBox');
+
+            // Adiciona a mensagem do usuário
+            const userMessage = document.createElement('div');
+            userMessage.className = 'message user';
+            userMessage.textContent = userInput;
+            chatBox.appendChild(userMessage);
+
+            // Limpa o campo de entrada
+            document.getElementById('userInput').value = '';
+
+            // Simula um indicador de digitando do bot
+            const typingIndicator = document.createElement('div');
+            typingIndicator.className = 'message bot typing-indicator';
+            typingIndicator.textContent = 'Digitando...';
+            chatBox.appendChild(typingIndicator);
+
+            // Mantém a rolagem no final
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // Responde após 2 segundos
+            setTimeout(() => {
+                chatBox.removeChild(typingIndicator); // Remove o indicador de digitando
+
+                // Simula uma resposta do bot com base na etapa do atendimento
+                const botMessage = document.createElement('div');
+                botMessage.className = 'message bot';
+                
+                if (currentStep === 0) {
+                    botMessage.textContent = 'Oi! Como posso ajudar você hoje? Por favor, explique seu problema.';
+                    currentStep++;
+                } else if (currentStep === 1) {
+                    botMessage.textContent = 'Entendi. Qual é o seu nome?';
+                    currentStep++;
+                    window.userProblem = userInput; // Guarda o problema do usuário
+                } else if (currentStep === 2) {
+                    botMessage.textContent = 'Obrigado! Agora, por favor, informe seu número de contato.';
+                    currentStep++;
+                    window.userName = userInput; // Guarda o nome do usuário
+                } else if (currentStep === 3) {
+                    botMessage.textContent = 'Perfeito! Estamos encaminhando suas informações para um de nossos atendentes. Você será contatado em breve.';
+                    currentStep = 0; // Reseta o passo
+                    window.userContact = userInput; // Guarda o número de contato do usuário
+                    
+                    // Envia a mensagem para o número especificado
+                    const message = `Nome: ${window.userName}\nContato: ${window.userContact}\nProblema: ${window.userProblem}`;
+                    const encodedMessage = encodeURIComponent(message);
+                    const whatsappUrl = `https://wa.me/5564992952748?text=${encodedMessage}`;
+                    window.open(whatsappUrl, '_blank');
+                }
+
+                chatBox.appendChild(botMessage);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }, 2000); // Responde após 2 segundos
+        }
+    </script>
 </body>
 </html>
