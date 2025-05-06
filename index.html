@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AtecSeven Tecnologia</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/aos@2.3.1/dist/aos.css">
   <style>
     :root {
       --main-bg: #f4f4f9;
@@ -13,6 +14,7 @@
       --text-color: #333;
       --dark-bg: #121212;
       --dark-text: #f4f4f9;
+      --dark-card: #1e1e1e;
     }
 
     body {
@@ -27,6 +29,35 @@
     body.dark-mode {
       background-color: var(--dark-bg);
       color: var(--dark-text);
+    }
+
+    body.dark-mode .service-item {
+      background-color: var(--dark-card);
+      color: var(--dark-text);
+    }
+
+    #preloader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: white;
+      z-index: 9999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #preloader img {
+      width: 100px;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
     }
 
     header {
@@ -71,7 +102,6 @@
     .section {
       padding: 50px 20px;
       text-align: center;
-      animation: fadeInUp 1s ease-in-out;
     }
 
     .services {
@@ -109,11 +139,43 @@
       text-decoration: none;
       transition: background-color 0.3s;
       display: inline-block;
+      margin-top: 10px;
     }
 
     .button:hover {
       background-color: var(--highlight);
       color: black;
+    }
+
+    .copy-button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--main-color);
+      margin-left: 10px;
+      font-size: 1.2em;
+    }
+
+    .whatsapp-float {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #25D366;
+      color: white;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2em;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+      z-index: 1000;
+      transition: transform 0.3s;
+    }
+
+    .whatsapp-float:hover {
+      transform: scale(1.1);
     }
 
     footer {
@@ -143,15 +205,7 @@
       color: white;
       text-align: center;
       padding: 10px;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; } to { opacity: 1; }
-    }
-
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
+      z-index: 999;
     }
 
     @media (max-width: 768px) {
@@ -167,12 +221,16 @@
   </style>
 </head>
 <body>
+  <div id="preloader">
+    <img src="logo2.png" alt="Carregando...">
+  </div>
+
   <div class="cookie-banner" id="cookieBanner">
     Este site utiliza cookies para melhorar sua experiência. <a href="cookies.html">Política de Cookies</a>.
     <button onclick="acceptCookies()">Aceitar</button>
   </div>
 
-  <header>
+  <header data-aos="fade-down">
     <img class="logo" src="logo2.png" alt="Logo AtecSeven">
     <h2>AtecSeven Tecnologia</h2>
     <p>Inovando o futuro, hoje!</p>
@@ -188,42 +246,39 @@
   </nav>
 
   <main>
-    <section id="services" class="section">
-      <h2>Serviços</h2>
+    <section id="services" class="section" data-aos="fade-up">
+      <h2>Nossos Serviços</h2>
       <div class="services">
-        <div class="service-item"><i class="fas fa-network-wired"></i><h3>Infraestrutura de Redes</h3><p>Projetos e instalação de redes estruturadas para empresas com alta performance e segurança.</p></div>
-        <div class="service-item"><i class="fas fa-shield-alt"></i><h3>Segurança da Informação</h3><p>Implementação de políticas, firewalls e soluções de proteção para seus dados e sistemas.</p></div>
-        <div class="service-item"><i class="fas fa-cogs"></i><h3>Suporte Técnico</h3><p>Atendimento especializado para resolver falhas, manutenções e suporte preventivo.</p></div>
-        <div class="service-item"><i class="fas fa-cloud"></i><h3>Serviços em Nuvem</h3><p>Migração, gestão e consultoria de soluções em nuvem para empresas modernas.</p></div>
-        <div class="service-item"><i class="fas fa-store"></i><h3>Marketplace</h3><p>Criação de plataformas que conectam múltiplos vendedores em um único ambiente de compras.</p></div>
-        <div class="service-item"><i class="fas fa-money-check-alt"></i><h3>Gestão Financeira</h3><p>Controle de fluxo de caixa, notas fiscais e integração bancária.</p></div>
-        <div class="service-item"><i class="fas fa-robot"></i><h3>Automação de Atendimento</h3><p>Chatbots e IA para suporte ao cliente e respostas automáticas.</p></div>
-        <div class="service-item"><i class="fas fa-chart-line"></i><h3>Marketing Digital e SEO</h3><p>Otimização de sites, campanhas e estratégias de vendas online.</p></div>
-        <div class="service-item"><i class="fas fa-gift"></i><h3>Fidelização</h3><p>Programas de pontos e aplicativos para clientes frequentes.</p></div>
-        <div class="service-item"><i class="fas fa-shipping-fast"></i><h3>Logística e Rastreamento</h3><p>Sistemas para entregas, rastreio e rotas inteligentes.</p></div>
-        <div class="service-item"><i class="fas fa-video"></i><h3>Eventos Online</h3><p>Plataformas para lives, ingressos e interação virtual.</p></div>
-        <div class="service-item"><i class="fas fa-file-signature"></i><h3>Assinatura Digital</h3><p>Ferramentas para contratos, documentos e validação eletrônica.</p></div>
-        <div class="service-item"><i class="fas fa-plug"></i><h3>Integração de APIs</h3><p>Conexão entre sistemas e plataformas externas.</p></div>
+        <div class="service-item"><i class="fas fa-network-wired"></i><h3>Redes e Infraestrutura</h3><p>Montagem, cabeamento e gerenciamento de redes corporativas e residenciais.</p></div>
+        <div class="service-item"><i class="fas fa-desktop"></i><h3>Suporte Técnico</h3><p>Manutenção preventiva e corretiva de computadores, notebooks e servidores.</p></div>
+        <div class="service-item"><i class="fas fa-shield-alt"></i><h3>Segurança Digital</h3><p>Soluções em antivírus, backups e proteção de dados empresariais.</p></div>
+        <div class="service-item"><i class="fas fa-store"></i><h3>Plataformas de Marketplace</h3><p>Desenvolvimento de sites que conectam múltiplos vendedores em um único ambiente de compras.</p></div>
+        <div class="service-item"><i class="fas fa-chart-line"></i><h3>Sistemas de Gestão Financeira</h3><p>Controle de fluxo de caixa, emissão de notas fiscais e integração bancária.</p></div>
+        <div class="service-item"><i class="fas fa-robot"></i><h3>Automação de Atendimento</h3><p>Chatbots e inteligência artificial para suporte ao cliente.</p></div>
+        <div class="service-item"><i class="fas fa-bullhorn"></i><h3>Marketing Digital e SEO</h3><p>Otimização de sites, campanhas publicitárias e estratégias de vendas online.</p></div>
+        <div class="service-item"><i class="fas fa-gift"></i><h3>Sistemas de Fidelização</h3><p>Programas de pontos para clientes frequentes, incentivando compras recorrentes.</p></div>
+        <div class="service-item"><i class="fas fa-shipping-fast"></i><h3>Logística e Rastreamento</h3><p>Softwares para gestão de entregas e rastreamento de pedidos.</p></div>
+        <div class="service-item"><i class="fas fa-video"></i><h3>Plataformas de Eventos Online</h3><p>Transmissões ao vivo, venda de ingressos e interação virtual.</p></div>
+        <div class="service-item"><i class="fas fa-file-signature"></i><h3>Assinatura Digital</h3><p>Ferramentas para assinatura de contratos e validação digital segura.</p></div>
+        <div class="service-item"><i class="fas fa-plug"></i><h3>Integração de APIs</h3><p>Conexão de sistemas internos com plataformas externas.</p></div>
       </div>
     </section>
 
-    <section id="about" class="section">
-      <h2>Sobre Nós</h2>
-      <p>A AtecSeven Tecnologia é uma empresa dedicada a trazer soluções tecnológicas inovadoras para negócios de todos os tamanhos.</p>
-    </section>
-
-    <section id="video" class="section">
-      <h2>Promoções</h2>
-      <iframe width="560" height="315" src="https://www.youtube.com/embed/JAe6ZzXIFU0?si=VviikGDhukG5OerY" frameborder="0" allowfullscreen></iframe>
-    </section>
-
-    <section id="contact" class="section">
+    <section id="contact" class="section" data-aos="fade-up">
       <h2>Contato</h2>
       <p><strong>Endereço:</strong> Rua 0009, 800, Centro, Cidade Rio Verde - GO</p>
-      <p><strong>Email:</strong> comercial@atecseven.com.br</p>
+      <p>
+        <strong>Email:</strong> comercial@atecseven.com.br
+        <button class="copy-button" onclick="copyEmail()"><i class="fas fa-copy"></i></button>
+      </p>
       <p><strong>Telefone:</strong> (64) 9 9295-2748</p>
+      <a class="button" href="https://wa.me/5564992952748?text=Olá%20AtecSeven!%20Gostaria%20de%20mais%20informações%20sobre%20os%20serviços." target="_blank">Enviar mensagem no WhatsApp</a>
     </section>
   </main>
+
+  <a class="whatsapp-float" href="https://wa.me/5564992952748" target="_blank">
+    <i class="fab fa-whatsapp"></i>
+  </a>
 
   <footer>
     <p>&copy; 2024 AtecSeven Tecnologia. Todos os direitos reservados.</p>
@@ -232,10 +287,20 @@
       <a href="https://wa.me/5564992952748"><i class="fab fa-whatsapp"></i></a>
       <a href="https://www.linkedin.com/in/atecseven-tecnologia"><i class="fab fa-linkedin-in"></i></a>
       <a href="https://www.instagram.com/atecseven_tecnologia"><i class="fab fa-instagram"></i></a>
+      <a href="https://www.reclameaqui.com.br/empresa/atecseven-tecnologia/">
+        <img src="https://claimbox.com.br/wp-content/uploads/2023/07/reclame-aqui-logo.png" alt="Reclame Aqui" style="height: 30px; vertical-align: middle;">
+      </a>
     </div>
   </footer>
 
+  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
   <script>
+    AOS.init();
+
+    window.addEventListener('load', () => {
+      document.getElementById('preloader').style.display = 'none';
+    });
+
     function acceptCookies() {
       document.getElementById('cookieBanner').style.display = 'none';
     }
@@ -245,6 +310,15 @@
       document.getElementById('toggleTheme').textContent =
         document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
     });
+
+    function copyEmail() {
+      const email = 'comercial@atecseven.com.br';
+      navigator.clipboard.writeText(email).then(() => {
+        alert('Email copiado para a área de transferência!');
+      }, () => {
+        alert('Erro ao copiar o email.');
+      });
+    }
   </script>
 </body>
 </html>
