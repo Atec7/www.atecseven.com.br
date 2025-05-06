@@ -1,350 +1,250 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-  
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AtecSeven Tecnologia</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
- <style>
-   body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
-    background-color: #f4f4f9;
-    color: #333;
-}
-
-header {
-    background: linear-gradient(90deg, #3498db, #1e90ff);
-    color: white;
-    text-align: center;
-    padding: 20px 0;
-    animation: fadeIn 1s ease-in-out;
-}
-
-header .logo {
-    max-width: 100px;
-    margin-bottom: 10px;
-  border-radius: 50%;
-}
-
-header h2 {
-    margin: 0;
-    font-size: 2.5em;
-}
-
-header p {
-    font-size: 1.2em;
-}
-
-nav {
-    background: linear-gradient(90deg, #1e90ff, #3498db);
-    display: flex;
-    justify-content: center;
-    padding: 10px 0;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-}
-
-nav a {
-    color: white;
-    text-decoration: none;
-    margin: 0 15px;
-    font-size: 1.1em;
-    transition: color 0.3s, transform 0.3s;
-}
-
-nav a:hover {
-    color: #ffdb58;
-    transform: scale(1.1);
-}
-
-.section {
-    padding: 50px 20px;
-    text-align: center;
-    animation: fadeInUp 1s ease-in-out;
-}
-
-.section h2 {
-    font-size: 2em;
-    margin-bottom: 20px;
-    color: #1e90ff;
-}
-
-.services {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 20px;
-}
-
-.service-item {
-    background: white;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 20px;
-    width: 300px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s, box-shadow 0.3s;
-}
-
-.service-item:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2);
-}
-
-.service-item h3 {
-    color: #1e90ff;
-    margin-bottom: 10px;
-}
-
-.service-item p {
-    font-size: 0.9em;
-    margin-bottom: 15px;
-}
-
-.service-item .button {
-    background: linear-gradient(90deg, #1e90ff, #3498db);
-    color: white;
-    text-decoration: none;
-    padding: 10px 15px;
-    border-radius: 5px;
-    transition: background-color 0.3s;
-}
-
-.service-item .button:hover {
-    background-color: #ffdb58;
-}
-
-footer {
-    background: linear-gradient(90deg, #3498db, #1e90ff);
-    color: white;
-    text-align: center;
-    padding: 20px 0;
-}
-
-footer .social-icons a {
-    color: white;
-    margin: 0 10px;
-    font-size: 1.5em;
-    transition: color 0.3s, transform 0.3s;
-}
-
-footer .social-icons a:hover {
-    color: #ffdb58;
-    transform: scale(1.2);
-}
-
-.cookie-banner {
-    position: fixed;
-    bottom: 0;
-    width: 100%;
-    background: linear-gradient(90deg, #1e90ff, #3498db);
-    color: white;
-    text-align: center;
-    padding: 10px;
-    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.2);
-    animation: slideUp 1s ease-in-out;
-}
-
-.cookie-banner a {
-    color: #ffdb58;
-    text-decoration: underline;
-}
-
-.cookie-banner button {
-    background: #ffdb58;
-    color: #333;
-    border: none;
-    padding: 5px 10px;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.3s, transform 0.3s;
-}
-
-.cookie-banner button:hover {
-    background-color: #3498db;
-    transform: scale(1.1);
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AtecSeven Tecnologia</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    :root {
+      --main-bg: #f4f4f9;
+      --main-color: #1e90ff;
+      --highlight: #ffdb58;
+      --text-color: #333;
+      --dark-bg: #121212;
+      --dark-text: #f4f4f9;
     }
-    to {
-        opacity: 1;
-    }
-}
 
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: var(--main-bg);
+      color: var(--text-color);
+      transition: background 0.3s, color 0.3s;
     }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
 
-@keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(100%);
+    body.dark-mode {
+      background-color: var(--dark-bg);
+      color: var(--dark-text);
     }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
 
-@media (max-width: 768px) {
-    .services {
-        flex-direction: column;
-        align-items: center;
+    header {
+      background: linear-gradient(90deg, #3498db, var(--main-color));
+      color: white;
+      text-align: center;
+      padding: 20px 0;
+      animation: fadeIn 1s ease-in-out;
+    }
+
+    header .logo {
+      max-width: 100px;
+      margin-bottom: 10px;
+      border-radius: 50%;
     }
 
     nav {
-        flex-direction: column;
+      background: linear-gradient(90deg, var(--main-color), #3498db);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 10px;
     }
 
-    nav a {
-        margin: 10px 0;
+    nav a, #toggleTheme {
+      color: white;
+      text-decoration: none;
+      margin: 10px 15px;
+      font-size: 1.1em;
+      transition: color 0.3s, transform 0.3s;
+      background: none;
+      border: none;
+      cursor: pointer;
     }
 
-    header h2 {
-        font-size: 1.8em;
+    nav a:hover, #toggleTheme:hover {
+      color: var(--highlight);
+      transform: scale(1.1);
+    }
+
+    .section {
+      padding: 50px 20px;
+      text-align: center;
+      animation: fadeInUp 1s ease-in-out;
+    }
+
+    .services {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
     }
 
     .service-item {
-        width: 90%;
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      width: 300px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transition: transform 0.3s, box-shadow 0.3s;
     }
-}
- </style>
-    <div class="cookie-banner" id="cookieBanner">
-    Este site utiliza cookies para melhorar sua experiência. Ao continuar
-    navegando, você concorda com nossa <a href="cookies.html" style="color:
-    #3498db;">Política de Cookies</a>.
-    <button onclick="acceptCookies()">Aceitar</button>
-</div>
+
+    .service-item:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .service-item i {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      color: var(--main-color);
+    }
+
+    .button {
+      background: linear-gradient(90deg, #1e90ff, #3498db);
+      color: white;
+      padding: 10px 15px;
+      border-radius: 5px;
+      text-decoration: none;
+      transition: background-color 0.3s;
+      display: inline-block;
+    }
+
+    .button:hover {
+      background-color: var(--highlight);
+      color: black;
+    }
+
+    footer {
+      background: linear-gradient(90deg, #3498db, var(--main-color));
+      color: white;
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .social-icons a {
+      color: white;
+      margin: 0 10px;
+      font-size: 1.5em;
+      transition: transform 0.3s, color 0.3s;
+    }
+
+    .social-icons a:hover {
+      color: var(--highlight);
+      transform: scale(1.2);
+    }
+
+    .cookie-banner {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      background: linear-gradient(90deg, var(--main-color), #3498db);
+      color: white;
+      text-align: center;
+      padding: 10px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; } to { opacity: 1; }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 768px) {
+      .services {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .service-item {
+        width: 90%;
+      }
+    }
+  </style>
 </head>
 <body>
-    <header>
-      <img class="logo" src="logo2.png">
-        <h2>AtecSeven Tecnologia</h2>
-        <p>Inovando o futuro, hoje!</p>
-    </header>
-    <nav>
-        <a href="#services">Serviços</a>
-        <a href="#about">Sobre Nós</a>
-        <a href="#video">Promoções</a>
-        <a href="#contact">Contato</a>
-        <a href="https://atec7.github.io/chamados/">Abrir Chamado</a>
-    </nav>
-    <div class="container">
-        <section id="services" class="section">
-    <h2>Serviços</h2>
-    <div class="services">
-        <div class="service-item" id="criacao-sites">
-            <h3>Criação de Sites</h3>
-            <p>Desenvolvimento de sites empresariais personalizados para melhorar a presença online.</p>
-            <a href="https://wa.me/5564992952748" class="button">Saiba Mais</a>
-        </div>
-        <div class="service-item" id="criacao-aplicativos">
-            <h3>Criação de Aplicativos</h3>
-            <p>Desenvolvimento de aplicativos sob medida para facilitar o engajamento com os clientes.</p>
-            <a href="https://wa.me/5564992952748" class="button">Saiba Mais</a>
-        </div>
-        <div class="service-item" id="landpages">
-            <h3>Landpages</h3>
-            <p>Construção de páginas atrativas para aumentar conversões e captar leads.</p>
-            <a href="https://wa.me/5564992952748" class="button">Saiba Mais</a>
-        </div>
-        <div class="service-item" id="emails-empresariais">
-            <h3>Emails Personalizados Empresariais</h3>
-            <p>Criação de contas de email exclusivas e profissionais para sua empresa.</p>
-            <a href="https://wa.me/5564992952748" class="button">Saiba Mais</a>
-        </div>
-        <div class="service-item" id="hospedagem-sites">
-            <h3>Hospedagem de Sites</h3>
-            <p>Serviço confiável de hospedagem para garantir que seu site esteja sempre online.</p>
-            <a href="https://wa.me/5564992952748" class="button">Saiba Mais</a>
-        </div>
-        <div class="service-item" id="bancos-dados">
-            <h3>Bancos de Dados</h3>
-            <p>Soluções completas para armazenamento e gerenciamento seguro de dados.</p>
-            <a href="https://wa.me/5564992952748" class="button">Saiba Mais</a>
-        </div>
-        <div class="service-item" id="suporte-tecnico">
-            <h3>Suporte Técnico 24h</h3>
-            <p>Atendimento técnico contínuo para atender às necessidades da sua empresa.</p>
-            <a href="https://wa.me/5564992952748" class="button">Saiba Mais</a>
-        </div>
-        <div class="service-item" id="plataformas-treinamento">
-            <h3>Plataformas de Treinamento</h3>
-            <p>Desenvolvimento de sistemas interativos para capacitação de equipes.</p>
-            <a href="https://wa.me/5564992952748" class="button">Saiba Mais</a>
-        </div>
-        <div class="service-item" id="consultoria-tecnologica">
-            <h3>Consultoria Tecnológica</h3>
-            <p>Orientação especializada para ajudar sua empresa a aproveitar ao máximo a tecnologia.</p>
-            <a href="https://wa.me/5564992952748" class="button">Saiba Mais</a>
-        </div>
-        <div class="service-item" id="parceiros-nacionais-internacionais">
-            <h3>Parceiros Nacionais e Internacionais</h3>
-            <p>Conexões estratégicas para expandir sua presença no mercado global.</p>
-            <a href="https://wa.me/5564992952748" class="button">Saiba Mais</a>
-        </div>
+  <div class="cookie-banner" id="cookieBanner">
+    Este site utiliza cookies para melhorar sua experiência. <a href="cookies.html">Política de Cookies</a>.
+    <button onclick="acceptCookies()">Aceitar</button>
+  </div>
+
+  <header>
+    <img class="logo" src="logo2.png" alt="Logo AtecSeven">
+    <h2>AtecSeven Tecnologia</h2>
+    <p>Inovando o futuro, hoje!</p>
+  </header>
+
+  <nav>
+    <a href="#services">Serviços</a>
+    <a href="#about">Sobre Nós</a>
+    <a href="#video">Promoções</a>
+    <a href="#contact">Contato</a>
+    <a href="https://atec7.github.io/chamados/">Abrir Chamado</a>
+    <button id="toggleTheme">🌙</button>
+  </nav>
+
+  <main>
+    <section id="services" class="section">
+      <h2>Serviços</h2>
+      <div class="services">
+        <div class="service-item"><i class="fas fa-network-wired"></i><h3>Infraestrutura de Redes</h3><p>Projetos e instalação de redes estruturadas para empresas com alta performance e segurança.</p></div>
+        <div class="service-item"><i class="fas fa-shield-alt"></i><h3>Segurança da Informação</h3><p>Implementação de políticas, firewalls e soluções de proteção para seus dados e sistemas.</p></div>
+        <div class="service-item"><i class="fas fa-cogs"></i><h3>Suporte Técnico</h3><p>Atendimento especializado para resolver falhas, manutenções e suporte preventivo.</p></div>
+        <div class="service-item"><i class="fas fa-cloud"></i><h3>Serviços em Nuvem</h3><p>Migração, gestão e consultoria de soluções em nuvem para empresas modernas.</p></div>
+        <div class="service-item"><i class="fas fa-store"></i><h3>Marketplace</h3><p>Criação de plataformas que conectam múltiplos vendedores em um único ambiente de compras.</p></div>
+        <div class="service-item"><i class="fas fa-money-check-alt"></i><h3>Gestão Financeira</h3><p>Controle de fluxo de caixa, notas fiscais e integração bancária.</p></div>
+        <div class="service-item"><i class="fas fa-robot"></i><h3>Automação de Atendimento</h3><p>Chatbots e IA para suporte ao cliente e respostas automáticas.</p></div>
+        <div class="service-item"><i class="fas fa-chart-line"></i><h3>Marketing Digital e SEO</h3><p>Otimização de sites, campanhas e estratégias de vendas online.</p></div>
+        <div class="service-item"><i class="fas fa-gift"></i><h3>Fidelização</h3><p>Programas de pontos e aplicativos para clientes frequentes.</p></div>
+        <div class="service-item"><i class="fas fa-shipping-fast"></i><h3>Logística e Rastreamento</h3><p>Sistemas para entregas, rastreio e rotas inteligentes.</p></div>
+        <div class="service-item"><i class="fas fa-video"></i><h3>Eventos Online</h3><p>Plataformas para lives, ingressos e interação virtual.</p></div>
+        <div class="service-item"><i class="fas fa-file-signature"></i><h3>Assinatura Digital</h3><p>Ferramentas para contratos, documentos e validação eletrônica.</p></div>
+        <div class="service-item"><i class="fas fa-plug"></i><h3>Integração de APIs</h3><p>Conexão entre sistemas e plataformas externas.</p></div>
+      </div>
+    </section>
+
+    <section id="about" class="section">
+      <h2>Sobre Nós</h2>
+      <p>A AtecSeven Tecnologia é uma empresa dedicada a trazer soluções tecnológicas inovadoras para negócios de todos os tamanhos.</p>
+    </section>
+
+    <section id="video" class="section">
+      <h2>Promoções</h2>
+      <iframe width="560" height="315" src="https://www.youtube.com/embed/JAe6ZzXIFU0?si=VviikGDhukG5OerY" frameborder="0" allowfullscreen></iframe>
+    </section>
+
+    <section id="contact" class="section">
+      <h2>Contato</h2>
+      <p><strong>Endereço:</strong> Rua 0009, 800, Centro, Cidade Rio Verde - GO</p>
+      <p><strong>Email:</strong> comercial@atecseven.com.br</p>
+      <p><strong>Telefone:</strong> (64) 9 9295-2748</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2024 AtecSeven Tecnologia. Todos os direitos reservados.</p>
+    <div class="social-icons">
+      <a href="https://www.facebook.com/atecseven.tecnologia"><i class="fab fa-facebook-f"></i></a>
+      <a href="https://wa.me/5564992952748"><i class="fab fa-whatsapp"></i></a>
+      <a href="https://www.linkedin.com/in/atecseven-tecnologia"><i class="fab fa-linkedin-in"></i></a>
+      <a href="https://www.instagram.com/atecseven_tecnologia"><i class="fab fa-instagram"></i></a>
     </div>
-</section>
-        <section id="about" class="section">
-            <h2>Sobre Nós</h2>
-            <p>A AtecSeven Tecnologia é uma empresa dedicada a trazer soluções tecnológicas inovadoras para negócios de todos os tamanhos. Nossa missão é transformar ideias em realidade através de serviços personalizados e de alta qualidade.</p>
-        </section>
-        <section id="video" class="section video-section">
-            <h2>Promoções</h2>
-           <iframe 
-    src="https://www.youtube.com/embed/JAe6ZzXIFU0?si=VviikGDhukG5OerY" 
-    allowfullscreen>
-</iframe>
-        </section>
-        <section id="contact" class="section">
-            <h2>Contato</h2>
-            <div class="contact">
-                <div class="contact-item">
-                    <h3>Endereço</h3>
-                    <p>Rua 0009, 800, Centro, Cidade Rio Verde - GO</p>
-                </div>
-                <div class="contact-item">
-                    <h3>Email</h3>
-                    <p>comercial@atecseven.com.br</p>
-                </div>
-                <div class="contact-item">
-                    <h3>Telefone</h3>
-                    <p>(64) 9 9295-2748</p>
-                </div>
-            </div>
-        </section>
-    </div>
-    <footer>
-        <p>&copy; 2024 AtecSeven Tecnologia. Todos os direitos reservados.</p>
-        <div class="social-icons">
-    <a href="https://www.facebook.com/atecseven.tecnologia?mibextid=ZbWKwL"><i class="fab fa-facebook-f"></i></a>
-    <a
-    href="https://wa.me/5564992952748?text=Olá%2C%20equipe%20AtecSeven%20Tecnologia!%20Visitei%20o%20site%20de%20vocês%20e%20estou%20interessado%20nos%20serviços%20oferecidos.%20Gostaria%20de%20mais%20informações%20sobre%20como%20podemos%20colaborar.%20Obrigado."><i
-    class="fab fa-whatsapp"></i></a>
-    <a
-    href="https://www.linkedin.com/in/atecseven-tecnologia-9909a5337?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app"><i
-    class="fab fa-linkedin-in"></i></a>
-    <a
-    href="https://www.instagram.com/atecseven_tecnologia/profilecard/?igsh=MTN5dTMwd3hmMmJ4ZQ=="><i
-    class="fab fa-instagram"></i></a>
-</div>
-    </footer>
-    <script>
-      function acceptCookies() {
-    document.getElementById('cookieBanner').style.display = 'none';
-}
-    </script>
+  </footer>
+
+  <script>
+    function acceptCookies() {
+      document.getElementById('cookieBanner').style.display = 'none';
+    }
+
+    document.getElementById('toggleTheme').addEventListener('click', () => {
+      document.body.classList.toggle('dark-mode');
+      document.getElementById('toggleTheme').textContent =
+        document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+    });
+  </script>
 </body>
 </html>
