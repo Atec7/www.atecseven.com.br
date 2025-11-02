@@ -1,218 +1,188 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>AtecSeven Tecnologia | Inovando o Futuro</title>
 
-  <!-- SEO -->
-  <meta name="description" content="AtecSeven Tecnologia: Soluções completas em redes, automação, sistemas, design, marketing digital e inovação.">
-  <meta name="author" content="AtecSeven Tecnologia">
-
-  <!-- Favicon -->
-  <link rel="icon" href="logo2.png" type="image/png">
-
-  <!-- FontAwesome + AOS -->
+  <!-- Fonts & Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-  <link rel="stylesheet" href="https://unpkg.com/aos@2.3.1/dist/aos.css">
-
-  <!-- Google Font -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 
   <style>
-    :root {
-      --primary: #007BFF;
-      --secondary: #00D4FF;
-      --accent: #FFD43B;
-      --dark: #0b0f19;
-      --light: #f4f7fa;
-      --radius: 16px;
-      --transition: all 0.4s ease;
+    :root{
+      --bg:#f4f7fb;
+      --card:#ffffff;
+      --glass: rgba(255,255,255,0.06);
+      --primary:#007bff;
+      --secondary:#00d4ff;
+      --accent:#ffd43b;
+      --muted:#6b7280;
+      --dark:#0b0f19;
+      --radius:14px;
+      --transition:all .35s cubic-bezier(.2,.9,.3,1);
+      --glass-bg: rgba(255,255,255,0.6);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
+      background: linear-gradient(180deg,var(--bg),#e9eef6);
+      color:#0b1724;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      transition:var(--transition);
+    }
+    body.dark-mode{
+      background: linear-gradient(180deg,#071021,#071824);
+      color:#e6eef8;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Inter', sans-serif;
-      background-color: var(--light);
-      color: #111;
-      overflow-x: hidden;
-      transition: var(--transition);
+    /* ---------- Header & Nav ---------- */
+    header{
+      padding:48px 20px;
+      text-align:center;
+      background:linear-gradient(135deg,var(--primary),var(--secondary));
+      color:#fff;
+    }
+    header img{width:112px;border-radius:50%;box-shadow:0 8px 30px rgba(0,0,0,0.18)}
+    header h1{margin:10px 0 6px;font-weight:800;letter-spacing:0.6px}
+    header p{margin:0;color:rgba(255,255,255,0.92);font-weight:300}
+
+    nav{
+      display:flex;
+      justify-content:center;
+      gap:18px;
+      padding:14px;
+      background: rgba(255,255,255,0.95);
+      position:sticky;
+      top:0;
+      z-index:60;
+      box-shadow:0 6px 20px rgba(12,20,30,0.06);
+      align-items:center;
+    }
+    body.dark-mode nav{background:rgba(8,14,22,0.75);box-shadow:0 6px 20px rgba(0,0,0,0.3)}
+    nav a, nav button{background:none;border:none;color:var(--muted);font-weight:600;padding:6px 8px;cursor:pointer;transition:var(--transition)}
+    nav a:hover, nav button:hover{color:var(--primary)}
+    nav a.active{color:var(--primary);border-bottom:3px solid rgba(0,123,255,0.12);padding-bottom:4px}
+
+    /* ---------- Layout ---------- */
+    main{max-width:1200px;margin:36px auto;padding:0 20px}
+    section{display:none;opacity:0;transform:translateY(10px);transition:var(--transition);padding:36px 0}
+    section.active{display:block;opacity:1;transform:none}
+    h2{color:var(--primary);text-align:center;margin-bottom:18px}
+
+    /* Services grid */
+    .services{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+    .service{
+      background:var(--card);
+      padding:22px;border-radius:12px;
+      box-shadow:0 10px 30px rgba(14,20,40,0.06);
+      text-align:center;transition:var(--transition)
+    }
+    body.dark-mode .service{background:#0f1724;box-shadow:0 10px 30px rgba(0,0,0,0.45)}
+    .service i{font-size:28px;color:var(--secondary);margin-bottom:12px}
+    .service h3{margin:8px 0 6px}
+    .service p{color:var(--muted);font-size:0.95rem}
+
+    .cta{display:inline-block;margin-top:20px;padding:12px 22px;border-radius:10px;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;text-decoration:none;font-weight:700;transition:var(--transition)}
+    .cta:hover{transform:translateY(-4px);filter:brightness(1.03)}
+
+    footer{margin-top:40px;padding:28px;text-align:center;color:#fff;background:linear-gradient(90deg,var(--primary),var(--secondary));border-radius:12px;margin:40px 20px}
+
+    /* ---------- Contact info boxes ---------- */
+    .info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:18px}
+    .info{background:linear-gradient(180deg,rgba(255,255,255,0.98),var(--card));padding:18px;border-radius:12px;box-shadow:0 8px 30px rgba(10,20,40,0.04)}
+    body.dark-mode .info{background:linear-gradient(180deg,#0b1220,#0a1020);box-shadow:0 8px 30px rgba(0,0,0,0.5)}
+    .info h4{color:var(--primary);margin-bottom:8px}
+    .info p{margin:6px 0;color:var(--muted);font-size:0.95rem}
+    .info strong{color:inherit}
+
+    /* =========== ASSISTANT (VISUAL RICH) =========== */
+    .assistant-toggle{
+      position:fixed;right:22px;bottom:22px;width:66px;height:66px;border-radius:50%;
+      background:linear-gradient(135deg,var(--primary),var(--secondary));
+      display:flex;align-items:center;justify-content:center;color:#fff;z-index:120;
+      box-shadow:0 10px 30px rgba(0,0,0,0.25);cursor:pointer;transition:transform .22s ease, box-shadow .22s ease
+    }
+    .assistant-toggle:hover{transform:translateY(-6px) scale(1.02);box-shadow:0 16px 40px rgba(0,0,0,0.32)}
+
+    .assistant {
+      position:fixed;right:22px;bottom:100px;width:360px;max-width:calc(100% - 44px);
+      background:linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.5));
+      backdrop-filter: blur(8px) saturate(120%);
+      border-radius:16px;box-shadow:0 18px 50px rgba(6,12,24,0.28);
+      z-index:119;overflow:hidden;display:none;flex-direction:column;transition:var(--transition)
+    }
+    body.dark-mode .assistant{background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));border:1px solid rgba(255,255,255,0.03)}
+
+    .assistant-header{
+      display:flex;align-items:center;gap:12px;padding:12px 14px;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;
+    }
+    .assistant-header .avatar{
+      width:48px;height:48px;border-radius:50%;flex:0 0 48px;background:linear-gradient(180deg,#ffd;#fff);position:relative;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,0.25)
+    }
+    /* avatar circle graphic */
+    .avatar .face{
+      width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#ffffff22,#ffffff44);
+      border-radius:50%;position:relative;z-index:2
+    }
+    /* voice waves */
+    .avatar .waves{
+      position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+      width:68px;height:68px;border-radius:50%;z-index:1;pointer-events:none;
+    }
+    .avatar .wave{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;border:2px solid rgba(255,255,255,0.12);opacity:0;animation:wave 2s infinite}
+    .avatar .wave:nth-child(1){animation-delay:0s}
+    .avatar .wave:nth-child(2){animation-delay:.5s}
+    .avatar .wave:nth-child(3){animation-delay:1s}
+    @keyframes wave{
+      0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}
+      20%{opacity:.35}
+      100%{opacity:0;transform:translate(-50%,-50%) scale(1.7)}
     }
 
-    body.dark-mode { background-color: var(--dark); color: #f4f4f4; }
+    .assistant-header .title{font-weight:700}
+    .assistant-header .subtitle{font-size:12px;opacity:.9;color:rgba(255,255,255,0.95)}
 
-    header {
-      text-align: center;
-      padding: 60px 20px;
-      background: linear-gradient(135deg, var(--primary), var(--secondary));
-      color: white;
+    .assistant-body{
+      padding:12px;display:flex;flex-direction:column;gap:10px;max-height:320px;overflow:auto;scrollbar-width:thin;
     }
-
-    header .logo {
-      width: 110px;
-      border-radius: 50%;
-      margin-bottom: 15px;
-      box-shadow: 0 0 25px rgba(255,255,255,0.3);
+    .assistant-message{max-width:85%;padding:10px 12px;border-radius:12px;font-size:0.95rem;line-height:1.3}
+    .assistant-message.bot{
+      background:linear-gradient(180deg,#ffffff,#f6fbff);
+      color:#052337;align-self:flex-start;box-shadow:0 6px 20px rgba(8,16,30,0.06)
     }
+    body.dark-mode .assistant-message.bot{background:linear-gradient(180deg,#071428,#0a1730);color:#e8f6ff;box-shadow:0 8px 30px rgba(0,0,0,0.55)}
+    .assistant-message.user{background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;align-self:flex-end}
+    .assistant-footer{display:flex;gap:8px;padding:10px;border-top:1px solid rgba(0,0,0,0.06);align-items:center;background:transparent}
+    body.dark-mode .assistant-footer{border-top:1px solid rgba(255,255,255,0.03)}
 
-    header h1 { font-size: 2.3rem; margin-bottom: 0.3rem; letter-spacing: 1px; }
-    header p { opacity: 0.9; font-weight: 300; }
+    .assistant-actions{display:flex;gap:8px;justify-content:center;padding:12px;border-top:1px solid rgba(0,0,0,0.04);background:transparent}
+    .assistant-actions button{background:none;border:1px solid rgba(0,0,0,0.06);padding:8px 10px;border-radius:10px;color:var(--primary);font-weight:700;cursor:pointer}
+    .assistant-actions button:hover{transform:translateY(-3px)}
+    body.dark-mode .assistant-actions button{border-color:rgba(255,255,255,0.04);color:var(--secondary)}
 
-    nav {
-      display: flex;
-      justify-content: center;
-      gap: 1.5rem;
-      background-color: #fff;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-      padding: 1rem;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      transition: var(--transition);
-    }
+    /* typing indicator */
+    .typing{display:inline-block;vertical-align:middle}
+    .dot{display:inline-block;width:7px;height:7px;margin:0 2px;background:rgba(0,0,0,0.18);border-radius:50%;animation:dot 1s infinite}
+    .dot:nth-child(2){animation-delay:.12s}
+    .dot:nth-child(3){animation-delay:.24s}
+    @keyframes dot{0%{transform:translateY(0)}50%{transform:translateY(-6px)}100%{transform:translateY(0)}}
 
-    body.dark-mode nav { background-color: #141823; }
-
-    nav a, #toggleTheme {
-      text-decoration: none;
-      color: #333;
-      font-weight: 600;
-      cursor: pointer;
-      background: none;
-      border: none;
-      transition: var(--transition);
-    }
-
-    body.dark-mode nav a, body.dark-mode #toggleTheme { color: #f4f4f4; }
-    nav a.active { color: var(--primary); border-bottom: 2px solid var(--secondary); padding-bottom: 4px; }
-
-    section {
-      display: none;
-      opacity: 0;
-      transform: translateY(20px);
-      transition: var(--transition);
-      max-width: 1200px;
-      margin: auto;
-      padding: 80px 20px;
-    }
-
-    section.active {
-      display: block;
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    h2 {
-      font-size: 2rem;
-      margin-bottom: 20px;
-      color: var(--primary);
-      text-align: center;
-    }
-
-    .services {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 25px;
-      margin-top: 30px;
-    }
-
-    .service-item {
-      background: white;
-      border-radius: var(--radius);
-      padding: 30px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-      text-align: center;
-      transition: var(--transition);
-    }
-
-    body.dark-mode .service-item { background-color: #1c2333; }
-
-    .service-item:hover { transform: translateY(-8px) scale(1.02); }
-
-    .service-item i { font-size: 2.5rem; color: var(--secondary); margin-bottom: 10px; }
-
-    .button {
-      background: linear-gradient(90deg, var(--primary), var(--secondary));
-      color: white;
-      border-radius: 8px;
-      padding: 12px 28px;
-      text-decoration: none;
-      transition: var(--transition);
-      display: inline-block;
-      font-weight: 600;
-      margin-top: 20px;
-    }
-
-    .button:hover { transform: scale(1.05); background: var(--accent); color: #111; }
-
-    footer {
-      text-align: center;
-      padding: 30px;
-      background: linear-gradient(90deg, var(--primary), var(--secondary));
-      color: white;
-    }
-
-    .social-icons a {
-      color: white;
-      margin: 0 10px;
-      font-size: 1.5rem;
-      transition: var(--transition);
-    }
-
-    .social-icons a:hover { color: var(--accent); transform: scale(1.2); }
-
-    .whatsapp-float {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: #25D366;
-      color: white;
-      border-radius: 50%;
-      width: 60px;
-      height: 60px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 2rem;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-      transition: var(--transition);
-      z-index: 1000;
-    }
-
-    .whatsapp-float:hover { transform: scale(1.1); }
-
-    /* CONTATO */
-    .info-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 25px;
-      margin-top: 25px;
-    }
-
-    .info-box {
-      background: white;
-      border-radius: var(--radius);
-      padding: 20px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-      transition: var(--transition);
-    }
-
-    body.dark-mode .info-box { background-color: #1c2333; }
-
-    .info-box h4 {
-      color: var(--primary);
-      margin-bottom: 10px;
-    }
-
-    .info-box p {
-      margin-bottom: 6px;
-      font-size: 0.95rem;
+    /* responsive */
+    @media(max-width:540px){
+      .assistant{right:6px;left:6px;width:auto;bottom:88px}
+      .assistant-toggle{right:18px;bottom:16px}
+      header h1{font-size:20px}
+      nav{gap:10px;padding:12px}
     }
   </style>
 </head>
 <body>
-  <header data-aos="fade-down">
-    <img src="logo2.png" alt="Logo AtecSeven" class="logo">
+  <header>
+    <img src="logo2.png" alt="Logo AtecSeven">
     <h1>AtecSeven Tecnologia</h1>
     <p>Inovando o futuro, hoje!</p>
   </header>
@@ -222,146 +192,329 @@
     <a data-target="services">Serviços</a>
     <a data-target="about">Sobre Nós</a>
     <a data-target="contact">Contato</a>
-    <button id="toggleTheme" title="Alternar tema">🌙</button>
+    <button id="toggleTheme" aria-label="Alternar tema">🌙</button>
   </nav>
 
   <main>
-    <!-- INÍCIO -->
     <section id="home" class="active">
       <h2>Bem-vindo à AtecSeven Tecnologia</h2>
-      <p>Transformamos tecnologia em crescimento real para sua empresa. Atuamos com soluções digitais, infraestrutura de redes, segurança da informação, automação, sistemas inteligentes e design profissional.</p>
-      <a href="#" class="button" id="btnServices">Conheça nossos serviços</a>
-    </section>
-
-    <!-- SERVIÇOS -->
-    <section id="services">
-      <h2>Nossos Serviços</h2>
-      <div class="services">
-        <div class="service-item"><i class="fas fa-network-wired"></i><h3>Redes e Infraestrutura</h3><p>Planejamento, cabeamento e manutenção de redes corporativas.</p></div>
-        <div class="service-item"><i class="fas fa-desktop"></i><h3>Suporte Técnico</h3><p>Manutenção preventiva e corretiva de equipamentos e servidores.</p></div>
-        <div class="service-item"><i class="fas fa-shield-alt"></i><h3>Segurança Digital</h3><p>Proteção contra ameaças, backup e segurança em nuvem.</p></div>
-        <div class="service-item"><i class="fas fa-robot"></i><h3>Automação e IA</h3><p>Chatbots, sistemas inteligentes e integração de processos.</p></div>
-        <div class="service-item"><i class="fas fa-bullhorn"></i><h3>Marketing Digital</h3><p>Gestão de tráfego, SEO, social media e branding.</p></div>
-        <div class="service-item"><i class="fas fa-palette"></i><h3>Design & Identidade Visual</h3><p>Criação de logotipos, marcas, portfólios e identidade visual completa.</p></div>
-        <div class="service-item"><i class="fas fa-mobile-alt"></i><h3>Desenvolvimento de Aplicativos</h3><p>Aplicativos móveis e sistemas web personalizados sob medida.</p></div>
-        <div class="service-item"><i class="fas fa-layer-group"></i><h3>UI/UX e Experiência do Usuário</h3><p>Interfaces modernas e intuitivas que encantam o usuário.</p></div>
+      <p style="text-align:center;color:var(--muted);max-width:860px;margin:auto">
+        Transformamos tecnologia em crescimento real para sua empresa. Soluções em infra, sistemas, aplicativos, design e marketing — tudo pensado para gerar resultados mensuráveis.
+      </p>
+      <div style="text-align:center;margin-top:20px">
+        <a href="#" id="btnServices" class="cta">Conheça nossos serviços</a>
       </div>
     </section>
 
-    <!-- SOBRE -->
-    <section id="about">
-      <h2>Sobre Nós</h2>
-      <p>A <strong>AtecSeven Tecnologia</strong> nasceu com o propósito de impulsionar empresas a atingirem o seu máximo potencial através da inovação e da transformação digital.</p>
-      <br>
-      <p>Nosso CEO, <strong>Arnaldo S. Lima</strong>, é movido pela missão de tornar a tecnologia uma aliada estratégica de micro, pequenas e médias empresas.  
-      Seu objetivo é transformar negócios em potências digitais — entregando soluções modernas, acessíveis e que realmente geram resultados.  
-      Acreditamos que toda empresa pode ser extraordinária quando tecnologia e propósito caminham juntos.</p>
+    <section id="services">
+      <h2>Nossos Serviços</h2>
+      <div class="services" aria-live="polite">
+        <div class="service"><i class="fas fa-network-wired"></i><h3>Redes e Infraestrutura</h3><p>Planejamento, cabeamento estruturado e suporte de rede.</p></div>
+        <div class="service"><i class="fas fa-desktop"></i><h3>Suporte Técnico</h3><p>Atendimento remoto e on-site, manutenção preventiva e corretiva.</p></div>
+        <div class="service"><i class="fas fa-palette"></i><h3>Design & Identidade</h3><p>Criação de identidade visual, logotipos e materiais gráficos.</p></div>
+        <div class="service"><i class="fas fa-folder-open"></i><h3>Portfólios Profissionais</h3><p>Criação e otimização de portfólios digitais para profissionais e agências.</p></div>
+        <div class="service"><i class="fas fa-mobile-alt"></i><h3>Aplicativos & Web</h3><p>Desenvolvimento de apps mobile e sistemas web sob medida.</p></div>
+        <div class="service"><i class="fas fa-user-check"></i><h3>UI/UX</h3><p>Experiências intuitivas e protótipos interativos que aumentam conversões.</p></div>
+        <div class="service"><i class="fas fa-bullhorn"></i><h3>Marketing Digital</h3><p>SEO, campanhas pagas e gestão de redes sociais.</p></div>
+        <div class="service"><i class="fas fa-chart-line"></i><h3>Sistemas de Gestão</h3><p>ERP, integração bancária e automação de processos administrativos.</p></div>
+      </div>
     </section>
 
-    <!-- CONTATO -->
+    <section id="about">
+      <h2>Sobre Nós</h2>
+      <p style="max-width:900px;margin:auto;color:var(--muted);line-height:1.5">
+        A <strong>ATECSEVEN TECNOLOGIA LTDA</strong> foi criada com o propósito de impulsionar micro, pequenas e médias empresas a alcançarem seu máximo potencial. Oferecemos soluções tecnológicas estratégicas, pensadas para gerar eficiência e crescer com segurança.
+      </p>
+      <br>
+      <p style="max-width:900px;margin:auto;color:var(--muted);line-height:1.5">
+        Nosso CEO, <strong>Arnaldo S. Lima</strong>, tem como missão tornar a tecnologia uma alavanca real — acessível, mensurável e estratégica — para negócios de todos os tamanhos. Ele acredita que, com a combinação certa de tecnologia, processos e propósito, toda empresa pode se tornar a melhor versão de si mesma.
+      </p>
+    </section>
+
     <section id="contact">
       <h2>Contato e Informações Empresariais</h2>
-      <p>Entre em contato conosco ou conheça nossos dados institucionais abaixo:</p>
 
       <div class="info-grid">
-        <div class="info-box">
-          <h4><i class="fas fa-building"></i> Dados Cadastrais</h4>
+        <div class="info" aria-labelledby="dados-title">
+          <h4 id="dados-title"><i class="fas fa-building"></i> Dados Cadastrais</h4>
           <p><strong>CNPJ:</strong> 63.373.374/0001-72</p>
           <p><strong>Razão Social:</strong> ATECSEVEN TECNOLOGIA LTDA</p>
           <p><strong>Nome Fantasia:</strong> ATECSEVEN SOLUÇÕES TECNOLÓGICAS</p>
           <p><strong>Porte:</strong> ME</p>
-          <p><strong>Data de Abertura:</strong> 27/10/2025</p>
+         <!-- <p><strong>Data de Abertura:</strong> 27/10/2025</p>-->
           <p><strong>Natureza Jurídica:</strong> 206-2 - Sociedade Empresária Limitada</p>
         </div>
 
-        <div class="info-box">
-          <h4><i class="fas fa-map-marker-alt"></i> Endereço da Matriz</h4>
+        <div class="info" aria-labelledby="end-title">
+          <h4 id="end-title"><i class="fas fa-map-marker-alt"></i> Matriz</h4>
           <p><strong>Logradouro:</strong> Rua da Bahia, 1148 - Sala 1208</p>
           <p><strong>Bairro:</strong> Centro</p>
           <p><strong>Município:</strong> Belo Horizonte - MG</p>
           <p><strong>CEP:</strong> 30.160-906</p>
         </div>
 
-        <div class="info-box">
-          <h4><i class="fas fa-briefcase"></i> Atividades Econômicas</h4>
-          <p><strong>Principal:</strong> 82.19-9-99 - Serviços de apoio administrativo</p>
-          <p><strong>Secundária:</strong> 82.11-3-00 - Serviços combinados de escritório e apoio administrativo</p>
+        <div class="info" aria-labelledby="cnae-title">
+          <h4 id="cnae-title"><i class="fas fa-briefcase"></i> Atividades Econômicas</h4>
+          <p><strong>Principal:</strong> 82.19-9-99 - Preparação de documentos e serviços especializados de apoio administrativo.</p>
+          <p><strong>Secundária:</strong> 82.11-3-00 - Serviços combinados de escritório e apoio administrativo.</p>
         </div>
 
-        <div class="info-box">
-          <h4><i class="fas fa-phone"></i> Contatos</h4>
+        <div class="info" aria-labelledby="contato-title">
+          <h4 id="contato-title"><i class="fas fa-phone"></i> Contatos</h4>
           <p><strong>Telefone:</strong> (64) 9 9295-2748</p>
-          <p><strong>Email:</strong> <span id="email">comercial@atecseven.com.br</span> 
-            <button onclick="copyEmail()" title="Copiar email"><i class="fas fa-copy"></i></button></p>
-          <p><strong>WhatsApp:</strong> <a href="https://wa.me/5564992952748?text=Olá%20AtecSeven!" target="_blank">Falar agora</a></p>
-          <p><strong>Redes Sociais:</strong></p>
-          <div class="social-icons">
-            <a href="https://facebook.com/atecseven.tecnologia"><i class="fab fa-facebook-f"></i></a>
-            <a href="https://instagram.com/atecseven_tecnologia"><i class="fab fa-instagram"></i></a>
-            <a href="https://linkedin.com/in/atecseven-tecnologia"><i class="fab fa-linkedin-in"></i></a>
+          <p><strong>Email:</strong> <span id="mainEmail">comercial@atecseven.com.br</span>
+            <button aria-label="Copiar email" id="copyEmailBtn" style="margin-left:8px;padding:6px 8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:#fff;cursor:pointer"><i class="fas fa-copy"></i></button>
+          </p>
+          <p><strong>WhatsApp:</strong> <a href="https://wa.me/5564992952748" target="_blank" rel="noopener noreferrer">+55 (64) 9 9295-2748</a></p>
+          <div style="margin-top:10px">
+            <a href="https://facebook.com/atecseven.tecnologia" target="_blank" rel="noopener noreferrer" style="margin-right:8px"><i class="fab fa-facebook-f"></i></a>
+            <a href="https://instagram.com/atecseven_tecnologia" target="_blank" rel="noopener noreferrer" style="margin-right:8px"><i class="fab fa-instagram"></i></a>
+            <a href="https://linkedin.com/in/atecseven-tecnologia" target="_blank" rel="noopener noreferrer"><i class="fab fa-linkedin-in"></i></a>
           </div>
         </div>
       </div>
     </section>
   </main>
 
-  <a href="https://wa.me/5564992952748" target="_blank" class="whatsapp-float"><i class="fab fa-whatsapp"></i></a>
+  <!-- ASSISTANT TOGGLE -->
+  <div class="assistant-toggle" id="assistantToggle" title="Abrir assistente">
+    <i class="fas fa-robot" style="font-size:20px"></i>
+  </div>
+
+  <!-- ASSISTANT PANEL -->
+  <div class="assistant" id="assistant" role="dialog" aria-label="Assistente AtecSeven">
+    <div class="assistant-header">
+      <div class="avatar" aria-hidden="true">
+        <div class="waves">
+          <div class="wave"></div>
+          <div class="wave"></div>
+          <div class="wave"></div>
+        </div>
+        <div class="face"><i class="fas fa-robot" style="font-size:20px;color:rgba(255,255,255,0.95)"></i></div>
+      </div>
+      <div style="flex:1;text-align:left">
+        <div class="title">Aury</div>
+        <div class="subtitle">Assistente virtual • AtecSeven</div>
+      </div>
+    </div>
+
+    <div class="assistant-body" id="assistantBody" aria-live="polite">
+      <!-- messages injected here -->
+      <div class="assistant-message bot" id="welcomeMessage">
+        Olá! 👋 Sou a <strong>Aury</strong>, assistente virtual da AtecSeven. Escolha uma opção abaixo para eu ajudar:
+      </div>
+    </div>
+
+    <div class="assistant-actions">
+      <button type="button" id="btnFinanceiro"><i class="fas fa-money-bill-wave"></i> Financeiro</button>
+      <button type="button" id="btnSuporte"><i class="fas fa-tools"></i> Suporte</button>
+      <button type="button" id="btnOrcamento"><i class="fas fa-file-invoice-dollar"></i> Orçamento</button>
+    </div>
+  </div>
 
   <footer>
-    <p>&copy; <span id="year"></span> AtecSeven Tecnologia. Todos os direitos reservados.</p>
+    <p>&copy; 2023 AtecSeven Tecnologia. Todos os direitos reservados.</p>
   </footer>
 
-  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
   <script>
-    AOS.init();
-
+    // ---------- Basic UI & Section control ----------
     const navLinks = document.querySelectorAll('nav a[data-target]');
     const sections = document.querySelectorAll('main section');
+    function showSection(target){
+      sections.forEach(s => s.classList.remove('active'));
+      navLinks.forEach(a => a.classList.remove('active'));
+      const sec = document.getElementById(target);
+      const link = document.querySelector(`nav a[data-target="${target}"]`);
+      if(sec && link){
+        link.classList.add('active');
+        // small delay for nicer feel
+        setTimeout(()=> sec.classList.add('active'), 80);
+        window.scrollTo({top:0,behavior:'smooth'});
+      }
+    }
+    navLinks.forEach(a => a.addEventListener('click', e => { e.preventDefault(); showSection(a.dataset.target); }));
 
-    function showSection(target) {
-      navLinks.forEach(l => l.classList.remove('active'));
-      sections.forEach(sec => sec.classList.remove('active'));
+    document.getElementById('btnServices').addEventListener('click', e=>{
+      e.preventDefault();
+      showSection('services');
+    });
 
-      const activeLink = document.querySelector(`nav a[data-target="${target}"]`);
-      const activeSection = document.getElementById(target);
-      if (activeLink && activeSection) {
-        activeLink.classList.add('active');
-        setTimeout(() => activeSection.classList.add('active'), 100);
+    // Theme toggle
+    const toggleTheme = document.getElementById('toggleTheme');
+    toggleTheme.addEventListener('click', ()=>{
+      document.body.classList.toggle('dark-mode');
+      toggleTheme.textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+      // persist theme
+      localStorage.setItem('atec-theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+    });
+    if(localStorage.getItem('atec-theme') === 'dark'){
+      document.body.classList.add('dark-mode');
+      toggleTheme.textContent = '☀️';
+    }
+
+    // Year
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // copy email quick action
+    document.getElementById('copyEmailBtn').addEventListener('click', () => {
+      const txt = document.getElementById('mainEmail').textContent.trim();
+      navigator.clipboard.writeText(txt).then(()=> alert('Email copiado!'), ()=> alert('Erro ao copiar'));
+    });
+
+    // ---------- Assistant behavior ----------
+    const assistantToggle = document.getElementById('assistantToggle');
+    const assistant = document.getElementById('assistant');
+    const assistantBody = document.getElementById('assistantBody');
+
+    assistantToggle.addEventListener('click', ()=>{
+      const isOpen = assistant.style.display === 'flex';
+      assistant.style.display = isOpen ? 'none' : 'flex';
+      if(!isOpen){
+        // scroll to bottom if opened
+        setTimeout(()=> assistantBody.scrollTop = assistantBody.scrollHeight, 220);
+      }
+    });
+
+    // helper to add message
+    function addBotMessage(html, typing=false){
+      const msg = document.createElement('div');
+      msg.className = 'assistant-message bot';
+      assistantBody.appendChild(msg);
+      assistantBody.scrollTop = assistantBody.scrollHeight;
+      if(typing){
+        // show typing indicator then type
+        msg.innerHTML = `<div class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>`;
+        assistantBody.scrollTop = assistantBody.scrollHeight;
+        return {
+          typeOut: (text, delay=25) => {
+            setTimeout(()=>{
+              // animate typing letter by letter
+              msg.innerHTML = ''; let i=0;
+              const interval = setInterval(()=> {
+                msg.innerHTML += text[i] === '<' ? '' : text[i]; // naive, we'll just append directly
+                i++;
+                assistantBody.scrollTop = assistantBody.scrollHeight;
+                if(i>=text.length){
+                  clearInterval(interval);
+                }
+              }, delay);
+            }, 800);
+          },
+          replace: (text)=>{ setTimeout(()=> { msg.innerHTML = text; assistantBody.scrollTop = assistantBody.scrollHeight; }, 800); }
+        }
+      } else {
+        msg.innerHTML = html;
+        assistantBody.scrollTop = assistantBody.scrollHeight;
+        return null;
       }
     }
 
-    navLinks.forEach(link => {
-      link.addEventListener('click', e => {
-        const target = link.getAttribute('data-target');
-        showSection(target);
-      });
-    });
+    // more precise typed message (handles html by inserting text nodes)
+    function typedBotMessage(text, typingDelay=18){
+      const msg = document.createElement('div');
+      msg.className = 'assistant-message bot';
+      assistantBody.appendChild(msg);
+      assistantBody.scrollTop = assistantBody.scrollHeight;
 
-    document.getElementById('btnServices').addEventListener('click', e => {
-      e.preventDefault();
-      showSection('services');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
+      // typing indicator first
+      const typingEl = document.createElement('div');
+      typingEl.className = 'typing';
+      typingEl.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+      msg.appendChild(typingEl);
 
-    const toggleBtn = document.getElementById('toggleTheme');
-    toggleBtn.addEventListener('click', () => {
-      document.body.classList.toggle('dark-mode');
-      toggleBtn.textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
-      localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
-    });
-
-    if (localStorage.getItem('theme') === 'dark') {
-      document.body.classList.add('dark-mode');
-      toggleBtn.textContent = '☀️';
+      // after small pause, replace with text typed char-by-char
+      setTimeout(()=>{
+        msg.removeChild(typingEl);
+        // create text nodes safe
+        let i = 0;
+        const out = document.createElement('span');
+        msg.appendChild(out);
+        function step(){
+          if(i < text.length){
+            out.textContent += text[i++];
+            assistantBody.scrollTop = assistantBody.scrollHeight;
+            setTimeout(step, typingDelay);
+          }
+        }
+        step();
+      }, 800);
+      return msg;
     }
 
-    function copyEmail() {
-      const email = document.getElementById('email').textContent;
-      navigator.clipboard.writeText(email);
-      alert('Email copiado!');
-    }
+    // actions: financeiro, orcamento, suporte
+    const pixKey = 'comercial@atecseven.com.br';
+    const phone = '5564992952748';
+    const phoneDisplay = '+55 (64) 9 9295-2748';
 
-    document.getElementById('year').textContent = new Date().getFullYear();
+    // Financeiro
+    document.getElementById('btnFinanceiro').addEventListener('click', async ()=>{
+      // show assistant if closed
+      if(assistant.style.display !== 'flex') assistant.style.display = 'flex';
+      // add typing and then reveal pix
+      typedBotMessage('Aguarde enquanto eu envio a chave PIX para você regularizar... 💳');
+      setTimeout(()=> {
+        const html = `<div style="margin-top:8px"><strong>Chave PIX:</strong> <span id="pixValue" style="font-weight:700">${pixKey}</span>
+          <button id="copyPix" style="margin-left:10px;padding:6px 8px;border-radius:8px;border:none;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;cursor:pointer"><i class="fas fa-copy"></i></button>
+          </div>`;
+        const msg = addBotMessage(html, false);
+        assistantBody.scrollTop = assistantBody.scrollHeight;
+        // attach copy handler
+        setTimeout(()=> {
+          const btn = document.getElementById('copyPix');
+          if(btn){
+            btn.addEventListener('click', ()=> {
+              navigator.clipboard.writeText(pixKey).then(()=> alert('Chave PIX copiada!'), ()=> alert('Erro ao copiar'));
+            });
+          }
+        }, 80);
+      }, 1400);
+    });
+
+    // Orçamento
+    document.getElementById('btnOrcamento').addEventListener('click', ()=>{
+      if(assistant.style.display !== 'flex') assistant.style.display = 'flex';
+      typedBotMessage('Aguarde enquanto te envio o WhatsApp para orçamento... 📞');
+      setTimeout(()=> {
+        const wa = `https://wa.me/${phone}?text=${encodeURIComponent('Olá AtecSeven, gostaria de um orçamento.')}`;
+        const html = `<div style="margin-top:8px"><a href="${wa}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 12px;border-radius:10px;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;font-weight:700;text-decoration:none">Abrir WhatsApp para Orçamento</a></div>`;
+        addBotMessage(html,false);
+      }, 1200);
+    });
+
+    // Suporte
+    document.getElementById('btnSuporte').addEventListener('click', ()=>{
+      if(assistant.style.display !== 'flex') assistant.style.display = 'flex';
+      typedBotMessage('Conectando você ao suporte técnico... ⚙️');
+      setTimeout(()=> {
+        const wa = `https://wa.me/${phone}?text=${encodeURIComponent('Olá AtecSeven, preciso de suporte técnico.')}`;
+        const html = `<div style="margin-top:8px"><a href="${wa}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 12px;border-radius:10px;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;font-weight:700;text-decoration:none">Falar com Suporte</a></div>`;
+        addBotMessage(html,false);
+      }, 1200);
+    });
+
+    // accessibility: close assistant on Escape
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape') assistant.style.display = 'none';
+    });
+
+    // ensure first welcome message scrolls into view
+    setTimeout(()=> {
+      const wm = document.getElementById('welcomeMessage');
+      if(wm) assistantBody.scrollTop = assistantBody.scrollHeight;
+    }, 300);
+
+    // small safety: close assistant when clicking outside (mobile friendly)
+    document.addEventListener('click',(e)=>{
+      const target = e.target;
+      if(!assistant.contains(target) && !assistantToggle.contains(target)){
+        // keep it open if user explicitly opened it; we won't auto-close to avoid annoyance
+        // comment the next line if you prefer not to auto-close:
+        // assistant.style.display = 'none';
+      }
+    });
+
+    // initial state: keep assistant closed
+    assistant.style.display = 'none';
   </script>
 </body>
 </html>
