@@ -14,8 +14,8 @@
       --bg:#f4f7fb;
       --card:#ffffff;
       --glass: rgba(255,255,255,0.06);
-      --primary:#007bff;
-      --secondary:#00d4ff;
+      --primary:#007bff; /* azul */
+      --secondary:#00d4ff; /* ciano predominante */
       --accent:#ffd43b;
       --muted:#6b7280;
       --dark:#0b0f19;
@@ -33,10 +33,22 @@
       -webkit-font-smoothing:antialiased;
       -moz-osx-font-smoothing:grayscale;
       transition:var(--transition);
+      position:relative;
+      overflow-x:hidden;
     }
     body.dark-mode{
       background: linear-gradient(180deg,#071021,#071824);
       color:#e6eef8;
+    }
+
+    /* ---------- Particle canvas (full background) ---------- */
+    .particle-canvas {
+      position:fixed;
+      inset:0;
+      z-index:0;
+      pointer-events:none; /* não atrapalha interações */
+      mix-blend-mode:screen; /* leve brilho sobre o fundo */
+      opacity:0.95;
     }
 
     /* ---------- Header & Nav ---------- */
@@ -45,10 +57,93 @@
       text-align:center;
       background:linear-gradient(135deg,var(--primary),var(--secondary));
       color:#fff;
+      position:relative;
+      z-index:10;
+      overflow:visible;
     }
-    header img{width:112px;border-radius:50%;box-shadow:0 8px 30px rgba(0,0,0,0.18)}
-    header h1{margin:10px 0 6px;font-weight:800;letter-spacing:0.6px}
-    header p{margin:0;color:rgba(255,255,255,0.92);font-weight:300}
+
+    /* Logo wrapper necessário para neon */
+    header .logo-wrap {
+      position:relative;
+      display:inline-block;
+      margin:0 auto;
+      width:112px;
+      height:112px;
+      border-radius:50%;
+    }
+
+    header img{
+      width:112px;border-radius:50%;
+      box-shadow:0 8px 30px rgba(0,0,0,0.18);
+      display:block;
+      position:relative;
+      z-index:2;
+    }
+
+    /* ==== Neon animado ao redor da logo ==== */
+    header .logo-wrap::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background: conic-gradient(
+        from 0deg,
+        rgba(0,212,255,0.95),
+        rgba(0,123,255,0.95),
+        rgba(0,212,255,0.95)
+      );
+      filter: blur(14px) saturate(120%);
+      animation: neon-rotate 6.2s ease-in-out infinite alternate;
+      z-index:1;
+      opacity: 0.95;
+      pointer-events: none;
+    }
+
+    header .logo-wrap::after {
+      /* subtle ring sharp highlight */
+      content:"";
+      position:absolute;
+      top:50%;
+      left:50%;
+      width:150px;
+      height:150px;
+      transform:translate(-50%,-50%);
+      border-radius:50%;
+      box-shadow:0 0 40px rgba(0,212,255,0.25), inset 0 0 8px rgba(255,255,255,0.06);
+      z-index:1;
+      pointer-events:none;
+      opacity:0.65;
+      mix-blend-mode:screen;
+      animation: neon-pulse 3.6s ease-in-out infinite;
+    }
+
+    @keyframes neon-rotate {
+      0% {
+        transform: translate(-50%, -50%) rotate(0deg) scale(0.98);
+        filter: blur(12px) brightness(1.15) saturate(110%);
+      }
+      50% {
+        transform: translate(-50%, -50%) rotate(180deg) scale(1.03);
+        filter: blur(18px) brightness(1.45) saturate(130%);
+      }
+      100% {
+        transform: translate(-50%, -50%) rotate(360deg) scale(0.98);
+        filter: blur(12px) brightness(1.15) saturate(110%);
+      }
+    }
+
+    @keyframes neon-pulse {
+      0% { opacity:0.55; transform: translate(-50%,-50%) scale(0.98); }
+      50% { opacity:0.95; transform: translate(-50%,-50%) scale(1.04); }
+      100% { opacity:0.55; transform: translate(-50%,-50%) scale(0.98); }
+    }
+
+    header h1{margin:10px 0 6px;font-weight:800;letter-spacing:0.6px;position:relative;z-index:3}
+    header p{margin:0;color:rgba(255,255,255,0.92);font-weight:300;position:relative;z-index:3}
 
     nav{
       display:flex;
@@ -68,7 +163,7 @@
     nav a.active{color:var(--primary);border-bottom:3px solid rgba(0,123,255,0.12);padding-bottom:4px}
 
     /* ---------- Layout ---------- */
-    main{max-width:1200px;margin:36px auto;padding:0 20px}
+    main{max-width:1200px;margin:36px auto;padding:0 20px;position:relative;z-index:5}
     section{display:none;opacity:0;transform:translateY(10px);transition:var(--transition);padding:36px 0}
     section.active{display:block;opacity:1;transform:none}
     h2{color:var(--primary);text-align:center;margin-bottom:18px}
@@ -89,7 +184,7 @@
     .cta{display:inline-block;margin-top:20px;padding:12px 22px;border-radius:10px;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;text-decoration:none;font-weight:700;transition:var(--transition)}
     .cta:hover{transform:translateY(-4px);filter:brightness(1.03)}
 
-    footer{margin-top:40px;padding:28px;text-align:center;color:#fff;background:linear-gradient(90deg,var(--primary),var(--secondary));border-radius:12px;margin:40px 20px}
+    footer{margin-top:40px;padding:28px;text-align:center;color:#fff;background:linear-gradient(90deg,var(--primary),var(--secondary));border-radius:12px;margin:40px 20px;position:relative;z-index:5}
 
     /* ---------- Contact info boxes ---------- */
     .info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:18px}
@@ -177,12 +272,40 @@
       .assistant-toggle{right:18px;bottom:16px}
       header h1{font-size:20px}
       nav{gap:10px;padding:12px}
+      header .logo-wrap::before { width:180px; height:180px; }
+      header .logo-wrap::after { width:130px; height:130px; }
+    }
+
+    /* small decorative floats for minimal motion (subtle) */
+    .floating-deco{
+      position:absolute;
+      border-radius:12px;
+      opacity:0.05;
+      z-index:2;
+      pointer-events:none;
+      mix-blend-mode:screen;
+    }
+    .float-1{width:320px;height:120px;top:60px;left:-40px;background:linear-gradient(90deg,var(--secondary),transparent);animation:floatX 9s ease-in-out infinite;}
+    .float-2{width:220px;height:80px;bottom:140px;right:-30px;background:linear-gradient(90deg,var(--primary),transparent);animation:floatX 11s ease-in-out infinite reverse;}
+    @keyframes floatX {
+      0% { transform:translateY(0) translateX(0); opacity:0.06; }
+      50% { transform:translateY(-18px) translateX(6px); opacity:0.09; }
+      100% { transform:translateY(0) translateX(0); opacity:0.06; }
     }
   </style>
 </head>
 <body>
+  <!-- Particle canvas (full-site subtle particles) -->
+  <canvas id="bgParticles" class="particle-canvas" aria-hidden="true"></canvas>
+
+  <!-- subtle decorative floats -->
+  <div class="floating-deco float-1" aria-hidden="true"></div>
+  <div class="floating-deco float-2" aria-hidden="true"></div>
+
   <header>
-    <img src="logo2.png" alt="Logo AtecSeven">
+    <div class="logo-wrap" aria-hidden="false" role="img" aria-label="Logo AtecSeven">
+      <img src="logo2.png" alt="Logo AtecSeven">
+    </div>
     <h1>AtecSeven Tecnologia</h1>
     <p>Inovando o futuro, hoje!</p>
   </header>
@@ -190,7 +313,7 @@
   <nav>
     <a class="active" data-target="home">Início</a>
     <a data-target="services">Serviços</a>
-    <a data-target="about">Sobre</a>
+    <a data-target="about">Sobre Nós</a>
     <a data-target="contact">Contato</a>
     <button id="toggleTheme" aria-label="Alternar tema">🌙</button>
   </nav>
@@ -277,7 +400,7 @@
   </main>
 
   <!-- ASSISTANT TOGGLE -->
-  <div class="assistant-toggle" id="assistantToggle" title="Abrir assistente">
+  <div class="assistant-toggle" id="assistantToggle" title="Abrir assistente" aria-hidden="false">
     <i class="fas fa-robot" style="font-size:20px"></i>
   </div>
 
@@ -388,7 +511,6 @@
         return {
           typeOut: (text, delay=25) => {
             setTimeout(()=>{
-              // animate typing letter by letter
               msg.innerHTML = ''; let i=0;
               const interval = setInterval(()=> {
                 msg.innerHTML += text[i] === '<' ? '' : text[i]; // naive, we'll just append directly
@@ -448,16 +570,13 @@
 
     // Financeiro
     document.getElementById('btnFinanceiro').addEventListener('click', async ()=>{
-      // show assistant if closed
       if(assistant.style.display !== 'flex') assistant.style.display = 'flex';
-      // add typing and then reveal pix
       typedBotMessage('Aguarde enquanto eu envio a chave PIX para você regularizar... 💳');
       setTimeout(()=> {
         const html = `<div style="margin-top:8px"><strong>Chave PIX:</strong> <span id="pixValue" style="font-weight:700">${pixKey}</span>
           <button id="copyPix" style="margin-left:10px;padding:6px 8px;border-radius:8px;border:none;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;cursor:pointer"><i class="fas fa-copy"></i></button>
           </div>`;
-        const msg = addBotMessage(html, false);
-        assistantBody.scrollTop = assistantBody.scrollHeight;
+        addBotMessage(html, false);
         // attach copy handler
         setTimeout(()=> {
           const btn = document.getElementById('copyPix');
@@ -507,14 +626,124 @@
     document.addEventListener('click',(e)=>{
       const target = e.target;
       if(!assistant.contains(target) && !assistantToggle.contains(target)){
-        // keep it open if user explicitly opened it; we won't auto-close to avoid annoyance
-        // comment the next line if you prefer not to auto-close:
-        // assistant.style.display = 'none';
+        // we keep assistant open unless explicitly closed by toggle
       }
     });
 
     // initial state: keep assistant closed
     assistant.style.display = 'none';
+
+
+    /* =======================
+       Particle system (canvas)
+       lightweight, subtle, full-page
+       ======================= */
+    (function(){
+      const canvas = document.getElementById('bgParticles');
+      if(!canvas) return;
+      const ctx = canvas.getContext('2d');
+      let w = 0, h = 0, dpr = Math.max(1, window.devicePixelRatio || 1);
+      let particles = [];
+      const PARTICLE_COUNT_BASE = 40; // baseline density
+      const colors = [
+        'rgba(0,212,255,0.12)',  // secondary (ciano) faint
+        'rgba(0,123,255,0.10)',  // primary faint
+        'rgba(255,255,255,0.04)' // soft white
+      ];
+
+      function resize(){
+        dpr = Math.max(1, window.devicePixelRatio || 1);
+        w = Math.max(320, window.innerWidth);
+        h = Math.max(240, window.innerHeight);
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        initParticles();
+      }
+
+      function rand(min, max){ return Math.random() * (max - min) + min; }
+
+      function initParticles() {
+        particles = [];
+        // density scales with viewport area but capped
+        const areaFactor = (w*h) / (1280*720);
+        const targetCount = Math.min(180, Math.floor(PARTICLE_COUNT_BASE * areaFactor));
+        for(let i=0;i<targetCount;i++){
+          particles.push(createParticle());
+        }
+      }
+
+      function createParticle(){
+        // distribute a bit more near center-top so it looks nicer near header too
+        const x = rand(0, w);
+        const y = rand(0, h);
+        const size = rand(0.6, 3.2);
+        const speed = rand(0.1, 0.6); // very slow
+        const angle = rand(-Math.PI, Math.PI);
+        const vx = Math.cos(angle) * speed * rand(0.2,1.2);
+        const vy = Math.sin(angle) * speed * rand(0.2,1.2) - 0.02; // slight upward drift
+        const color = colors[Math.floor(Math.random()*colors.length)];
+        const life = rand(8, 40);
+        return { x, y, vx, vy, size, color, life, age: rand(0, life) };
+      }
+
+      function update(){
+        for(let p of particles){
+          p.x += p.vx;
+          p.y += p.vy;
+          p.age += 0.02;
+          // gentle wandering
+          p.vx += Math.sin((p.age + p.x) * 0.002) * 0.0008;
+          p.vy += Math.cos((p.age + p.y) * 0.002) * 0.0008;
+          // respawn if out of bounds or old
+          if(p.x < -40 || p.x > w+40 || p.y < -40 || p.y > h+40 || p.age > p.life){
+            Object.assign(p, createParticle());
+            p.x = rand(0, w);
+            p.y = h + rand(0, 80); // respawn near bottom for upward drift
+          }
+        }
+      }
+
+      function draw(){
+        ctx.clearRect(0,0,w,h);
+        // subtle darkening / gradient overlay to give depth (low alpha)
+        // we won't draw heavy layers - keep minimal
+        for(let p of particles){
+          ctx.beginPath();
+          const alpha = Math.max(0.02, 1 - (p.age / p.life));
+          ctx.fillStyle = p.color.replace(/[\d\.]+\)$/,' ' + alpha + ')').replace(',)',')'); // keep color but adjust alpha
+          // fallback: if replace didn't work, use rgba manually
+          // draw soft circle with radial gradient
+          const rad = p.size;
+          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rad*6);
+          g.addColorStop(0, `rgba(255,255,255,${0.22 * alpha})`);
+          g.addColorStop(0.2, p.color.replace(/[\d\.]+\)$/,' ' + (0.18 * alpha) + ')'));
+          g.addColorStop(1, `rgba(255,255,255,0)`);
+          ctx.fillStyle = g;
+          ctx.arc(p.x, p.y, rad*6, 0, Math.PI*2);
+          ctx.fill();
+        }
+      }
+
+      // animation loop
+      let raf = null;
+      function loop(){
+        update();
+        draw();
+        raf = requestAnimationFrame(loop);
+      }
+
+      // init
+      resize();
+      loop();
+      window.addEventListener('resize', ()=> {
+        cancelAnimationFrame(raf);
+        resize();
+        loop();
+      });
+    })();
   </script>
 </body>
 </html>
