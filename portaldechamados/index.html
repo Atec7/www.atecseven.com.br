@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Atec7 Core | Gestão de Chamados</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .hide { display: none !important; }
+        .status-badge { padding: 4px 10px; border-radius: 99px; font-size: 10px; font-weight: 800; text-transform: uppercase; white-space: nowrap; }
+        .status-aberto { background: #fee2e2; color: #991b1b; }
+        .status-em-atendimento { background: #dbeafe; color: #1e40af; }
+        .status-concluido { background: #dcfce7; color: #166534; }
+        /* Scrollbar suave para iOS/Webkit */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-900">
+
+    <div id="login-screen" class="flex items-center justify-center min-h-screen p-4 bg-slate-900 overflow-hidden">
+        <div class="bg-white p-6 md:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md animate-in fade-in zoom-in duration-500">
+            <div class="flex flex-col items-center mb-8">
+                <div class="bg-blue-600 p-4 rounded-2xl mb-4 text-white shadow-xl shadow-blue-500/20">
+                    <i data-lucide="cpu" class="w-8 h-8"></i>
+                </div>
+                <h1 class="text-2xl font-black italic tracking-tighter">ATEC7 <span class="text-blue-600">CORE</span></h1>
+                <p class="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">Portal de Suporte</p>
+            </div>
+            <div class="space-y-4">
+                <input type="email" id="login-email" placeholder="Seu e-mail" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
+                <input type="password" id="login-pass" placeholder="Sua senha" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
+                <button onclick="handleLogin()" id="btn-login" class="w-full bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95 uppercase tracking-widest">Acessar</button>
+                <p id="login-error" class="text-red-500 text-[10px] text-center hide font-black bg-red-50 p-3 rounded-xl uppercase">Usuário ou senha inválidos.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-screen" class="hide">
+        <nav class="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around p-3 z-50 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
+            <button onclick="showSection('dashboard')" class="flex flex-col items-center text-slate-400 hover:text-blue-600 active:scale-90 transition-all"><i data-lucide="layout-grid" class="w-6 h-6"></i></button>
+            <button onclick="toggleModal('modal-ticket')" class="bg-blue-600 text-white p-3 rounded-full -mt-10 shadow-xl shadow-blue-500/40 border-4 border-slate-50 active:scale-90 transition-all"><i data-lucide="plus" class="w-6 h-6"></i></button>
+            <button onclick="logout()" class="flex flex-col items-center text-slate-400 hover:text-red-500 active:scale-90 transition-all"><i data-lucide="log-out" class="w-6 h-6"></i></button>
+        </nav>
+
+        <aside class="fixed left-0 top-0 h-full w-64 bg-white border-r border-slate-200 p-8 hidden lg:block z-40">
+            <div class="flex items-center gap-2 mb-12">
+                <div class="bg-slate-900 p-1.5 rounded-lg text-white"><i data-lucide="cpu" class="w-5 h-5"></i></div>
+                <h1 class="text-xl font-black italic tracking-tighter">ATEC7 CORE</h1>
+            </div>
+            <div class="space-y-2">
+                <button onclick="showSection('dashboard')" class="w-full flex items-center gap-3 p-4 rounded-2xl hover:bg-slate-50 text-slate-500 hover:text-blue-600 font-bold transition-all"><i data-lucide="home"></i> Dashboard</button>
+                <div id="admin-menu" class="hide pt-8 mt-8 border-t border-slate-100">
+                    <p class="text-[10px] text-slate-400 mb-4 px-4 uppercase font-black tracking-widest">Painel Atec7</p>
+                    <button onclick="showSection('users')" class="w-full flex items-center gap-3 p-4 rounded-2xl hover:bg-slate-50 text-slate-500 hover:text-blue-600 font-bold transition-all"><i data-lucide="users"></i> Usuários</button>
+                </div>
+            </div>
+            <div class="absolute bottom-8 left-8 right-8">
+                <button onclick="logout()" class="w-full flex items-center justify-center gap-2 bg-slate-50 text-slate-400 py-4 rounded-2xl font-black hover:bg-red-50 hover:text-red-600 transition-all"><i data-lucide="power" class="w-4 h-4"></i> SAIR</button>
+            </div>
+        </aside>
+
+        <main class="lg:ml-64 p-4 md:p-10 pb-24 lg:pb-10">
+            <header class="flex justify-between items-center mb-8 md:mb-12">
+                <div>
+                    <h2 class="text-2xl md:text-3xl font-black text-slate-900 tracking-tight" id="user-greeting">...</h2>
+                    <span id="user-role-badge" class="bg-blue-100 text-blue-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest">PERFIL</span>
+                </div>
+                <button onclick="toggleModal('modal-ticket')" class="hidden lg:flex bg-blue-600 text-white px-8 py-4 rounded-2xl font-black items-center gap-2 shadow-xl shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all">
+                    <i data-lucide="plus-circle"></i> NOVO CHAMADO
+                </button>
+            </header>
+
+            <section id="section-dashboard" class="animate-in fade-in slide-in-from-bottom-5 duration-500">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-8 md:mb-10" id="stats-container"></div>
+                
+                <div class="bg-white rounded-[2rem] p-6 md:p-8 border border-slate-100 shadow-sm">
+                    <h3 class="font-black text-xl text-slate-900 mb-6 flex items-center gap-2"><i data-lucide="list" class="text-blue-600"></i> Chamados</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left min-w-[500px]">
+                            <thead class="text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-50">
+                                <tr>
+                                    <th class="pb-4 px-2">ID</th>
+                                    <th class="pb-4 px-2">Assunto</th>
+                                    <th class="pb-4 px-2 text-center">Status</th>
+                                    <th class="pb-4 px-2 text-right">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ticket-list" class="divide-y divide-slate-50"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="section-detail" class="hide animate-in slide-in-from-right-10 duration-300">
+                <button onclick="showSection('dashboard')" class="flex items-center gap-2 text-slate-400 mb-6 font-bold hover:text-blue-600 transition-all"><i data-lucide="arrow-left" class="w-5 h-5"></i> Voltar</button>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 space-y-6">
+                        <div class="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 relative">
+                            <div class="bg-blue-50 text-blue-600 font-black text-[10px] px-3 py-1 rounded-full absolute top-6 right-6" id="detail-ticket-number">#000</div>
+                            <div id="detail-header" class="mb-6"></div>
+                            <div id="detail-desc" class="text-slate-600 bg-slate-50 p-5 rounded-2xl border border-dashed border-slate-200 font-medium text-sm leading-relaxed"></div>
+                            <div id="detail-image" class="mt-4"></div>
+                        </div>
+
+                        <div class="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-100">
+                            <h4 class="font-black text-lg mb-6 flex items-center gap-2 text-slate-900"><i data-lucide="message-square" class="text-blue-600"></i> Linha do Tempo</h4>
+                            <div id="detail-comments" class="space-y-4 mb-8"></div>
+                            
+                            <div class="bg-slate-100 p-2 rounded-[2rem] border border-slate-200">
+                                <div class="flex flex-col sm:flex-row gap-2">
+                                    <input type="text" id="new-comment" placeholder="Digite sua mensagem..." class="flex-1 bg-transparent p-4 outline-none font-bold text-sm">
+                                    <div class="flex items-center gap-2 px-2 pb-2 sm:pb-0">
+                                        <label class="cursor-pointer bg-white p-4 rounded-full text-slate-400 hover:text-blue-600 shadow-sm transition-all active:scale-90 border border-slate-200">
+                                            <input type="file" id="c-file" class="hidden" accept="image/*" onchange="previewCommentFile()">
+                                            <i data-lucide="camera" class="w-5 h-5" id="c-file-icon"></i>
+                                        </label>
+                                        <button onclick="sendComment()" id="btn-send-comment" class="bg-slate-900 text-white px-6 py-4 rounded-full hover:bg-blue-600 transition-all font-black uppercase text-xs tracking-widest flex items-center gap-2">
+                                            Enviar <i data-lucide="send" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="c-file-name" class="px-4 pb-2 text-[10px] font-black text-blue-600 hide"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <aside class="space-y-6">
+                        <div id="admin-actions-card" class="bg-slate-900 p-8 rounded-[2.5rem] shadow-xl text-white hide">
+                            <h4 class="font-black text-lg mb-6 flex items-center gap-2"><i data-lucide="settings"></i> Atec7 Admin</h4>
+                            <div class="space-y-3" id="admin-actions">
+                                <button onclick="updateStatus('Em Atendimento')" class="w-full bg-white/10 text-white p-4 rounded-2xl font-black hover:bg-blue-600 transition-all text-xs tracking-widest">ATENDER</button>
+                                <button onclick="updateStatus('Concluído')" class="w-full bg-green-600 text-white p-4 rounded-2xl font-black hover:bg-green-700 transition-all text-xs tracking-widest">FINALIZAR</button>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+
+            <section id="section-users" class="hide animate-in fade-in">
+                <div class="bg-white rounded-[2rem] p-6 md:p-8 border border-slate-100">
+                    <div class="flex flex-col sm:flex-row justify-between gap-4 mb-8">
+                        <h3 class="font-black text-2xl text-slate-900">Gerenciar Acessos</h3>
+                        <button onclick="toggleModal('modal-user')" class="bg-slate-900 text-white px-6 py-4 rounded-2xl text-xs font-black tracking-widest hover:bg-blue-600 transition-all">ADICIONAR</button>
+                    </div>
+                    <div id="user-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="modal-ticket" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md hide flex items-center justify-center p-4 z-[100]">
+        <div class="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
+            <div class="p-8 border-b border-slate-50 flex justify-between items-center sticky top-0 bg-white z-10">
+                <h3 class="text-xl font-black text-slate-900">Novo Chamado</h3>
+                <button onclick="toggleModal('modal-ticket')" class="text-slate-300 hover:text-red-500 transition-all"><i data-lucide="x-circle" class="w-8 h-8"></i></button>
+            </div>
+            <div class="p-8 space-y-6">
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Assunto</label>
+                    <input type="text" id="t-subject" placeholder="Ex: Internet parou" class="w-full border-2 border-slate-100 p-4 rounded-2xl outline-none focus:border-blue-500 font-bold">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Descrição</label>
+                    <textarea id="t-desc" rows="3" placeholder="O que aconteceu?" class="w-full border-2 border-slate-100 p-4 rounded-2xl outline-none focus:border-blue-500 font-bold"></textarea>
+                </div>
+                <div class="border-4 border-dotted border-slate-100 p-8 rounded-[2rem] text-center relative hover:bg-slate-50 transition-all">
+                    <input type="file" id="t-file" class="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" onchange="previewFile('t-file', 't-preview-label')">
+                    <div id="t-preview-label" class="text-slate-400">
+                        <i data-lucide="image-plus" class="mx-auto w-10 h-10 mb-2 text-blue-600"></i>
+                        <p class="text-[10px] font-black uppercase tracking-widest">Clique para print/foto</p>
+                    </div>
+                </div>
+                <button onclick="createTicket()" id="btn-save-ticket" class="w-full bg-blue-600 text-white font-black py-5 rounded-[1.5rem] shadow-xl shadow-blue-500/20 active:scale-95 transition-all">ABRIR CHAMADO AGORA</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-user" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md hide flex items-center justify-center p-4 z-[100]">
+        <div class="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 animate-in zoom-in duration-300">
+            <h3 class="text-xl font-black mb-8">Novo Acesso</h3>
+            <div class="space-y-4">
+                <input type="text" id="u-name" placeholder="Nome" class="w-full border-2 border-slate-100 p-4 rounded-2xl outline-none font-bold">
+                <input type="email" id="u-email" placeholder="E-mail" class="w-full border-2 border-slate-100 p-4 rounded-2xl outline-none font-bold">
+                <input type="password" id="u-pass" placeholder="Senha" class="w-full border-2 border-slate-100 p-4 rounded-2xl outline-none font-bold">
+                <select id="u-role" class="w-full border-2 border-slate-100 p-4 rounded-2xl outline-none font-black text-slate-500">
+                    <option value="cliente">CLIENTE</option>
+                    <option value="atec">ATEC7 ADMIN</option>
+                </select>
+                <button onclick="createUser()" class="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl transition-all active:scale-95">SALVAR USUÁRIO</button>
+                <button onclick="toggleModal('modal-user')" class="w-full text-slate-400 font-bold py-2 text-sm">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, get, push, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDFQCMsX04fwh7MVyEpvXnXD0U4TD5Or5w",
+            authDomain: "ja-barbearia.firebaseapp.com",
+            databaseURL: "https://ja-barbearia-default-rtdb.firebaseio.com",
+            projectId: "ja-barbearia",
+            storageBucket: "ja-barbearia.firebasestorage.app",
+            messagingSenderId: "213237027963",
+            appId: "1:213237027963:web:7d585b158ee06d3ab7fede"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const IMGBB_KEY = "95bb16ee776d7e20f26857cec98bd372";
+
+        let currentUser = JSON.parse(localStorage.getItem('atec7_user')) || null;
+        let activeTicketId = null;
+
+        // AUTH
+        window.handleLogin = async () => {
+            const email = document.getElementById('login-email').value;
+            const pass = document.getElementById('login-pass').value;
+            const btn = document.getElementById('btn-login');
+            if(!email || !pass) return;
+            btn.innerText = "...";
+            const snap = await get(ref(db, 'users'));
+            let found = null;
+            if (snap.exists()) {
+                snap.forEach(c => {
+                    const u = c.val();
+                    if (u.email === email && u.password === pass) found = { ...u, id: c.key };
+                });
+            }
+            if (found) {
+                localStorage.setItem('atec7_user', JSON.stringify(found));
+                initApp(found);
+            } else {
+                document.getElementById('login-error').classList.remove('hide');
+                btn.innerText = "Acessar";
+            }
+        };
+
+        window.logout = () => { localStorage.removeItem('atec7_user'); location.reload(); };
+
+        function initApp(user) {
+            currentUser = user;
+            document.getElementById('login-screen').classList.add('hide');
+            document.getElementById('app-screen').classList.remove('hide');
+            document.getElementById('user-greeting').innerText = `Olá, ${user.name.split(' ')[0]}!`;
+            document.getElementById('user-role-badge').innerText = user.role;
+            if (user.role === 'atec') {
+                document.getElementById('admin-menu').classList.remove('hide');
+                document.getElementById('admin-actions-card').classList.remove('hide');
+                loadUsersList();
+            }
+            loadTickets();
+            lucide.createIcons();
+        }
+
+        // UPLOAD IMGBB
+        async function uploadToImgBB(file) {
+            const formData = new FormData();
+            formData.append('image', file);
+            const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: formData });
+            const data = await res.json();
+            return data.data.url;
+        }
+
+        // TICKET OPS
+        window.createTicket = async () => {
+            const btn = document.getElementById('btn-save-ticket');
+            const sub = document.getElementById('t-subject').value;
+            const file = document.getElementById('t-file').files[0];
+            if(!sub) return alert("Assunto obrigatório");
+            btn.disabled = true; btn.innerText = "ENVIANDO...";
+            let img = file ? await uploadToImgBB(file) : "";
+            const tId = `TK-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+            const tRef = push(ref(db, 'tickets'));
+            await set(tRef, {
+                ticketNum: tId, subject: sub, desc: document.getElementById('t-desc').value,
+                image: img, status: 'Aberto', clientName: currentUser.name, clientId: currentUser.id,
+                createdAt: new Date().toLocaleString('pt-BR')
+            });
+            await set(push(ref(db, `tickets/${tRef.key}/comments`)), {
+                user: "Sistema Atec7", text: `Ticket **${tId}** aberto.`, date: new Date().toLocaleString('pt-BR')
+            });
+            toggleModal('modal-ticket'); btn.disabled = false; btn.innerText = "ABRIR CHAMADO AGORA";
+        };
+
+        function loadTickets() {
+            onValue(ref(db, 'tickets'), (snap) => {
+                const list = document.getElementById('ticket-list');
+                list.innerHTML = "";
+                let stats = { aberto: 0, andamento: 0, concluido: 0 };
+                if (snap.exists()) {
+                    const data = [];
+                    snap.forEach(c => {
+                        const t = c.val();
+                        if (currentUser.role === 'cliente' && t.clientId !== currentUser.id) return;
+                        data.push({ ...t, fbKey: c.key });
+                    });
+                    data.reverse().forEach(t => {
+                        if (t.status === 'Aberto') stats.aberto++;
+                        if (t.status === 'Em Atendimento') stats.andamento++;
+                        if (t.status === 'Concluído') stats.concluido++;
+                        list.innerHTML += `
+                            <tr class="hover:bg-slate-50 transition-all cursor-pointer" onclick="viewDetail('${t.fbKey}')">
+                                <td class="py-5 px-2 font-black text-blue-600 text-xs">${t.ticketNum}</td>
+                                <td class="py-5 px-2"><p class="font-bold text-slate-800 text-sm">${t.subject}</p></td>
+                                <td class="py-5 px-2 text-center"><span class="status-badge status-${t.status.toLowerCase().replace(/ /g, '-')}">${t.status}</span></td>
+                                <td class="py-5 px-2 text-right text-slate-300"><i data-lucide="chevron-right" class="w-4 h-4 ml-auto"></i></td>
+                            </tr>`;
+                    });
+                }
+                renderStats(stats); lucide.createIcons();
+            });
+        }
+
+        window.viewDetail = (id) => {
+            activeTicketId = id;
+            onValue(ref(db, `tickets/${id}`), (snap) => {
+                const t = snap.val(); if (!t) return;
+                document.getElementById('detail-ticket-number').innerText = t.ticketNum;
+                document.getElementById('detail-header').innerHTML = `
+                    <h2 class="text-2xl font-black text-slate-900 leading-tight pr-12">${t.subject}</h2>
+                    <p class="text-[9px] font-black text-slate-400 mt-2 uppercase tracking-widest">${t.clientName} | ${t.createdAt}</p>`;
+                document.getElementById('detail-desc').innerText = t.desc;
+                document.getElementById('detail-image').innerHTML = t.image ? `<a href="${t.image}" target="_blank" class="inline-flex items-center gap-2 bg-blue-50 text-blue-600 p-3 rounded-xl font-black text-[10px] uppercase mt-4"><i data-lucide="image"></i> Ver Print Inicial</a>` : "";
+                const box = document.getElementById('detail-comments'); box.innerHTML = "";
+                if (t.comments) {
+                    Object.values(t.comments).forEach(c => {
+                        const isS = c.user === 'Sistema Atec7';
+                        box.innerHTML += `
+                            <div class="${isS ? 'bg-blue-50/50' : 'bg-slate-50'} p-4 rounded-2xl border border-slate-100">
+                                <div class="flex justify-between mb-2">
+                                    <span class="font-black text-[9px] uppercase tracking-widest ${isS ? 'text-blue-600' : 'text-slate-500'}">${c.user}</span>
+                                    <span class="text-[9px] text-slate-400 font-bold">${c.date}</span>
+                                </div>
+                                <p class="text-sm font-medium text-slate-700 leading-relaxed">${c.text}</p>
+                                ${c.image ? `<a href="${c.image}" target="_blank" class="mt-2 inline-flex items-center gap-1 text-blue-600 font-black text-[9px] uppercase border border-blue-100 bg-white px-2 py-1 rounded-md"><i data-lucide="paperclip" class="w-3 h-3"></i> Ver Anexo</a>` : ""}
+                            </div>`;
+                    });
+                }
+                showSection('detail'); lucide.createIcons();
+            });
+        };
+
+        // COMENTÁRIO COM ANEXO
+        window.sendComment = async () => {
+            const input = document.getElementById('new-comment');
+            const fileInput = document.getElementById('c-file');
+            const btn = document.getElementById('btn-send-comment');
+            if (!input.value && !fileInput.files[0]) return;
+            
+            btn.disabled = true; btn.innerText = "...";
+            let imgUrl = "";
+            if (fileInput.files[0]) imgUrl = await uploadToImgBB(fileInput.files[0]);
+
+            await set(push(ref(db, `tickets/${activeTicketId}/comments`)), {
+                user: currentUser.name, text: input.value || "Anexo enviado.", 
+                image: imgUrl, date: new Date().toLocaleString('pt-BR')
+            });
+            
+            input.value = ""; fileInput.value = "";
+            document.getElementById('c-file-name').classList.add('hide');
+            document.getElementById('c-file-icon').className = "w-5 h-5";
+            btn.disabled = false; btn.innerText = "Enviar";
+            lucide.createIcons();
+        };
+
+        window.updateStatus = async (s) => {
+            await update(ref(db, `tickets/${activeTicketId}`), { status: s });
+            await set(push(ref(db, `tickets/${activeTicketId}/comments`)), {
+                user: "Sistema Atec7", text: `Status alterado para: **${s}**`, date: new Date().toLocaleString('pt-BR')
+            });
+        };
+
+        function renderStats(s) {
+            document.getElementById('stats-container').innerHTML = `
+                <div class="bg-white p-6 rounded-[2rem] border border-slate-100"><p class="text-slate-400 text-[10px] font-black uppercase mb-1">Abertos</p><p class="text-3xl font-black">${s.aberto}</p></div>
+                <div class="bg-white p-6 rounded-[2rem] border border-slate-100"><p class="text-slate-400 text-[10px] font-black uppercase mb-1">Andamento</p><p class="text-3xl font-black text-blue-600">${s.andamento}</p></div>
+                <div class="bg-white p-6 rounded-[2rem] border border-slate-100"><p class="text-slate-400 text-[10px] font-black uppercase mb-1">Finalizados</p><p class="text-3xl font-black text-green-600">${s.concluido}</p></div>`;
+        }
+
+        window.createUser = async () => {
+            const n = document.getElementById('u-name').value;
+            const e = document.getElementById('u-email').value;
+            const p = document.getElementById('u-pass').value;
+            const r = document.getElementById('u-role').value;
+            if(!e || !n) return;
+            await push(ref(db, 'users'), { name: n, email: e, password: p, role: r });
+            alert('Acesso criado!'); toggleModal('modal-user'); loadUsersList();
+        };
+
+        async function loadUsersList() {
+            const snap = await get(ref(db, 'users'));
+            const box = document.getElementById('user-list'); box.innerHTML = "";
+            snap.forEach(u => {
+                const user = u.val();
+                box.innerHTML += `
+                <div class="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div class="bg-white p-3 rounded-xl shadow-sm"><i data-lucide="user" class="w-4 h-4 text-slate-400"></i></div>
+                    <div><p class="font-black text-slate-900 text-xs">${user.name}</p><p class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">${user.email} | ${user.role}</p></div>
+                </div>`;
+            });
+            lucide.createIcons();
+        }
+
+        window.toggleModal = (id) => document.getElementById(id).classList.toggle('hide');
+        window.showSection = (n) => {
+            ['dashboard', 'users', 'detail'].forEach(s => document.getElementById(`section-${s}`).classList.add('hide'));
+            document.getElementById(`section-${n}`).classList.remove('hide');
+            window.scrollTo(0,0);
+        };
+        window.previewFile = (inputId, labelId) => {
+            const f = document.getElementById(inputId).files[0];
+            if(f) document.getElementById(labelId).innerHTML = `<p class="text-blue-600 font-black text-[9px] uppercase">${f.name}</p>`;
+        };
+        window.previewCommentFile = () => {
+            const f = document.getElementById('c-file').files[0];
+            const nameBox = document.getElementById('c-file-name');
+            if(f) {
+                nameBox.innerText = `Anexo: ${f.name}`;
+                nameBox.classList.remove('hide');
+                document.getElementById('c-file-icon').className = "w-5 h-5 text-blue-600";
+            }
+        };
+
+        if (currentUser) initApp(currentUser);
+        lucide.createIcons();
+    </script>
+</body>
+</html>
