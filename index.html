@@ -601,15 +601,32 @@
     });
 
     // Suporte
-    document.getElementById('btnSuporte').addEventListener('click', ()=>{
-      if(assistant.style.display !== 'flex') assistant.style.display = 'flex';
-      typedBotMessage('Conectando você ao suporte técnico... ⚙️');
-      setTimeout(()=> {
-        const wa = `https://wa.me/${phone}?text=${encodeURIComponent('Olá AtecSeven, preciso de suporte técnico.')}`;
-        const html = `<div style="margin-top:8px"><a href="${wa}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 12px;border-radius:10px;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;font-weight:700;text-decoration:none">Falar com Suporte</a></div>`;
-        addBotMessage(html,false);
-      }, 1200);
-    });
+     document.getElementById('btnSuporte').addEventListener('click', () => {
+  // Garante que o container do assistente esteja visível
+  if(assistant.style.display !== 'flex') assistant.style.display = 'flex';
+  
+  typedBotMessage('Conectando você ao portal de chamados... ⚙️');
+  
+  setTimeout(() => {
+    // URL do seu portal (adicione o https:// para garantir que não abra como subdiretório)
+    const portalUrl = 'https://www.atecseven.com.br/portaldechamados';
+    
+    const html = `
+      <div style="margin-top:8px">
+        <p style="font-size:13px; margin-bottom:8px; color:var(--text-muted);">
+          Clique no botão abaixo para abrir um ticket ou acompanhar seus chamados:
+        </p>
+        <a href="${portalUrl}" 
+           target="_blank" 
+           rel="noopener noreferrer" 
+           style="display:inline-block; padding:12px 20px; border-radius:12px; background:linear-gradient(90deg, #2563eb, #1d4ed8); color:#fff; font-weight:700; text-decoration:none; text-align:center; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); transition: transform 0.2s;">
+           🚀 Abrir Portal de Chamados
+        </a>
+      </div>`;
+      
+    addBotMessage(html, false);
+  }, 1000);
+});
 
     // accessibility: close assistant on Escape
     document.addEventListener('keydown', (e)=>{
