@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Atecseven Tecnologia - Chat v2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --atec-dark: #0f172a; --atec-blue: #0ea5e9; --msg-in: #ffffff; --msg-out: #e0f2fe; }
+        body { font-family: 'Inter', sans-serif; background: #f1f5f9; height: 100vh; overflow: hidden; margin: 0; }
+        
+        .view { display: none; height: 100%; width: 100%; }
+        .view.active { display: flex; flex-direction: column; }
+
+        #messages { 
+            background: #f8fafc; 
+            background-image: radial-gradient(#e2e8f0 0.8px, transparent 0.8px); 
+            background-size: 20px 20px; 
+        }
+        
+        .bubble { 
+            position: relative; max-width: 75%; padding: 10px 14px; border-radius: 14px; 
+            font-size: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+            transition: transform 0.1s; cursor: pointer;
+        }
+        .bubble-in { background: var(--msg-in); align-self: flex-start; border-bottom-left-radius: 2px; color: #1e293b; }
+        .bubble-out { background: var(--msg-out); align-self: flex-end; border-bottom-right-radius: 2px; color: #0c4a6e; }
+
+        .msg-options {
+            opacity: 0; position: absolute; top: 2px; right: -25px; 
+            color: #94a3b8; padding: 5px; transition: 0.2s;
+        }
+        .bubble:hover .msg-options { opacity: 1; }
+        .bubble-out .msg-options { left: -25px; right: auto; }
+
+        .reply-citation {
+            background: rgba(0,0,0,0.05); border-left: 3px solid var(--atec-blue);
+            padding: 4px 8px; border-radius: 4px; margin-bottom: 6px; font-size: 12px;
+            color: #64748b; display: block;
+        }
+
+        #ctx-menu {
+            position: fixed; background: white; border-radius: 8px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15); z-index: 1000; display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="ctx-menu" class="overflow-hidden border border-slate-200">
+    <div class="px-4 py-3 hover:bg-slate-50 cursor-pointer text-sm border-b border-slate-100" onclick="prepareReply()">Responder</div>
+    <div class="px-4 py-3 hover:bg-slate-50 cursor-pointer text-sm text-red-500 font-bold" onclick="deleteMessage()">Apagar</div>
+</div>
+
+<div id="v-login" class="view active items-center justify-center bg-slate-900 px-4">
+    <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center">
+        <h1 class="text-2xl font-black text-slate-900 mb-6 uppercase tracking-tighter">ATEC<span class="text-sky-500">SEVEN</span></h1>
+        <input type="text" id="username" placeholder="Nome do Usuário" class="w-full p-4 bg-slate-50 rounded-xl mb-4 outline-none border-2 border-transparent focus:border-sky-500">
+        <button onclick="login()" class="w-full bg-sky-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-sky-200 hover:bg-sky-600 active:scale-95 transition-all">ENTRAR</button>
+    </div>
+</div>
+
+<div id="v-admin" class="view bg-slate-50">
+    <header class="bg-slate-900 p-5 text-white font-bold flex justify-between items-center">
+        <span>PAINEL ATECSEVEN</span>
+        <button onclick="location.reload()" class="text-xs opacity-60">Sair</button>
+    </header>
+    <div id="user-list" class="flex-1 overflow-y-auto p-4 flex flex-col gap-3"></div>
+</div>
+
+<div id="v-chat" class="view bg-white max-w-4xl mx-auto border-x border-slate-200">
+    <header class="p-4 border-b flex items-center gap-3 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+        <button onclick="voltar()" id="btn-voltar" class="text-sky-500 font-bold px-2">❮</button>
+        <div class="w-10 h-10 rounded-full bg-sky-500 text-white flex items-center justify-center font-bold shadow-inner" id="chat-avatar">A</div>
+        <div class="flex-1">
+            <h3 class="font-bold text-slate-800 text-sm" id="chat-title">Carregando...</h3>
+            <span class="text-[10px] text-green-500 font-bold uppercase">Sistema Ativo</span>
+        </div>
+    </header>
+
+    <div id="messages" class="flex-1 overflow-y-auto p-4 flex flex-col gap-3"></div>
+
+    <div id="reply-box" class="hidden bg-slate-100 border-l-4 border-sky-500 p-3 flex justify-between items-center animate__animated animate__slideInUp">
+        <div class="truncate mr-4">
+            <p class="text-[10px] font-bold text-sky-600 uppercase">Respondendo a:</p>
+            <p class="text-xs text-slate-600 italic truncate" id="reply-content">Conteúdo da mensagem...</p>
+        </div>
+        <button onclick="cancelReply()" class="bg-slate-300 text-white rounded-full w-5 h-5 text-[10px]">✕</button>
+    </div>
+
+    <footer class="p-4 bg-white border-t flex items-center gap-3">
+        <label class="cursor-pointer text-slate-400 hover:text-sky-500">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            <input type="file" class="hidden" accept="image/*" onchange="uploadImg(this)">
+        </label>
+        <input type="text" id="msg-input" placeholder="Mensagem..." class="flex-1 bg-slate-100 p-3 rounded-2xl outline-none text-sm border border-transparent focus:border-sky-200">
+        <button onclick="enviar()" class="bg-sky-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-all">
+            <svg class="w-5 h-5 fill-current rotate-90" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+        </button>
+    </footer>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCSeSmkMM_4-NlLv8Js_ODwA4H372yq48k",
+        authDomain: "rnc-sgt.firebaseapp.com",
+        databaseURL: "https://rnc-sgt-default-rtdb.firebaseio.com",
+        projectId: "rnc-sgt",
+        storageBucket: "rnc-sgt.firebasestorage.app",
+        messagingSenderId: "500336948308",
+        appId: "1:500336948308:web:a6448b9141974f542ce9c1",
+        measurementId: "G-LB9EQPJRQ1"
+    };
+
+    const IMGBB_KEY = "95bb16ee776d7e20f26857cec98bd372"; // <--- COLOQUE SUA KEY DO IMGBB AQUI
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let user = "", chatID = "", isAdmin = false, msgRefId = "", msgRefText = "", replyActive = null;
+
+    function login() {
+        const val = document.getElementById('username').value.trim();
+        if(!val) return;
+        user = val; isAdmin = (val.toLowerCase() === 'admin');
+        if(isAdmin) { show('v-admin'); loadUsers(); }
+        else { chatID = user; abrirChat(user); }
+    }
+
+    function loadUsers() {
+        db.ref('users').on('value', s => {
+            const list = document.getElementById('user-list'); list.innerHTML = "";
+            s.forEach(u => {
+                const uData = u.val();
+                list.innerHTML += `<div onclick="abrirChat('${uData.name}')" class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer hover:border-sky-500 border-2 border-transparent transition-all">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-500">${uData.name[0]}</div>
+                        <span class="font-bold text-slate-700">${uData.name}</span>
+                    </div>
+                    <span class="text-sky-500 text-[10px] font-black">ABRIR</span>
+                </div>`;
+            });
+        });
+    }
+
+    async function uploadImg(el) {
+        if(!el.files[0]) return;
+        const body = new FormData(); body.append("image", el.files[0]);
+        const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: "POST", body });
+        const data = await res.json();
+        enviar(data.data.url, 'image');
+    }
+
+    function enviar(content = null, type = 'text') {
+        const input = document.getElementById('msg-input');
+        const text = content || input.value.trim();
+        if(!text) return;
+
+        db.ref('chats/' + chatID).push({
+            sender: user, text: text, type: type,
+            replyTo: replyActive, // Objeto de resposta
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            ts: Date.now()
+        });
+
+        if(!isAdmin) db.ref('users/' + user).set({name: user});
+        input.value = ""; cancelReply();
+    }
+
+    function abrirChat(n) {
+        chatID = n; document.getElementById('chat-title').innerText = isAdmin ? n : "Suporte Atecseven";
+        document.getElementById('chat-avatar').innerText = (isAdmin ? n[0] : "A").toUpperCase();
+        if(!isAdmin) document.getElementById('btn-voltar').style.display = 'none';
+        show('v-chat'); loadMessages();
+    }
+
+    function loadMessages() {
+        db.ref('chats/' + chatID).on('value', s => {
+            const container = document.getElementById('messages'); container.innerHTML = "";
+            s.forEach(child => {
+                const d = child.val();
+                const isMe = d.sender === user;
+                const bubble = document.createElement('div');
+                bubble.className = `bubble ${isMe ? 'bubble-out' : 'bubble-in'}`;
+                
+                // DOUBLE CLICK PC
+                bubble.ondblclick = () => setReply(d.text);
+
+                let html = `<div class="msg-options" onclick="openMenu(event, '${child.key}', '${d.text}')">⋮</div>`;
+                if(d.replyTo) html += `<div class="reply-citation">"${d.replyTo}"</div>`;
+                if(d.type === 'image') html += `<img src="${d.text}" class="rounded-lg max-w-full">`;
+                else html += `<div>${d.text}</div>`;
+                
+                html += `<div class="text-[9px] mt-1 text-right opacity-40">${d.time}</div>`;
+                bubble.innerHTML = html;
+                container.appendChild(bubble);
+            });
+            container.scrollTop = container.scrollHeight;
+        });
+    }
+
+    // LÓGICA DE RESPOSTA CORRIGIDA
+    function openMenu(e, id, text) {
+        e.stopPropagation(); msgRefId = id; msgRefText = text;
+        const menu = document.getElementById('ctx-menu');
+        menu.style.display = 'block';
+        menu.style.left = e.clientX + 'px';
+        menu.style.top = e.clientY + 'px';
+    }
+
+    function prepareReply() { setReply(msgRefText); }
+
+    function setReply(text) {
+        replyActive = text.substring(0, 50);
+        document.getElementById('reply-box').classList.remove('hidden');
+        document.getElementById('reply-content').innerText = text;
+        document.getElementById('msg-input').focus();
+    }
+
+    function cancelReply() { replyActive = null; document.getElementById('reply-box').classList.add('hidden'); }
+    function deleteMessage() { if(confirm("Apagar?")) db.ref('chats/' + chatID + '/' + msgRefId).remove(); }
+    function voltar() { show(isAdmin ? 'v-admin' : 'v-login'); }
+    function show(id) { document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+    
+    document.addEventListener('click', () => document.getElementById('ctx-menu').style.display = 'none');
+    document.getElementById('msg-input').onkeypress = (e) => { if(e.key === 'Enter') enviar(); };
+</script>
+</body>
+</html>
