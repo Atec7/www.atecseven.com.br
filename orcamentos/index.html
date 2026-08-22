@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gerador de Orçamentos — Atecseven Tecnologia</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 <style>
   :root{
     --navy:#0b2545;
@@ -46,7 +48,15 @@
     color:var(--muted);
     font-size:13px;
     margin-top:2px;
+    display:flex;
+    align-items:center;
+    gap:8px;
   }
+  .status-dot{
+    width:8px;height:8px;border-radius:50%;background:#c9cdd4;display:inline-block;
+  }
+  .status-dot.ok{background:#2ea043;}
+  .status-dot.err{background:#d1242f;}
   .theme-picker{
     display:flex;
     gap:8px;
@@ -118,6 +128,7 @@
   }
   .btn-primary{background:var(--accent);color:#fff;}
   .btn-primary:hover{filter:brightness(1.08);}
+  .btn-primary:disabled{opacity:.6;cursor:wait;}
   .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink);}
   .btn-ghost:hover{background:#f4f6f9;}
   .btn-danger{background:#fff;border:1px solid #f0c4c4;color:#b3271f;}
@@ -144,6 +155,7 @@
   }
   .totals .line{display:flex;justify-content:space-between;padding:5px 0;font-size:14px;}
   .totals .line.grand{font-size:19px;font-weight:700;color:var(--accent);border-top:1px solid var(--line);padding-top:10px;margin-top:6px;}
+  .totals .line.sinal{font-size:12.5px;color:var(--muted);}
   .totals .muted{color:var(--muted);font-size:12.5px;}
 
   .actions-bar{
@@ -171,6 +183,11 @@
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
   .hint{font-size:11.5px;color:var(--muted);margin-top:4px;}
+  .qr-preview{
+    width:80px;height:80px;border-radius:8px;border:1px dashed var(--line);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fafbfc;flex-shrink:0;
+  }
+  .qr-preview img{max-width:100%;max-height:100%;object-fit:contain;}
 </style>
 </head>
 <body>
@@ -179,7 +196,7 @@
   <header class="top">
     <div>
       <h1>Gerador de Orçamentos</h1>
-      <div class="sub">Monte, salve e exporte orçamentos em PDF — Atecseven Tecnologia</div>
+      <div class="sub"><span class="status-dot" id="dbStatus"></span><span id="dbStatusText">Conectando ao banco de dados…</span></div>
     </div>
     <div class="theme-picker" id="themePicker">
       <button class="theme-azul active" data-theme="azul" title="Azul"></button>
@@ -201,7 +218,7 @@
             <input type="file" id="logoInput" accept="image/*" style="display:none">
             <button class="btn btn-ghost btn-sm" onclick="document.getElementById('logoInput').click()">Enviar logo</button>
             <button class="btn btn-ghost btn-sm" onclick="removeLogo()">Remover</button>
-            <div class="hint">PNG ou JPG, fundo transparente fica melhor</div>
+            <div class="hint" id="logoHint">A imagem é enviada ao imgbb e só o link fica salvo no banco</div>
           </div>
         </div>
         <div class="field"><label>Nome da empresa</label><input id="empNome" value="Atecseven Tecnologia LTDA"></div>
@@ -253,14 +270,27 @@
             </span>
           </div>
           <div class="line grand"><span>Total</span><span id="totalView">R$ 0,00</span></div>
+          <div class="line sinal"><span>Sinal sugerido (50% de entrada)</span><span id="sinalView">R$ 0,00</span></div>
         </div>
       </div>
 
       <div class="card">
-        <h2><span class="dot"></span>Condições</h2>
+        <h2><span class="dot"></span>Condições e sinal de entrada</h2>
         <div class="row2">
           <div class="field"><label>Validade da proposta</label><input id="validade" placeholder="Ex: 15 dias"></div>
           <div class="field"><label>Forma de pagamento</label><input id="pagamento" placeholder="Ex: 50% entrada + 50% na entrega"></div>
+        </div>
+        <div class="field"><label>Chave PIX</label><input id="pixChave" placeholder="Ex: 63.373.374/0001-72 ou e-mail/telefone"></div>
+        <div class="logo-box field">
+          <div class="qr-preview" id="qrPreview">
+            <span style="font-size:10px;color:#9aa1ac;text-align:center;">QR do<br>sinal</span>
+          </div>
+          <div>
+            <input type="file" id="qrInput" accept="image/*" style="display:none">
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('qrInput').click()">Enviar QR Code</button>
+            <button class="btn btn-ghost btn-sm" onclick="removeQr()">Remover</button>
+            <div class="hint" id="qrHint">QR Code do Pix para o sinal de 50% de entrada</div>
+          </div>
         </div>
         <div class="field"><label>Observações</label><textarea id="observacoes" rows="3" placeholder="Prazo de execução, garantia, etc."></textarea></div>
       </div>
@@ -275,16 +305,17 @@
           <div class="field"><label>Data</label><input id="dataOrc" type="date"></div>
         </div>
         <div class="actions-bar">
-          <button class="btn btn-primary" onclick="gerarPDF()">Gerar PDF</button>
+          <button class="btn btn-primary" id="btnPdf" onclick="gerarPDF()">Gerar PDF</button>
           <button class="btn btn-ghost" onclick="salvarOrcamento()">Salvar</button>
           <button class="btn btn-ghost" onclick="novoOrcamento()">Novo</button>
         </div>
+        <div class="hint">O PDF sai em formato horizontal (paisagem), com o QR do sinal ao lado do total.</div>
       </div>
 
       <div class="card">
         <h2><span class="dot"></span>Orçamentos salvos</h2>
         <div id="historyList" class="history-list">
-          <div class="empty-hint">Nenhum orçamento salvo ainda.</div>
+          <div class="empty-hint">Carregando…</div>
         </div>
       </div>
     </div>
@@ -295,15 +326,70 @@
 
 <script>
 /* =========================================================
-   ARMAZENAMENTO
-   Este ambiente (artifacts do Claude) não roda localStorage,
-   por isso uso o storage próprio dos artifacts (window.storage),
-   que salva os dados por usuário e persiste entre sessões
-   normalmente. Se você copiar este arquivo para rodar fora do
-   Claude, é só trocar as chamadas de storage por localStorage.
+   BANCO DE DADOS — Firebase Realtime Database
+   Os orçamentos ficam salvos em /orcamentos/{id} e continuam
+   editáveis depois, de qualquer dispositivo que abra este
+   arquivo. As imagens (logo e QR code) não vão pro banco —
+   são enviadas ao imgbb e só o link (URL) fica salvo, pra
+   não pesar o registro.
 ========================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyD9kWG_RgdfBURwHafLWcN3P_qVxMvqHTE",
+  authDomain: "demobarbearia-4eb73.firebaseapp.com",
+  databaseURL: "https://demobarbearia-4eb73-default-rtdb.firebaseio.com",
+  projectId: "demobarbearia-4eb73",
+  storageBucket: "demobarbearia-4eb73.firebasestorage.app",
+  messagingSenderId: "522986196174",
+  appId: "1:522986196174:web:7d78eb757acf64f3ff149f"
+};
+const IMGBB_KEY = '95bb16ee776d7e20f26857cec98bd372';
 
-let logoDataUrl = null;
+let db = null;
+try{
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+  db.ref('.info/connected').on('value', (snap)=>{
+    const ok = snap.val() === true;
+    document.getElementById('dbStatus').className = 'status-dot ' + (ok ? 'ok':'err');
+    document.getElementById('dbStatusText').textContent = ok ? 'Conectado ao banco de dados' : 'Sem conexão com o banco';
+  });
+}catch(e){
+  console.error('Falha ao iniciar Firebase', e);
+  document.getElementById('dbStatus').className = 'status-dot err';
+  document.getElementById('dbStatusText').textContent = 'Erro ao conectar ao banco';
+}
+
+async function dbSet(path, value){
+  await db.ref(path).set(value);
+}
+async function dbGet(path){
+  const snap = await db.ref(path).once('value');
+  return snap.exists() ? snap.val() : null;
+}
+async function dbDelete(path){
+  await db.ref(path).remove();
+}
+async function dbGetAll(path){
+  const snap = await db.ref(path).once('value');
+  if(!snap.exists()) return [];
+  const val = snap.val();
+  return Object.keys(val).map(k => ({...val[k], id: val[k].id || k}));
+}
+
+/* ---------- UPLOAD DE IMAGEM (imgbb) ---------- */
+async function uploadToImgbb(file){
+  const fd = new FormData();
+  fd.append('image', file);
+  const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, {
+    method:'POST', body: fd
+  });
+  const json = await res.json();
+  if(!json.success) throw new Error('Falha no upload da imagem');
+  return json.data.url;
+}
+
+let logoUrl = null;
+let qrUrl = null;
 let currentTheme = 'azul';
 let currentId = null;
 
@@ -317,28 +403,7 @@ function showToast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 2200);
-}
-
-async function storageSet(key, value){
-  try{
-    await window.storage.set(key, JSON.stringify(value));
-  }catch(e){ console.error('storage set falhou', e); }
-}
-async function storageGet(key){
-  try{
-    const r = await window.storage.get(key);
-    return r ? JSON.parse(r.value) : null;
-  }catch(e){ return null; }
-}
-async function storageDelete(key){
-  try{ await window.storage.delete(key); }catch(e){}
-}
-async function storageListPrefix(prefix){
-  try{
-    const r = await window.storage.list(prefix);
-    return r ? r.keys : [];
-  }catch(e){ return []; }
+  setTimeout(()=>t.classList.remove('show'), 2400);
 }
 
 /* ---------- THEME ---------- */
@@ -351,19 +416,45 @@ document.getElementById('themePicker').addEventListener('click', (e)=>{
 });
 
 /* ---------- LOGO ---------- */
-document.getElementById('logoInput').addEventListener('change', (e)=>{
+document.getElementById('logoInput').addEventListener('change', async (e)=>{
   const file = e.target.files[0];
   if(!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev)=>{
-    logoDataUrl = ev.target.result;
-    document.getElementById('logoPreview').innerHTML = `<img src="${logoDataUrl}">`;
-  };
-  reader.readAsDataURL(file);
+  document.getElementById('logoHint').textContent = 'Enviando imagem…';
+  try{
+    logoUrl = await uploadToImgbb(file);
+    document.getElementById('logoPreview').innerHTML = `<img src="${logoUrl}">`;
+    document.getElementById('logoHint').textContent = 'A imagem é enviada ao imgbb e só o link fica salvo no banco';
+    showToast('Logo enviada ✓');
+  }catch(err){
+    console.error(err);
+    document.getElementById('logoHint').textContent = 'Falha no upload — tente novamente';
+    showToast('Erro ao enviar a logo');
+  }
 });
 function removeLogo(){
-  logoDataUrl = null;
+  logoUrl = null;
   document.getElementById('logoPreview').innerHTML = `<span style="font-size:11px;color:#9aa1ac;">sem logo</span>`;
+}
+
+/* ---------- QR CODE DO SINAL ---------- */
+document.getElementById('qrInput').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  document.getElementById('qrHint').textContent = 'Enviando imagem…';
+  try{
+    qrUrl = await uploadToImgbb(file);
+    document.getElementById('qrPreview').innerHTML = `<img src="${qrUrl}">`;
+    document.getElementById('qrHint').textContent = 'QR Code do Pix para o sinal de 50% de entrada';
+    showToast('QR Code enviado ✓');
+  }catch(err){
+    console.error(err);
+    document.getElementById('qrHint').textContent = 'Falha no upload — tente novamente';
+    showToast('Erro ao enviar o QR Code');
+  }
+});
+function removeQr(){
+  qrUrl = null;
+  document.getElementById('qrPreview').innerHTML = `<span style="font-size:10px;color:#9aa1ac;text-align:center;">QR do<br>sinal</span>`;
 }
 
 /* ---------- ITENS ---------- */
@@ -417,6 +508,7 @@ function recalcular(){
   const total = Math.max(subtotal - desconto, 0);
   document.getElementById('subtotalView').textContent = fmtBRL(subtotal);
   document.getElementById('totalView').textContent = fmtBRL(total);
+  document.getElementById('sinalView').textContent = fmtBRL(total/2);
 }
 document.getElementById('descontoInput').addEventListener('input', recalcular);
 
@@ -431,7 +523,8 @@ function collectData(){
     numero: document.getElementById('numOrc').value || '—',
     data: document.getElementById('dataOrc').value || '',
     theme: currentTheme,
-    logo: logoDataUrl,
+    logoUrl: logoUrl,
+    qrUrl: qrUrl,
     empresa: {
       nome: document.getElementById('empNome').value,
       cnpj: document.getElementById('empCnpj').value,
@@ -449,6 +542,7 @@ function collectData(){
     condicoes: {
       validade: document.getElementById('validade').value,
       pagamento: document.getElementById('pagamento').value,
+      pixChave: document.getElementById('pixChave').value,
       observacoes: document.getElementById('observacoes').value,
     },
     items, subtotal, desconto, total,
@@ -460,8 +554,10 @@ function fillForm(d){
   currentId = d.id;
   currentTheme = d.theme || 'azul';
   document.querySelectorAll('#themePicker button').forEach(b=>b.classList.toggle('active', b.dataset.theme===currentTheme));
-  logoDataUrl = d.logo || null;
-  document.getElementById('logoPreview').innerHTML = logoDataUrl ? `<img src="${logoDataUrl}">` : `<span style="font-size:11px;color:#9aa1ac;">sem logo</span>`;
+  logoUrl = d.logoUrl || null;
+  document.getElementById('logoPreview').innerHTML = logoUrl ? `<img src="${logoUrl}">` : `<span style="font-size:11px;color:#9aa1ac;">sem logo</span>`;
+  qrUrl = d.qrUrl || null;
+  document.getElementById('qrPreview').innerHTML = qrUrl ? `<img src="${qrUrl}">` : `<span style="font-size:10px;color:#9aa1ac;text-align:center;">QR do<br>sinal</span>`;
   document.getElementById('numOrc').value = d.numero==='—' ? '' : d.numero;
   document.getElementById('dataOrc').value = d.data || '';
   document.getElementById('empNome').value = d.empresa.nome || '';
@@ -476,6 +572,7 @@ function fillForm(d){
   document.getElementById('cliEmail').value = d.cliente.email || '';
   document.getElementById('validade').value = d.condicoes.validade || '';
   document.getElementById('pagamento').value = d.condicoes.pagamento || '';
+  document.getElementById('pixChave').value = d.condicoes.pixChave || '';
   document.getElementById('observacoes').value = d.condicoes.observacoes || '';
   document.getElementById('descontoInput').value = d.desconto || 0;
   document.getElementById('itemsBody').innerHTML = '';
@@ -491,55 +588,62 @@ function fillForm(d){
 async function salvarOrcamento(){
   const data = collectData();
   currentId = data.id;
-  await storageSet('orcamento:'+data.id, data);
-  showToast('Orçamento salvo ✓');
-  await carregarHistorico();
+  try{
+    await dbSet('orcamentos/'+data.id, data);
+    showToast('Orçamento salvo ✓');
+    await carregarHistorico();
+  }catch(e){
+    console.error(e);
+    showToast('Erro ao salvar no banco');
+  }
 }
 
 async function carregarHistorico(){
-  const keys = await storageListPrefix('orcamento:');
   const list = document.getElementById('historyList');
-  if(!keys || keys.length===0){
-    list.innerHTML = '<div class="empty-hint">Nenhum orçamento salvo ainda.</div>';
-    return;
+  try{
+    const entries = await dbGetAll('orcamentos');
+    if(!entries.length){
+      list.innerHTML = '<div class="empty-hint">Nenhum orçamento salvo ainda.</div>';
+      return;
+    }
+    entries.sort((a,b)=> new Date(b.savedAt) - new Date(a.savedAt));
+    list.innerHTML = '';
+    entries.forEach(d=>{
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      div.innerHTML = `
+        <div onclick='window.__load("${d.id}")' style="flex:1;">
+          <div><strong>#${escapeHtml(d.numero)}</strong> — ${escapeHtml(d.cliente?.nome || 'Sem cliente')} <span class="badge">${THEMES[d.theme]?.name || 'Azul'}</span></div>
+          <div class="meta">${fmtBRL(d.total||0)} · ${d.data || 'sem data'}</div>
+        </div>
+        <div class="hbtns">
+          <button class="btn btn-ghost btn-sm" onclick='window.__load("${d.id}")'>Abrir</button>
+          <button class="btn btn-danger btn-sm" onclick='window.__del("${d.id}")'>Excluir</button>
+        </div>
+      `;
+      list.appendChild(div);
+    });
+  }catch(e){
+    console.error(e);
+    list.innerHTML = '<div class="empty-hint">Não foi possível carregar do banco.</div>';
   }
-  const entries = [];
-  for(const k of keys){
-    const d = await storageGet(k);
-    if(d) entries.push(d);
-  }
-  entries.sort((a,b)=> new Date(b.savedAt) - new Date(a.savedAt));
-  list.innerHTML = '';
-  entries.forEach(d=>{
-    const div = document.createElement('div');
-    div.className = 'history-item';
-    div.innerHTML = `
-      <div onclick='window.__load("${d.id}")' style="flex:1;">
-        <div><strong>#${escapeHtml(d.numero)}</strong> — ${escapeHtml(d.cliente.nome || 'Sem cliente')} <span class="badge">${THEMES[d.theme]?.name || 'Azul'}</span></div>
-        <div class="meta">${fmtBRL(d.total)} · ${d.data || 'sem data'}</div>
-      </div>
-      <div class="hbtns">
-        <button class="btn btn-ghost btn-sm" onclick='window.__load("${d.id}")'>Abrir</button>
-        <button class="btn btn-danger btn-sm" onclick='window.__del("${d.id}")'>Excluir</button>
-      </div>
-    `;
-    list.appendChild(div);
-  });
 }
 window.__load = async (id)=>{
-  const d = await storageGet('orcamento:'+id);
+  const d = await dbGet('orcamentos/'+id);
   if(d) fillForm(d);
 };
 window.__del = async (id)=>{
-  await storageDelete('orcamento:'+id);
+  await dbDelete('orcamentos/'+id);
   showToast('Orçamento excluído');
   await carregarHistorico();
 };
 
 function novoOrcamento(){
   currentId = null;
-  logoDataUrl = null;
+  logoUrl = null;
+  qrUrl = null;
   document.getElementById('logoPreview').innerHTML = `<span style="font-size:11px;color:#9aa1ac;">sem logo</span>`;
+  document.getElementById('qrPreview').innerHTML = `<span style="font-size:10px;color:#9aa1ac;text-align:center;">QR do<br>sinal</span>`;
   document.getElementById('numOrc').value = '';
   document.getElementById('dataOrc').value = new Date().toISOString().slice(0,10);
   document.getElementById('cliNome').value = '';
@@ -548,6 +652,7 @@ function novoOrcamento(){
   document.getElementById('cliEmail').value = '';
   document.getElementById('validade').value = '';
   document.getElementById('pagamento').value = '';
+  document.getElementById('pixChave').value = '';
   document.getElementById('observacoes').value = '';
   document.getElementById('descontoInput').value = 0;
   document.getElementById('itemsBody').innerHTML = '';
@@ -556,217 +661,277 @@ function novoOrcamento(){
   showToast('Novo orçamento');
 }
 
-/* ---------- GERAÇÃO DE PDF ---------- */
-function gerarPDF(){
+/* ---------- helpers de imagem pro PDF ---------- */
+async function urlToDataUrl(url){
+  if(!url) return null;
+  try{
+    const res = await fetch(url, {mode:'cors'});
+    const blob = await res.blob();
+    return await new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=>resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }catch(e){
+    console.warn('Não deu pra carregar imagem pro PDF:', url, e);
+    return null;
+  }
+}
+
+/* ---------- GERAÇÃO DE PDF (horizontal / paisagem) ---------- */
+async function gerarPDF(){
   const d = collectData();
   if(!d.items.length || d.items.every(i=>!i.desc)){
     showToast('Adicione ao menos um item');
     return;
   }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({unit:'pt', format:'a4'});
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const margin = 40;
-  const theme = THEMES[d.theme] || THEMES.azul;
+  const btn = document.getElementById('btnPdf');
+  btn.disabled = true;
+  btn.textContent = 'Gerando…';
 
-  const hexToRgb = (hex)=>{
-    hex = hex.replace('#','');
-    const bigint = parseInt(hex,16);
-    return [(bigint>>16)&255, (bigint>>8)&255, bigint&255];
-  };
-  const primary = hexToRgb(theme.primary);
-  const dark = hexToRgb(theme.dark);
-  const isDarkTheme = d.theme === 'preto';
-  const headerTextColor = isDarkTheme ? [255,255,255] : (d.theme==='branco' ? [16,20,24] : [255,255,255]);
-  const bodyText = [30,32,38];
-  const mutedText = [110,118,128];
+  try{
+    const [logoData, qrData] = await Promise.all([
+      urlToDataUrl(d.logoUrl),
+      urlToDataUrl(d.qrUrl)
+    ]);
 
-  // ---- HEADER BAND ----
-  const headerH = 118;
-  doc.setFillColor(...dark);
-  doc.rect(0,0,pageW,headerH,'F');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:'pt', format:'a4', orientation:'landscape'});
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 36;
+    const theme = THEMES[d.theme] || THEMES.azul;
 
-  // subtle accent stripe for azul/preto themes
-  if(d.theme !== 'branco'){
-    doc.setFillColor(...primary);
-    doc.rect(0, headerH-6, pageW, 6, 'F');
-  } else {
-    doc.setDrawColor(220,220,220);
-    doc.line(0, headerH, pageW, headerH);
-  }
+    const hexToRgb = (hex)=>{
+      hex = hex.replace('#','');
+      const bigint = parseInt(hex,16);
+      return [(bigint>>16)&255, (bigint>>8)&255, bigint&255];
+    };
+    const primary = hexToRgb(theme.primary);
+    const dark = hexToRgb(theme.dark);
+    const headerTextColor = d.theme==='branco' ? [16,20,24] : [255,255,255];
+    const bodyText = [30,32,38];
+    const mutedText = [110,118,128];
 
-  // logo
-  let textStartX = margin;
-  if(d.logo){
-    try{
-      const logoSize = 56;
-      doc.addImage(d.logo, undefined, margin, (headerH-logoSize)/2 - 6, logoSize, logoSize, undefined, 'FAST');
-      textStartX = margin + logoSize + 16;
-    }catch(e){}
-  }
-
-  doc.setTextColor(...headerTextColor);
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(17);
-  doc.text(d.empresa.nome || 'Empresa', textStartX, 44);
-
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(9.5);
-  let infoY = 60;
-  const infoLine = (txt)=>{ if(txt){ doc.text(txt, textStartX, infoY); infoY += 13; } };
-  infoLine(d.empresa.cnpj ? `CNPJ: ${d.empresa.cnpj}` : '');
-  infoLine([d.empresa.telefone, d.empresa.email].filter(Boolean).join('   ·   '));
-  infoLine([d.empresa.endereco, d.empresa.site].filter(Boolean).join('   ·   '));
-
-  // ORÇAMENTO badge top-right
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(22);
-  doc.text('ORÇAMENTO', pageW-margin, 40, {align:'right'});
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(10);
-  doc.text(`Nº ${d.numero}`, pageW-margin, 58, {align:'right'});
-  doc.text(`Data: ${d.data ? formatDate(d.data) : '—'}`, pageW-margin, 72, {align:'right'});
-  if(d.condicoes.validade) doc.text(`Validade: ${d.condicoes.validade}`, pageW-margin, 86, {align:'right'});
-
-  let y = headerH + 34;
-
-  // ---- CLIENTE BOX ----
-  doc.setTextColor(...bodyText);
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(10.5);
-  doc.text('CLIENTE', margin, y);
-  doc.setDrawColor(...primary);
-  doc.setLineWidth(1.2);
-  doc.line(margin, y+4, margin+40, y+4);
-  y += 18;
-
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(10);
-  doc.setTextColor(...bodyText);
-  doc.text(d.cliente.nome || '—', margin, y); y+=14;
-  doc.setTextColor(...mutedText);
-  const cliLine2 = [d.cliente.doc, d.cliente.telefone, d.cliente.email].filter(Boolean).join('   ·   ');
-  if(cliLine2){ doc.text(cliLine2, margin, y); y+=14; }
-  y += 16;
-
-  // ---- TABELA DE ITENS ----
-  // colunas numéricas definidas da direita para a esquerda, com folga suficiente
-  // pra "Valor unit." e "Total" nunca se encostarem, mesmo com valores grandes.
-  const rightEdge = pageW - margin;
-  const colX = {
-    desc: margin,
-    qtdCenter: rightEdge - 205,      // centro da coluna QTD
-    precoRight: rightEdge - 110,     // fim da coluna VALOR UNIT. (alinhado à direita)
-    totalRight: rightEdge            // fim da coluna TOTAL (alinhado à direita)
-  };
-  const descMaxWidth = colX.qtdCenter - colX.desc - 40;
-  const tableTop = y;
-  const rowH = 24;
-
-  // table header
-  doc.setFillColor(...primary);
-  doc.rect(margin, tableTop, pageW-margin*2, 26, 'F');
-  doc.setTextColor(...headerTextColor);
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(9.5);
-  doc.text('DESCRIÇÃO', colX.desc+8, tableTop+17);
-  doc.text('QTD', colX.qtdCenter, tableTop+17, {align:'center'});
-  doc.text('VALOR UNIT.', colX.precoRight, tableTop+17, {align:'right'});
-  doc.text('TOTAL', colX.totalRight, tableTop+17, {align:'right'});
-
-  y = tableTop + 26;
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(9.8);
-
-  d.items.forEach((it, idx)=>{
-    if(y > pageH - 170){
-      doc.addPage();
-      y = 50;
+    // ---- HEADER BAND ----
+    const headerH = 78;
+    doc.setFillColor(...dark);
+    doc.rect(0,0,pageW,headerH,'F');
+    if(d.theme !== 'branco'){
+      doc.setFillColor(...primary);
+      doc.rect(0, headerH-5, pageW, 5, 'F');
+    } else {
+      doc.setDrawColor(220,220,220);
+      doc.line(0, headerH, pageW, headerH);
     }
-    if(idx % 2 === 1){
-      doc.setFillColor(247,248,250);
-      doc.rect(margin, y, pageW-margin*2, rowH, 'F');
+
+    let textStartX = margin;
+    if(logoData){
+      try{
+        const logoSize = 48;
+        doc.addImage(logoData, undefined, margin, (headerH-logoSize)/2, logoSize, logoSize, undefined, 'FAST');
+        textStartX = margin + logoSize + 14;
+      }catch(e){}
     }
-    doc.setTextColor(...bodyText);
-    const descLines = doc.splitTextToSize(it.desc || '-', descMaxWidth);
-    doc.text(descLines[0] || '-', colX.desc+8, y+16);
-    doc.text(String(it.qtd), colX.qtdCenter, y+16, {align:'center'});
-    doc.text(fmtBRLpdf(it.preco), colX.precoRight, y+16, {align:'right'});
+
+    doc.setTextColor(...headerTextColor);
     doc.setFont('helvetica','bold');
-    doc.text(fmtBRLpdf(it.total), colX.totalRight, y+16, {align:'right'});
+    doc.setFontSize(16);
+    doc.text(d.empresa.nome || 'Empresa', textStartX, 32);
+
     doc.setFont('helvetica','normal');
-    y += rowH;
-  });
+    doc.setFontSize(9);
+    const empInfoLine = [d.empresa.cnpj ? `CNPJ ${d.empresa.cnpj}` : '', d.empresa.telefone, d.empresa.email].filter(Boolean).join('   ·   ');
+    const empInfoLine2 = [d.empresa.endereco, d.empresa.site].filter(Boolean).join('   ·   ');
+    if(empInfoLine) doc.text(empInfoLine, textStartX, 47);
+    if(empInfoLine2) doc.text(empInfoLine2, textStartX, 60);
 
-  doc.setDrawColor(225,227,231);
-  doc.line(margin, y, pageW-margin, y);
-  y += 10;
-
-  // ---- TOTALS ----
-  if(y > pageH - 160){ doc.addPage(); y = 50; }
-  const totalsX = pageW - margin - 190;
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(10);
-  doc.setTextColor(...mutedText);
-  doc.text('Subtotal', totalsX, y);
-  doc.setTextColor(...bodyText);
-  doc.text(fmtBRLpdf(d.subtotal), pageW-margin, y, {align:'right'});
-  y += 16;
-  if(d.desconto > 0){
-    doc.setTextColor(...mutedText);
-    doc.text('Desconto', totalsX, y);
-    doc.setTextColor(...bodyText);
-    doc.text('- '+fmtBRLpdf(d.desconto), pageW-margin, y, {align:'right'});
-    y += 16;
-  }
-  y += 4;
-  doc.setFillColor(...primary);
-  doc.rect(totalsX-10, y-16, pageW-margin-(totalsX-10), 30, 'F');
-  doc.setTextColor(...headerTextColor);
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(13);
-  doc.text('TOTAL', totalsX, y+3);
-  doc.text(fmtBRLpdf(d.total), pageW-margin-6, y+3, {align:'right'});
-  y += 40;
-
-  // ---- CONDIÇÕES ----
-  if(d.condicoes.pagamento || d.condicoes.observacoes){
-    if(y > pageH - 120){ doc.addPage(); y = 50; }
-    doc.setTextColor(...bodyText);
     doc.setFont('helvetica','bold');
-    doc.setFontSize(10.5);
-    doc.text('CONDIÇÕES', margin, y);
-    doc.setDrawColor(...primary);
-    doc.line(margin, y+4, margin+40, y+4);
-    y += 18;
+    doc.setFontSize(20);
+    doc.text('ORÇAMENTO', pageW-margin, 30, {align:'right'});
     doc.setFont('helvetica','normal');
     doc.setFontSize(9.5);
+    const rightHeaderBits = [`Nº ${d.numero}`, d.data ? `Data ${formatDate(d.data)}`:'', d.condicoes.validade ? `Validade ${d.condicoes.validade}`:''].filter(Boolean);
+    doc.text(rightHeaderBits.join('   ·   '), pageW-margin, 48, {align:'right'});
+
+    let y = headerH + 26;
+
+    // ---- CLIENTE + FORMA DE PAGAMENTO (duas colunas) ----
+    const colLeftX = margin;
+    const colRightX = margin + (pageW-margin*2)*0.62;
+
+    doc.setTextColor(...bodyText);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(10);
+    doc.text('CLIENTE', colLeftX, y);
+    doc.setFont('helvetica','bold');
+    doc.text('PAGAMENTO', colRightX, y);
+    doc.setDrawColor(...primary);
+    doc.setLineWidth(1.1);
+    doc.line(colLeftX, y+4, colLeftX+36, y+4);
+    doc.line(colRightX, y+4, colRightX+36, y+4);
+    y += 17;
+
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...bodyText);
+    doc.text(d.cliente.nome || '—', colLeftX, y);
+    doc.setTextColor(...bodyText);
+    doc.text(d.condicoes.pagamento || '—', colRightX, y, {maxWidth: pageW-margin-colRightX});
+    y += 13;
     doc.setTextColor(...mutedText);
-    if(d.condicoes.pagamento){
-      doc.text(`Forma de pagamento: ${d.condicoes.pagamento}`, margin, y);
-      y += 14;
+    const cliLine2 = [d.cliente.doc, d.cliente.telefone, d.cliente.email].filter(Boolean).join('   ·   ');
+    if(cliLine2) doc.text(cliLine2, colLeftX, y);
+    y += 18;
+
+    // ---- TABELA DE ITENS ----
+    const rightEdge = pageW - margin;
+    const colX = {
+      desc: margin,
+      qtdCenter: rightEdge - 220,
+      precoRight: rightEdge - 115,
+      totalRight: rightEdge
+    };
+    const descMaxWidth = colX.qtdCenter - colX.desc - 40;
+    const tableTop = y;
+    const rowH = 22;
+
+    const drawTableHeader = (yy)=>{
+      doc.setFillColor(...primary);
+      doc.rect(margin, yy, pageW-margin*2, 24, 'F');
+      doc.setTextColor(...headerTextColor);
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(9.5);
+      doc.text('DESCRIÇÃO', colX.desc+8, yy+16);
+      doc.text('QTD', colX.qtdCenter, yy+16, {align:'center'});
+      doc.text('VALOR UNIT.', colX.precoRight, yy+16, {align:'right'});
+      doc.text('TOTAL', colX.totalRight, yy+16, {align:'right'});
+      return yy+24;
+    };
+
+    y = drawTableHeader(tableTop);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9.6);
+
+    d.items.forEach((it, idx)=>{
+      if(y > pageH - 150){
+        doc.addPage('a4','landscape');
+        y = 40;
+        y = drawTableHeader(y);
+        doc.setFont('helvetica','normal');
+        doc.setFontSize(9.6);
+      }
+      if(idx % 2 === 1){
+        doc.setFillColor(247,248,250);
+        doc.rect(margin, y, pageW-margin*2, rowH, 'F');
+      }
+      doc.setTextColor(...bodyText);
+      const descLines = doc.splitTextToSize(it.desc || '-', descMaxWidth);
+      doc.text(descLines[0] || '-', colX.desc+8, y+15);
+      doc.text(String(it.qtd), colX.qtdCenter, y+15, {align:'center'});
+      doc.text(fmtBRLpdf(it.preco), colX.precoRight, y+15, {align:'right'});
+      doc.setFont('helvetica','bold');
+      doc.text(fmtBRLpdf(it.total), colX.totalRight, y+15, {align:'right'});
+      doc.setFont('helvetica','normal');
+      y += rowH;
+    });
+
+    doc.setDrawColor(225,227,231);
+    doc.line(margin, y, pageW-margin, y);
+    y += 14;
+
+    if(y > pageH - 150){ doc.addPage('a4','landscape'); y = 50; }
+
+    // ---- LINHA INFERIOR: QR do sinal (esquerda) + Totais (direita) ----
+    const bottomTop = y;
+    const qrColW = (pageW-margin*2) * 0.55;
+    const totColX = margin + qrColW + 20;
+
+    // QR / sinal box
+    if(qrData){
+      try{
+        doc.addImage(qrData, undefined, margin, bottomTop, 74, 74, undefined, 'FAST');
+      }catch(e){}
+    } else {
+      doc.setDrawColor(...primary);
+      doc.setLineWidth(0.7);
+      doc.roundedRect(margin, bottomTop, 74, 74, 4, 4);
+      doc.setFontSize(7.5);
+      doc.setTextColor(...mutedText);
+      doc.text('QR do sinal', margin+37, bottomTop+40, {align:'center'});
+    }
+
+    const infoX = margin + 90;
+    let infoY = bottomTop + 12;
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...bodyText);
+    doc.text('SINAL — 50% DE ENTRADA', infoX, infoY);
+    infoY += 14;
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...primary);
+    doc.setFont('helvetica','bold');
+    doc.text(fmtBRLpdf(d.total/2), infoX, infoY);
+    doc.setFont('helvetica','normal');
+    infoY += 14;
+    doc.setTextColor(...mutedText);
+    doc.setFontSize(8.5);
+    if(d.condicoes.pixChave){
+      doc.text(`Chave PIX: ${d.condicoes.pixChave}`, infoX, infoY, {maxWidth: qrColW-100});
+      infoY += 12;
     }
     if(d.condicoes.observacoes){
-      const obsLines = doc.splitTextToSize(d.condicoes.observacoes, pageW-margin*2);
-      doc.text(obsLines, margin, y);
-      y += obsLines.length*12 + 6;
+      const obsLines = doc.splitTextToSize(d.condicoes.observacoes, qrColW-100);
+      doc.text(obsLines.slice(0,4), infoX, infoY);
     }
+
+    // totals box
+    let ty = bottomTop + 4;
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(10);
+    doc.setTextColor(...mutedText);
+    doc.text('Subtotal', totColX, ty);
+    doc.setTextColor(...bodyText);
+    doc.text(fmtBRLpdf(d.subtotal), pageW-margin, ty, {align:'right'});
+    ty += 16;
+    if(d.desconto > 0){
+      doc.setTextColor(...mutedText);
+      doc.text('Desconto', totColX, ty);
+      doc.setTextColor(...bodyText);
+      doc.text('- '+fmtBRLpdf(d.desconto), pageW-margin, ty, {align:'right'});
+      ty += 16;
+    }
+    ty += 6;
+    doc.setFillColor(...primary);
+    doc.rect(totColX-10, ty-16, pageW-margin-(totColX-10), 30, 'F');
+    doc.setTextColor(...headerTextColor);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(13);
+    doc.text('TOTAL', totColX, ty+3);
+    doc.text(fmtBRLpdf(d.total), pageW-margin-6, ty+3, {align:'right'});
+
+    // ---- FOOTER ----
+    const footerY = pageH - 28;
+    doc.setDrawColor(230,232,236);
+    doc.line(margin, footerY-12, pageW-margin, footerY-12);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...mutedText);
+    doc.text(`${d.empresa.nome || ''}${d.empresa.cnpj ? ' · CNPJ ' + d.empresa.cnpj : ''}`, margin, footerY);
+    doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, pageW-margin, footerY, {align:'right'});
+
+    const filename = `orcamento_${(d.numero||'sem-numero').replace(/\s+/g,'_')}.pdf`;
+    doc.save(filename);
+    showToast('PDF gerado ✓');
+  }catch(e){
+    console.error(e);
+    showToast('Erro ao gerar o PDF');
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Gerar PDF';
   }
-
-  // ---- FOOTER ----
-  const footerY = pageH - 36;
-  doc.setDrawColor(230,232,236);
-  doc.line(margin, footerY-14, pageW-margin, footerY-14);
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...mutedText);
-  doc.text(`${d.empresa.nome || ''}${d.empresa.cnpj ? ' · CNPJ ' + d.empresa.cnpj : ''}`, margin, footerY);
-  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, pageW-margin, footerY, {align:'right'});
-
-  const filename = `orcamento_${(d.numero||'sem-numero').replace(/\s+/g,'_')}.pdf`;
-  doc.save(filename);
-  showToast('PDF gerado ✓');
 }
 
 function fmtBRLpdf(v){
