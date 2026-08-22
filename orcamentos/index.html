@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gerador de Orçamentos — Atecseven Tecnologia</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0b2545;
+    --blue:#1657c4;
+    --blue-light:#e8f0fe;
+    --ink:#101418;
+    --paper:#ffffff;
+    --line:#e4e7ec;
+    --muted:#6b7280;
+    --accent:#1657c4;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Segoe UI', Inter, -apple-system, sans-serif;
+    background:#f4f6f9;
+    color:var(--ink);
+  }
+  .app{
+    max-width:1180px;
+    margin:0 auto;
+    padding:28px 20px 80px;
+  }
+  header.top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:22px;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  header.top h1{
+    font-size:22px;
+    letter-spacing:.2px;
+    margin:0;
+  }
+  header.top .sub{
+    color:var(--muted);
+    font-size:13px;
+    margin-top:2px;
+  }
+  .theme-picker{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:6px 8px;
+  }
+  .theme-picker button{
+    width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;
+  }
+  .theme-picker button.active{border-color:var(--ink);}
+  .theme-azul{background:linear-gradient(135deg,#1657c4,#0b2545);}
+  .theme-branco{background:#ffffff;border:1px solid #ccc !important;}
+  .theme-preto{background:#111318;}
+
+  .grid{
+    display:grid;
+    grid-template-columns: 1.1fr .9fr;
+    gap:20px;
+  }
+  @media(max-width:900px){ .grid{grid-template-columns:1fr;} }
+
+  .card{
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:20px;
+    margin-bottom:20px;
+  }
+  .card h2{
+    font-size:14px;
+    text-transform:uppercase;
+    letter-spacing:.6px;
+    color:var(--muted);
+    margin:0 0 14px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .card h2 .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);}
+
+  .field{margin-bottom:12px;}
+  .field label{
+    display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600;
+  }
+  .field input, .field textarea, .field select{
+    width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;
+    font-size:14px;font-family:inherit;background:#fafbfc;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus{
+    outline:none;border-color:var(--accent);background:#fff;
+  }
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .row3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;}
+
+  .logo-box{
+    display:flex;align-items:center;gap:14px;
+  }
+  .logo-preview{
+    width:64px;height:64px;border-radius:8px;border:1px dashed var(--line);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fafbfc;flex-shrink:0;
+  }
+  .logo-preview img{max-width:100%;max-height:100%;object-fit:contain;}
+  .btn{
+    border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;
+    cursor:pointer;transition:.15s;
+  }
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink);}
+  .btn-ghost:hover{background:#f4f6f9;}
+  .btn-danger{background:#fff;border:1px solid #f0c4c4;color:#b3271f;}
+  .btn-danger:hover{background:#fdf0f0;}
+  .btn-sm{padding:5px 10px;font-size:12px;}
+
+  table.items{width:100%;border-collapse:collapse;margin-top:6px;}
+  table.items th{
+    text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;
+    color:var(--muted);padding:8px 6px;border-bottom:2px solid var(--line);
+  }
+  table.items td{padding:6px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  table.items input{width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 8px;font-size:13px;}
+  table.items td.num{text-align:right;}
+  .col-actions{width:36px;text-align:center;}
+  .col-qty{width:70px;}
+  .col-price{width:110px;}
+  .col-total{width:110px;}
+
+  .add-item{margin-top:10px;}
+
+  .totals{
+    margin-top:14px;border-top:1px solid var(--line);padding-top:14px;
+  }
+  .totals .line{display:flex;justify-content:space-between;padding:5px 0;font-size:14px;}
+  .totals .line.grand{font-size:19px;font-weight:700;color:var(--accent);border-top:1px solid var(--line);padding-top:10px;margin-top:6px;}
+  .totals .muted{color:var(--muted);font-size:12.5px;}
+
+  .actions-bar{
+    display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;
+  }
+
+  .history-list{max-height:340px;overflow:auto;}
+  .history-item{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:10px 8px;border-bottom:1px solid var(--line);font-size:13px;cursor:pointer;
+  }
+  .history-item:hover{background:#f7f9fc;}
+  .history-item .meta{color:var(--muted);font-size:11.5px;}
+  .history-item .hbtns{display:flex;gap:6px;}
+  .empty-hint{color:var(--muted);font-size:13px;text-align:center;padding:20px 0;}
+
+  .badge{
+    display:inline-block;padding:2px 8px;border-radius:999px;background:var(--blue-light);
+    color:var(--blue);font-size:11px;font-weight:700;
+  }
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:#fff;padding:11px 20px;border-radius:8px;font-size:13px;
+    opacity:0;pointer-events:none;transition:.25s;z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:4px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <div>
+      <h1>Gerador de Orçamentos</h1>
+      <div class="sub">Monte, salve e exporte orçamentos em PDF — Atecseven Tecnologia</div>
+    </div>
+    <div class="theme-picker" id="themePicker">
+      <button class="theme-azul active" data-theme="azul" title="Azul"></button>
+      <button class="theme-branco" data-theme="branco" title="Branco"></button>
+      <button class="theme-preto" data-theme="preto" title="Preto"></button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT COLUMN -->
+    <div>
+      <div class="card">
+        <h2><span class="dot"></span>Dados da empresa (emitente)</h2>
+        <div class="logo-box field">
+          <div class="logo-preview" id="logoPreview">
+            <span style="font-size:11px;color:#9aa1ac;">sem logo</span>
+          </div>
+          <div>
+            <input type="file" id="logoInput" accept="image/*" style="display:none">
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('logoInput').click()">Enviar logo</button>
+            <button class="btn btn-ghost btn-sm" onclick="removeLogo()">Remover</button>
+            <div class="hint">PNG ou JPG, fundo transparente fica melhor</div>
+          </div>
+        </div>
+        <div class="field"><label>Nome da empresa</label><input id="empNome" value="Atecseven Tecnologia LTDA"></div>
+        <div class="row2">
+          <div class="field"><label>CNPJ</label><input id="empCnpj" value="63.373.374/0001-72"></div>
+          <div class="field"><label>Telefone / WhatsApp</label><input id="empTelefone" placeholder="(41) 90000-0000"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>E-mail</label><input id="empEmail" placeholder="contato@atecseven.com.br"></div>
+          <div class="field"><label>Site</label><input id="empSite" placeholder="www.atecseven.com.br"></div>
+        </div>
+        <div class="field"><label>Endereço</label><input id="empEndereco" placeholder="Rua, número, bairro, cidade - UF"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="dot"></span>Dados do cliente</h2>
+        <div class="row2">
+          <div class="field"><label>Nome / Razão social</label><input id="cliNome" placeholder="Nome do cliente"></div>
+          <div class="field"><label>CPF / CNPJ</label><input id="cliDoc" placeholder="Documento"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Telefone</label><input id="cliTelefone" placeholder="(00) 00000-0000"></div>
+          <div class="field"><label>E-mail</label><input id="cliEmail" placeholder="cliente@email.com"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="dot"></span>Itens do orçamento</h2>
+        <table class="items" id="itemsTable">
+          <thead>
+            <tr>
+              <th>Descrição</th>
+              <th class="col-qty">Qtd</th>
+              <th class="col-price">Valor unit.</th>
+              <th class="col-total">Total</th>
+              <th class="col-actions"></th>
+            </tr>
+          </thead>
+          <tbody id="itemsBody"></tbody>
+        </table>
+        <button class="btn btn-ghost btn-sm add-item" onclick="addItem()">+ Adicionar item</button>
+
+        <div class="totals">
+          <div class="line"><span class="muted">Subtotal</span><span id="subtotalView">R$ 0,00</span></div>
+          <div class="line">
+            <span class="muted">Desconto</span>
+            <span style="display:flex;align-items:center;gap:6px;">
+              R$ <input id="descontoInput" type="number" min="0" step="0.01" value="0" style="width:100px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;text-align:right;">
+            </span>
+          </div>
+          <div class="line grand"><span>Total</span><span id="totalView">R$ 0,00</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="dot"></span>Condições</h2>
+        <div class="row2">
+          <div class="field"><label>Validade da proposta</label><input id="validade" placeholder="Ex: 15 dias"></div>
+          <div class="field"><label>Forma de pagamento</label><input id="pagamento" placeholder="Ex: 50% entrada + 50% na entrega"></div>
+        </div>
+        <div class="field"><label>Observações</label><textarea id="observacoes" rows="3" placeholder="Prazo de execução, garantia, etc."></textarea></div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div>
+      <div class="card">
+        <h2><span class="dot"></span>Documento</h2>
+        <div class="row2">
+          <div class="field"><label>Número do orçamento</label><input id="numOrc" placeholder="Ex: 0001"></div>
+          <div class="field"><label>Data</label><input id="dataOrc" type="date"></div>
+        </div>
+        <div class="actions-bar">
+          <button class="btn btn-primary" onclick="gerarPDF()">Gerar PDF</button>
+          <button class="btn btn-ghost" onclick="salvarOrcamento()">Salvar</button>
+          <button class="btn btn-ghost" onclick="novoOrcamento()">Novo</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="dot"></span>Orçamentos salvos</h2>
+        <div id="historyList" class="history-list">
+          <div class="empty-hint">Nenhum orçamento salvo ainda.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   ARMAZENAMENTO
+   Este ambiente (artifacts do Claude) não roda localStorage,
+   por isso uso o storage próprio dos artifacts (window.storage),
+   que salva os dados por usuário e persiste entre sessões
+   normalmente. Se você copiar este arquivo para rodar fora do
+   Claude, é só trocar as chamadas de storage por localStorage.
+========================================================== */
+
+let logoDataUrl = null;
+let currentTheme = 'azul';
+let currentId = null;
+
+const THEMES = {
+  azul:   { primary:'#1657c4', dark:'#0b2545', text:'#101418', light:'#e8f0fe', name:'Azul' },
+  branco: { primary:'#101418', dark:'#101418', text:'#101418', light:'#f2f2f2', name:'Branco' },
+  preto:  { primary:'#111318', dark:'#000000', text:'#ffffff', light:'#2a2d33', name:'Preto' }
+};
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+async function storageSet(key, value){
+  try{
+    await window.storage.set(key, JSON.stringify(value));
+  }catch(e){ console.error('storage set falhou', e); }
+}
+async function storageGet(key){
+  try{
+    const r = await window.storage.get(key);
+    return r ? JSON.parse(r.value) : null;
+  }catch(e){ return null; }
+}
+async function storageDelete(key){
+  try{ await window.storage.delete(key); }catch(e){}
+}
+async function storageListPrefix(prefix){
+  try{
+    const r = await window.storage.list(prefix);
+    return r ? r.keys : [];
+  }catch(e){ return []; }
+}
+
+/* ---------- THEME ---------- */
+document.getElementById('themePicker').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-theme]');
+  if(!btn) return;
+  document.querySelectorAll('#themePicker button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTheme = btn.dataset.theme;
+});
+
+/* ---------- LOGO ---------- */
+document.getElementById('logoInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    logoDataUrl = ev.target.result;
+    document.getElementById('logoPreview').innerHTML = `<img src="${logoDataUrl}">`;
+  };
+  reader.readAsDataURL(file);
+});
+function removeLogo(){
+  logoDataUrl = null;
+  document.getElementById('logoPreview').innerHTML = `<span style="font-size:11px;color:#9aa1ac;">sem logo</span>`;
+}
+
+/* ---------- ITENS ---------- */
+let itemSeq = 0;
+function addItem(desc='', qtd=1, preco=0){
+  itemSeq++;
+  const id = 'it'+itemSeq;
+  const tr = document.createElement('tr');
+  tr.id = id;
+  tr.innerHTML = `
+    <td><input type="text" class="it-desc" placeholder="Descrição do serviço/produto" value="${escapeHtml(desc)}"></td>
+    <td class="col-qty"><input type="number" class="it-qtd" min="0" step="1" value="${qtd}" onchange="recalcular()" oninput="recalcular()"></td>
+    <td class="col-price"><input type="number" class="it-preco" min="0" step="0.01" value="${preco}" onchange="recalcular()" oninput="recalcular()"></td>
+    <td class="col-total num" id="${id}-total">R$ 0,00</td>
+    <td class="col-actions"><button class="btn btn-danger btn-sm" onclick="removeItem('${id}')">✕</button></td>
+  `;
+  document.getElementById('itemsBody').appendChild(tr);
+  recalcular();
+}
+function removeItem(id){
+  const el = document.getElementById(id);
+  if(el) el.remove();
+  recalcular();
+}
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtBRL(v){
+  return v.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+}
+function getItems(){
+  const rows = document.querySelectorAll('#itemsBody tr');
+  const items = [];
+  rows.forEach(r=>{
+    const desc = r.querySelector('.it-desc').value.trim();
+    const qtd = parseFloat(r.querySelector('.it-qtd').value) || 0;
+    const preco = parseFloat(r.querySelector('.it-preco').value) || 0;
+    items.push({desc, qtd, preco, total: qtd*preco});
+  });
+  return items;
+}
+function recalcular(){
+  const items = getItems();
+  const rows = document.querySelectorAll('#itemsBody tr');
+  rows.forEach((r, i)=>{
+    const totalCell = r.querySelector('.col-total');
+    totalCell.textContent = fmtBRL(items[i].total);
+  });
+  const subtotal = items.reduce((s,i)=>s+i.total,0);
+  const desconto = parseFloat(document.getElementById('descontoInput').value) || 0;
+  const total = Math.max(subtotal - desconto, 0);
+  document.getElementById('subtotalView').textContent = fmtBRL(subtotal);
+  document.getElementById('totalView').textContent = fmtBRL(total);
+}
+document.getElementById('descontoInput').addEventListener('input', recalcular);
+
+/* ---------- COLETA DE DADOS ---------- */
+function collectData(){
+  const items = getItems();
+  const subtotal = items.reduce((s,i)=>s+i.total,0);
+  const desconto = parseFloat(document.getElementById('descontoInput').value) || 0;
+  const total = Math.max(subtotal - desconto, 0);
+  return {
+    id: currentId || ('orc_'+Date.now()),
+    numero: document.getElementById('numOrc').value || '—',
+    data: document.getElementById('dataOrc').value || '',
+    theme: currentTheme,
+    logo: logoDataUrl,
+    empresa: {
+      nome: document.getElementById('empNome').value,
+      cnpj: document.getElementById('empCnpj').value,
+      telefone: document.getElementById('empTelefone').value,
+      email: document.getElementById('empEmail').value,
+      site: document.getElementById('empSite').value,
+      endereco: document.getElementById('empEndereco').value,
+    },
+    cliente: {
+      nome: document.getElementById('cliNome').value,
+      doc: document.getElementById('cliDoc').value,
+      telefone: document.getElementById('cliTelefone').value,
+      email: document.getElementById('cliEmail').value,
+    },
+    condicoes: {
+      validade: document.getElementById('validade').value,
+      pagamento: document.getElementById('pagamento').value,
+      observacoes: document.getElementById('observacoes').value,
+    },
+    items, subtotal, desconto, total,
+    savedAt: new Date().toISOString()
+  };
+}
+
+function fillForm(d){
+  currentId = d.id;
+  currentTheme = d.theme || 'azul';
+  document.querySelectorAll('#themePicker button').forEach(b=>b.classList.toggle('active', b.dataset.theme===currentTheme));
+  logoDataUrl = d.logo || null;
+  document.getElementById('logoPreview').innerHTML = logoDataUrl ? `<img src="${logoDataUrl}">` : `<span style="font-size:11px;color:#9aa1ac;">sem logo</span>`;
+  document.getElementById('numOrc').value = d.numero==='—' ? '' : d.numero;
+  document.getElementById('dataOrc').value = d.data || '';
+  document.getElementById('empNome').value = d.empresa.nome || '';
+  document.getElementById('empCnpj').value = d.empresa.cnpj || '';
+  document.getElementById('empTelefone').value = d.empresa.telefone || '';
+  document.getElementById('empEmail').value = d.empresa.email || '';
+  document.getElementById('empSite').value = d.empresa.site || '';
+  document.getElementById('empEndereco').value = d.empresa.endereco || '';
+  document.getElementById('cliNome').value = d.cliente.nome || '';
+  document.getElementById('cliDoc').value = d.cliente.doc || '';
+  document.getElementById('cliTelefone').value = d.cliente.telefone || '';
+  document.getElementById('cliEmail').value = d.cliente.email || '';
+  document.getElementById('validade').value = d.condicoes.validade || '';
+  document.getElementById('pagamento').value = d.condicoes.pagamento || '';
+  document.getElementById('observacoes').value = d.condicoes.observacoes || '';
+  document.getElementById('descontoInput').value = d.desconto || 0;
+  document.getElementById('itemsBody').innerHTML = '';
+  if(d.items && d.items.length){
+    d.items.forEach(i=>addItem(i.desc, i.qtd, i.preco));
+  }else{
+    addItem();
+  }
+  recalcular();
+}
+
+/* ---------- SALVAR / HISTÓRICO ---------- */
+async function salvarOrcamento(){
+  const data = collectData();
+  currentId = data.id;
+  await storageSet('orcamento:'+data.id, data);
+  showToast('Orçamento salvo ✓');
+  await carregarHistorico();
+}
+
+async function carregarHistorico(){
+  const keys = await storageListPrefix('orcamento:');
+  const list = document.getElementById('historyList');
+  if(!keys || keys.length===0){
+    list.innerHTML = '<div class="empty-hint">Nenhum orçamento salvo ainda.</div>';
+    return;
+  }
+  const entries = [];
+  for(const k of keys){
+    const d = await storageGet(k);
+    if(d) entries.push(d);
+  }
+  entries.sort((a,b)=> new Date(b.savedAt) - new Date(a.savedAt));
+  list.innerHTML = '';
+  entries.forEach(d=>{
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    div.innerHTML = `
+      <div onclick='window.__load("${d.id}")' style="flex:1;">
+        <div><strong>#${escapeHtml(d.numero)}</strong> — ${escapeHtml(d.cliente.nome || 'Sem cliente')} <span class="badge">${THEMES[d.theme]?.name || 'Azul'}</span></div>
+        <div class="meta">${fmtBRL(d.total)} · ${d.data || 'sem data'}</div>
+      </div>
+      <div class="hbtns">
+        <button class="btn btn-ghost btn-sm" onclick='window.__load("${d.id}")'>Abrir</button>
+        <button class="btn btn-danger btn-sm" onclick='window.__del("${d.id}")'>Excluir</button>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+window.__load = async (id)=>{
+  const d = await storageGet('orcamento:'+id);
+  if(d) fillForm(d);
+};
+window.__del = async (id)=>{
+  await storageDelete('orcamento:'+id);
+  showToast('Orçamento excluído');
+  await carregarHistorico();
+};
+
+function novoOrcamento(){
+  currentId = null;
+  logoDataUrl = null;
+  document.getElementById('logoPreview').innerHTML = `<span style="font-size:11px;color:#9aa1ac;">sem logo</span>`;
+  document.getElementById('numOrc').value = '';
+  document.getElementById('dataOrc').value = new Date().toISOString().slice(0,10);
+  document.getElementById('cliNome').value = '';
+  document.getElementById('cliDoc').value = '';
+  document.getElementById('cliTelefone').value = '';
+  document.getElementById('cliEmail').value = '';
+  document.getElementById('validade').value = '';
+  document.getElementById('pagamento').value = '';
+  document.getElementById('observacoes').value = '';
+  document.getElementById('descontoInput').value = 0;
+  document.getElementById('itemsBody').innerHTML = '';
+  addItem();
+  recalcular();
+  showToast('Novo orçamento');
+}
+
+/* ---------- GERAÇÃO DE PDF ---------- */
+function gerarPDF(){
+  const d = collectData();
+  if(!d.items.length || d.items.every(i=>!i.desc)){
+    showToast('Adicione ao menos um item');
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt', format:'a4'});
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 40;
+  const theme = THEMES[d.theme] || THEMES.azul;
+
+  const hexToRgb = (hex)=>{
+    hex = hex.replace('#','');
+    const bigint = parseInt(hex,16);
+    return [(bigint>>16)&255, (bigint>>8)&255, bigint&255];
+  };
+  const primary = hexToRgb(theme.primary);
+  const dark = hexToRgb(theme.dark);
+  const isDarkTheme = d.theme === 'preto';
+  const headerTextColor = isDarkTheme ? [255,255,255] : (d.theme==='branco' ? [16,20,24] : [255,255,255]);
+  const bodyText = [30,32,38];
+  const mutedText = [110,118,128];
+
+  // ---- HEADER BAND ----
+  const headerH = 118;
+  doc.setFillColor(...dark);
+  doc.rect(0,0,pageW,headerH,'F');
+
+  // subtle accent stripe for azul/preto themes
+  if(d.theme !== 'branco'){
+    doc.setFillColor(...primary);
+    doc.rect(0, headerH-6, pageW, 6, 'F');
+  } else {
+    doc.setDrawColor(220,220,220);
+    doc.line(0, headerH, pageW, headerH);
+  }
+
+  // logo
+  let textStartX = margin;
+  if(d.logo){
+    try{
+      const logoSize = 56;
+      doc.addImage(d.logo, undefined, margin, (headerH-logoSize)/2 - 6, logoSize, logoSize, undefined, 'FAST');
+      textStartX = margin + logoSize + 16;
+    }catch(e){}
+  }
+
+  doc.setTextColor(...headerTextColor);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(17);
+  doc.text(d.empresa.nome || 'Empresa', textStartX, 44);
+
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9.5);
+  let infoY = 60;
+  const infoLine = (txt)=>{ if(txt){ doc.text(txt, textStartX, infoY); infoY += 13; } };
+  infoLine(d.empresa.cnpj ? `CNPJ: ${d.empresa.cnpj}` : '');
+  infoLine([d.empresa.telefone, d.empresa.email].filter(Boolean).join('   ·   '));
+  infoLine([d.empresa.endereco, d.empresa.site].filter(Boolean).join('   ·   '));
+
+  // ORÇAMENTO badge top-right
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(22);
+  doc.text('ORÇAMENTO', pageW-margin, 40, {align:'right'});
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  doc.text(`Nº ${d.numero}`, pageW-margin, 58, {align:'right'});
+  doc.text(`Data: ${d.data ? formatDate(d.data) : '—'}`, pageW-margin, 72, {align:'right'});
+  if(d.condicoes.validade) doc.text(`Validade: ${d.condicoes.validade}`, pageW-margin, 86, {align:'right'});
+
+  let y = headerH + 34;
+
+  // ---- CLIENTE BOX ----
+  doc.setTextColor(...bodyText);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(10.5);
+  doc.text('CLIENTE', margin, y);
+  doc.setDrawColor(...primary);
+  doc.setLineWidth(1.2);
+  doc.line(margin, y+4, margin+40, y+4);
+  y += 18;
+
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...bodyText);
+  doc.text(d.cliente.nome || '—', margin, y); y+=14;
+  doc.setTextColor(...mutedText);
+  const cliLine2 = [d.cliente.doc, d.cliente.telefone, d.cliente.email].filter(Boolean).join('   ·   ');
+  if(cliLine2){ doc.text(cliLine2, margin, y); y+=14; }
+  y += 16;
+
+  // ---- TABELA DE ITENS ----
+  const colX = { desc: margin, qtd: pageW-margin-190, preco: pageW-margin-125, total: pageW-margin-55 };
+  const tableTop = y;
+  const rowH = 24;
+
+  // table header
+  doc.setFillColor(...primary);
+  doc.rect(margin, tableTop, pageW-margin*2, 26, 'F');
+  doc.setTextColor(...headerTextColor);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(9.5);
+  doc.text('DESCRIÇÃO', colX.desc+8, tableTop+17);
+  doc.text('QTD', colX.qtd, tableTop+17);
+  doc.text('VALOR UNIT.', colX.preco, tableTop+17);
+  doc.text('TOTAL', colX.total, tableTop+17, {align:'right'});
+
+  y = tableTop + 26;
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9.8);
+
+  d.items.forEach((it, idx)=>{
+    if(y > pageH - 170){
+      doc.addPage();
+      y = 50;
+    }
+    if(idx % 2 === 1){
+      doc.setFillColor(247,248,250);
+      doc.rect(margin, y, pageW-margin*2, rowH, 'F');
+    }
+    doc.setTextColor(...bodyText);
+    const descLines = doc.splitTextToSize(it.desc || '-', colX.qtd - colX.desc - 20);
+    doc.text(descLines[0] || '-', colX.desc+8, y+16);
+    doc.text(String(it.qtd), colX.qtd, y+16);
+    doc.text(fmtBRLpdf(it.preco), colX.preco, y+16);
+    doc.text(fmtBRLpdf(it.total), colX.total, y+16, {align:'right'});
+    y += rowH;
+  });
+
+  doc.setDrawColor(225,227,231);
+  doc.line(margin, y, pageW-margin, y);
+  y += 10;
+
+  // ---- TOTALS ----
+  if(y > pageH - 160){ doc.addPage(); y = 50; }
+  const totalsX = pageW - margin - 190;
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...mutedText);
+  doc.text('Subtotal', totalsX, y);
+  doc.setTextColor(...bodyText);
+  doc.text(fmtBRLpdf(d.subtotal), pageW-margin, y, {align:'right'});
+  y += 16;
+  if(d.desconto > 0){
+    doc.setTextColor(...mutedText);
+    doc.text('Desconto', totalsX, y);
+    doc.setTextColor(...bodyText);
+    doc.text('- '+fmtBRLpdf(d.desconto), pageW-margin, y, {align:'right'});
+    y += 16;
+  }
+  y += 4;
+  doc.setFillColor(...primary);
+  doc.rect(totalsX-10, y-16, pageW-margin-(totalsX-10), 30, 'F');
+  doc.setTextColor(...headerTextColor);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(13);
+  doc.text('TOTAL', totalsX, y+3);
+  doc.text(fmtBRLpdf(d.total), pageW-margin-6, y+3, {align:'right'});
+  y += 40;
+
+  // ---- CONDIÇÕES ----
+  if(d.condicoes.pagamento || d.condicoes.observacoes){
+    if(y > pageH - 120){ doc.addPage(); y = 50; }
+    doc.setTextColor(...bodyText);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(10.5);
+    doc.text('CONDIÇÕES', margin, y);
+    doc.setDrawColor(...primary);
+    doc.line(margin, y+4, margin+40, y+4);
+    y += 18;
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...mutedText);
+    if(d.condicoes.pagamento){
+      doc.text(`Forma de pagamento: ${d.condicoes.pagamento}`, margin, y);
+      y += 14;
+    }
+    if(d.condicoes.observacoes){
+      const obsLines = doc.splitTextToSize(d.condicoes.observacoes, pageW-margin*2);
+      doc.text(obsLines, margin, y);
+      y += obsLines.length*12 + 6;
+    }
+  }
+
+  // ---- FOOTER ----
+  const footerY = pageH - 36;
+  doc.setDrawColor(230,232,236);
+  doc.line(margin, footerY-14, pageW-margin, footerY-14);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...mutedText);
+  doc.text(`${d.empresa.nome || ''}${d.empresa.cnpj ? ' · CNPJ ' + d.empresa.cnpj : ''}`, margin, footerY);
+  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, pageW-margin, footerY, {align:'right'});
+
+  const filename = `orcamento_${(d.numero||'sem-numero').replace(/\s+/g,'_')}.pdf`;
+  doc.save(filename);
+  showToast('PDF gerado ✓');
+}
+
+function fmtBRLpdf(v){
+  return 'R$ ' + (v||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function formatDate(iso){
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/* ---------- INIT ---------- */
+(async function init(){
+  document.getElementById('dataOrc').value = new Date().toISOString().slice(0,10);
+  addItem('', 1, 0);
+  await carregarHistorico();
+})();
+</script>
+</body>
+</html>
