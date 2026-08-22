@@ -651,7 +651,16 @@ function gerarPDF(){
   y += 16;
 
   // ---- TABELA DE ITENS ----
-  const colX = { desc: margin, qtd: pageW-margin-190, preco: pageW-margin-125, total: pageW-margin-55 };
+  // colunas numéricas definidas da direita para a esquerda, com folga suficiente
+  // pra "Valor unit." e "Total" nunca se encostarem, mesmo com valores grandes.
+  const rightEdge = pageW - margin;
+  const colX = {
+    desc: margin,
+    qtdCenter: rightEdge - 205,      // centro da coluna QTD
+    precoRight: rightEdge - 110,     // fim da coluna VALOR UNIT. (alinhado à direita)
+    totalRight: rightEdge            // fim da coluna TOTAL (alinhado à direita)
+  };
+  const descMaxWidth = colX.qtdCenter - colX.desc - 40;
   const tableTop = y;
   const rowH = 24;
 
@@ -662,9 +671,9 @@ function gerarPDF(){
   doc.setFont('helvetica','bold');
   doc.setFontSize(9.5);
   doc.text('DESCRIÇÃO', colX.desc+8, tableTop+17);
-  doc.text('QTD', colX.qtd, tableTop+17);
-  doc.text('VALOR UNIT.', colX.preco, tableTop+17);
-  doc.text('TOTAL', colX.total, tableTop+17, {align:'right'});
+  doc.text('QTD', colX.qtdCenter, tableTop+17, {align:'center'});
+  doc.text('VALOR UNIT.', colX.precoRight, tableTop+17, {align:'right'});
+  doc.text('TOTAL', colX.totalRight, tableTop+17, {align:'right'});
 
   y = tableTop + 26;
   doc.setFont('helvetica','normal');
@@ -680,11 +689,13 @@ function gerarPDF(){
       doc.rect(margin, y, pageW-margin*2, rowH, 'F');
     }
     doc.setTextColor(...bodyText);
-    const descLines = doc.splitTextToSize(it.desc || '-', colX.qtd - colX.desc - 20);
+    const descLines = doc.splitTextToSize(it.desc || '-', descMaxWidth);
     doc.text(descLines[0] || '-', colX.desc+8, y+16);
-    doc.text(String(it.qtd), colX.qtd, y+16);
-    doc.text(fmtBRLpdf(it.preco), colX.preco, y+16);
-    doc.text(fmtBRLpdf(it.total), colX.total, y+16, {align:'right'});
+    doc.text(String(it.qtd), colX.qtdCenter, y+16, {align:'center'});
+    doc.text(fmtBRLpdf(it.preco), colX.precoRight, y+16, {align:'right'});
+    doc.setFont('helvetica','bold');
+    doc.text(fmtBRLpdf(it.total), colX.totalRight, y+16, {align:'right'});
+    doc.setFont('helvetica','normal');
     y += rowH;
   });
 
