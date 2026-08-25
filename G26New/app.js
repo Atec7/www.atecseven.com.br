@@ -538,6 +538,65 @@ function metaWarningHtml(atrib){
 function findEquipe(id){ return DB.equipes.find(e=>e.id===Number(id)); }
 function findAtividade(id){ return DB.atividades.find(a=>a.id===Number(id)); }
 function findProjeto(id){ return DB.projetos.find(p=>p.id===Number(id)); }
+function cidadeCor(nome){
+  const cid = (DB.cidades||[]).find(c=>c.nome && c.nome.toLowerCase()===String(nome||'').toLowerCase());
+  return cid?.cor || '#6b7280';
+}
+function openCidadeModal(id){
+  if(!requerEscrita()) return;
+  const cid = id ? (DB.cidades||[]).find(c=>c.id===Number(id)) : null;
+  const coresPre = ['#3b82f6','#ef4444','#22c55e','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#f97316','#14b8a6','#6366f1','#84cc16','#e11d48'];
+  const corAtual = cid?.cor || '#3b82f6';
+  const paletaHtml = coresPre.map(c=>`<button type="button" class="cid-pick" data-cor="${c}" style="width:28px;height:28px;border-radius:6px;background:${c};border:2px solid ${c===corAtual?'#fff':'transparent'};cursor:pointer;flex-shrink:0;" title="${c}"></button>`).join('');
+  const body = `
+    <div class="field"><label>Nome da cidade <span class="req">*</span></label><input type="text" name="nome" required value="${esc(cid?.nome||'')}" placeholder="Ex: Rio Verde"></div>
+    <div class="field"><label>Cor de identificação <span class="req">*</span></label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;">${paletaHtml}</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="text" name="cor" id="cid-cor-input" value="${corAtual}" maxlength="7" style="width:90px;font-family:monospace;font-size:13px;text-transform:lowercase;" placeholder="#3b82f6">
+        <input type="color" id="cid-color-native" value="${corAtual}" style="width:38px;height:34px;padding:2px;border:1px solid var(--border);border-radius:6px;background:var(--panel-2);cursor:pointer;">
+      </div>
+    </div>`;
+  openModal({
+    title: cid? 'Editar cidade' : 'Nova cidade', bodyHtml: body, submitLabel: cid? 'Salvar':'Criar cidade',
+    onMount:(modal)=>{
+      modal.querySelectorAll('.cid-pick').forEach(b=>{
+        b.addEventListener('click', ()=>{
+          const c = b.dataset.cor;
+          modal.querySelector('#cid-cor-input').value = c;
+          modal.querySelector('#cid-color-native').value = c;
+          modal.querySelectorAll('.cid-pick').forEach(x=>x.style.borderColor='transparent');
+          b.style.borderColor='#fff';
+        });
+      });
+      modal.querySelector('#cid-color-native')?.addEventListener('input', (e)=>{
+        modal.querySelector('#cid-cor-input').value = e.target.value;
+        modal.querySelectorAll('.cid-pick').forEach(x=>x.style.borderColor='transparent');
+      });
+      modal.querySelector('#cid-cor-input')?.addEventListener('input', (e)=>{
+        const v = e.target.value;
+        if(/^#[0-9a-f]{6}$/i.test(v)){ modal.querySelector('#cid-color-native').value = v; }
+      });
+    },
+    onSubmit:(fd)=>{
+      const nome = fd.get('nome').trim();
+      const cor = fd.get('cor').trim();
+      if(!nome){ toast('Informe o nome da cidade.', 'error'); return false; }
+      if(!/^#[0-9a-f]{6}$/i.test(cor)){ toast('Informe uma cor válida (ex: #3b82f6).', 'error'); return false; }
+      if((DB.cidades||[]).some(c=>c.nome.toLowerCase()===nome.toLowerCase() && String(c.id)!==String(cid?.id))){ toast('Já existe uma cidade com este nome.', 'error'); return false; }
+      if(cid){ cid.nome=nome; cid.cor=cor; toast('Cidade atualizada.'); registrarEvento('edicao','cidade',cid.id,cid.nome,'Cidade atualizada'); }
+      else { const novo={id:nextId(), nome, cor}; DB.cidades.push(novo); toast('Cidade criada.'); registrarEvento('criacao','cidade',novo.id,novo.nome,'Cidade criada'); }
+      saveData(); renderContent();
+    }
+  });
+}
+function deleteCidade(id){
+  const cid = (DB.cidades||[]).find(c=>c.id===Number(id));
+  if(!cid) return;
+  if(!confirm('Excluir a cidade "'+cid.nome+'"?')) return;
+  registrarEvento('exclusao','cidade',cid.id,cid.nome,'Cidade excluída');
+  DB.cidades = DB.cidades.filter(c=>c.id!==Number(id)); saveData(); renderContent(); toast('Cidade excluída.');
+}
 function esc(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function hl(text, q){
   text = String(text??'');
@@ -2443,6 +2502,7 @@ function renderProgCalendarioInto(area, list){
       <div class="tabs">
         <button class="tab ${progFilters.calView==='mes'?'active':''}" data-cal-view="mes">Mês (externa)</button>
         <button class="tab ${progFilters.calView==='dia'?'active':''}" data-cal-view="dia">Dia (interna)</button>
+        <button class="tab ${progFilters.calView==='tabulacao'?'active':''}" data-cal-view="tabulacao">Tabulação</button>
       </div>
       ${progFilters.calView==='dia'? `<div style="display:flex;align-items:center;gap:8px;">
         <button class="icon-btn" id="day-prev">${icon('chevL',16)}</button>
@@ -2463,6 +2523,10 @@ function renderProgCalendarioInto(area, list){
     if(nx) nx.addEventListener('click', ()=>{ progFilters.calDay=shiftISO(progFilters.calDay,1); renderContent(); });
     area.querySelectorAll('[data-open-prog]').forEach(c=>c.addEventListener('click', ()=>openAtribDetalhe(c.dataset.openProg)));
     area.querySelectorAll('[data-doc-prog]').forEach(c=>c.addEventListener('click', ()=>openDocProgramacao(c.dataset.docProg)));
+    return;
+  }
+  if(progFilters.calView==='tabulacao'){
+    renderProgTabulacaoInto(area, list, subTabs, bindTabs);
     return;
   }
   const year = calRef.getFullYear(), month = calRef.getMonth();
@@ -2536,6 +2600,94 @@ function renderDayList(dayList){
       </div>
     </div>`;
   }).join('')}</div>`;
+}
+
+function renderProgTabulacaoInto(area, list, subTabs, bindTabs){
+  const visiveis = list.filter(x=> x.atribuicao.status!=='Cancelado');
+  const dows = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const byDate = {};
+  visiveis.forEach(x=>{
+    const d = x.atribuicao.dataProgramada;
+    (byDate[d] = byDate[d]||[]).push(x);
+  });
+  const dates = Object.keys(byDate).sort();
+  const eqSet = new Set();
+  visiveis.forEach(x=>{ const eq=findEquipe(x.atribuicao.equipeId); if(eq) eqSet.add(eq.id); });
+  const equipes = [...eqSet].map(id=>findEquipe(id)).filter(Boolean);
+  if(!dates.length){
+    area.innerHTML = subTabs + `<div class="panel"><div class="empty-state">${icon('empty',34)}<p>Nenhuma programação para exibir na tabulação.</p></div></div>`;
+    bindTabs();
+    return;
+  }
+  let totalGeral = 0;
+  let rowsHtml = dates.map(iso=>{
+    const d = new Date(iso+'T12:00:00');
+    const dow = dows[d.getDay()];
+    const weekNum = getWeekNumber(d);
+    const items = byDate[iso];
+    const totalDia = items.length;
+    totalGeral += totalDia;
+    const eqCells = equipes.map(eq=>{
+      const progs = items.filter(x=>x.atribuicao.equipeId===eq.id);
+      if(!progs.length) return `<td class="tab-cell"></td>`;
+      const blocks = progs.map(x=>{
+        const pr = findProjeto(x.programacao.projetoId);
+        const cidade = pr?.cidade || '';
+        const cor = cidadeCor(cidade);
+        const label = esc((pr?.codigo||'—') + (cidade? '/'+cidade:''));
+        return `<div class="tab-block" style="background:${cor};color:#fff;" title="${esc(pr?.nome||'')}">${label}</div>`;
+      }).join('');
+      return `<td class="tab-cell">${blocks}</td>`;
+    }).join('');
+    const isToday = iso===todayISO();
+    return `<tr class="${isToday?'tab-row-today':''}">
+      <td class="tab-cell tab-cell-date tab-col-1">${fmtDate(iso)}</td>
+      <td class="tab-cell tab-cell-dow tab-col-2">${esc(dow)}</td>
+      <td class="tab-cell tab-cell-week tab-col-3">${weekNum}</td>
+      <td class="tab-cell tab-cell-total tab-col-4">${totalDia}</td>
+      ${eqCells}
+    </tr>`;
+  }).join('');
+  const eqHeaders = equipes.map(eq=>{
+    const label = equipeLabel(eq);
+    return `<th class="tab-th-eq" title="${esc(label)}">${esc(label)}</th>`;
+  }).join('');
+  area.innerHTML = subTabs + `
+    <div class="panel" style="padding:0;">
+      <div class="table-scroll tab-scroll">
+        <table class="tab-table">
+          <thead><tr>
+            <th class="tab-th tab-th-fixed tab-col-1">Data</th>
+            <th class="tab-th tab-th-fixed tab-col-2">Dia</th>
+            <th class="tab-th tab-th-fixed tab-col-3">Semana</th>
+            <th class="tab-th tab-th-fixed tab-col-4">Total</th>
+            ${eqHeaders}
+          </tr></thead>
+          <tbody>${rowsHtml}
+            <tr class="tab-total-row">
+              <td class="tab-cell tab-col-1 tab-cell-date" style="font-weight:700;text-align:right;">Total</td>
+              <td class="tab-cell tab-col-2"></td>
+              <td class="tab-cell tab-col-3"></td>
+              <td class="tab-cell tab-col-4 tab-cell-total" style="font-weight:700;">${totalGeral}</td>
+              ${equipes.map(eq=>{
+                const count = visiveis.filter(x=>x.atribuicao.equipeId===eq.id).length;
+                return `<td class="tab-cell" style="font-weight:700;text-align:center;">${count}</td>`;
+              }).join('')}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  bindTabs();
+  area.querySelectorAll('.tab-block').forEach(b=>{
+    b.style.cursor = 'pointer';
+  });
+}
+function getWeekNumber(d){
+  const oneJan = new Date(d.getFullYear(), 0, 1);
+  const diff = d - oneJan;
+  const oneWeek = 604800000;
+  return Math.ceil((diff / oneWeek + oneJan.getDay() + 1) / 1);
 }
 
 function atribDetalheHtml(programacao, atrib, comAcoes=true){
@@ -3625,6 +3777,13 @@ function renderAdmin(){
     <div class="panel" style="margin-top:24px;">
       <div class="panel-head"><h3>Respostas RDO - Saída da Base</h3></div>
       <div id="admin-rdo-list"></div>
+    </div>
+    <div class="panel" style="margin-top:24px;">
+      <div class="panel-head">
+        <div><h3>Cidades</h3><div class="admin-field-meta">Cadastre cidades e defina cores de identificação para uso na Tabulação do Calendário.</div></div>
+        <button class="btn btn-primary btn-sm" id="btn-nova-cidade">${icon('plus',13)} Nova cidade</button>
+      </div>
+      <div id="admin-cidades-list"></div>
     </div>`;
   el.querySelectorAll('[data-mod]').forEach(b=>b.addEventListener('click', ()=>{ adminModulo=b.dataset.mod; renderAdmin(); }));
   bindMonPanel();
@@ -3641,7 +3800,9 @@ function renderAdmin(){
     registrarEvento('config','sistema',null,'Campo personalizado', 'Campo "'+label+'" adicionado no módulo '+adminModulo);
     saveData(); toast('Campo adicionado.'); renderAdmin();
   });
-  paintAdminRdoList();
+  document.getElementById('btn-nova-cidade').addEventListener('click', ()=>openCidadeModal());
+  paintAdminCidadesList();
+  try{ paintAdminRdoList(); }catch(e){ console.error('RDO list error:', e); }
 }
 function paintAdminUsersList(){
   const wrap = document.getElementById('admin-users-list');
@@ -3834,6 +3995,23 @@ function paintAdminRdoList(){
         </table>
       </div>
     </div>`).join('');
+}
+function paintAdminCidadesList(){
+  const wrap = document.getElementById('admin-cidades-list');
+  const cids = DB.cidades||[];
+  wrap.innerHTML = cids.length? cids.map(c=>`
+    <div class="admin-field-row">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="width:18px;height:18px;border-radius:4px;background:${c.cor||'#6b7280'};flex-shrink:0;"></span>
+        <strong>${esc(c.nome)}</strong>
+      </div>
+      <div class="row-actions">
+        <button class="icon-btn" data-edit-cid="${c.id}">${icon('edit',14)}</button>
+        <button class="icon-btn" data-del-cid="${c.id}">${icon('trash',14)}</button>
+      </div>
+    </div>`).join('') : `<div style="padding:20px;color:var(--muted-2);font-size:12.5px;">Nenhuma cidade cadastrada. Cadastre cidades para usar cores de identificação na Tabulação.</div>`;
+  wrap.querySelectorAll('[data-edit-cid]').forEach(b=>b.addEventListener('click', ()=>openCidadeModal(b.dataset.editCid)));
+  wrap.querySelectorAll('[data-del-cid]').forEach(b=>b.addEventListener('click', ()=>deleteCidade(b.dataset.delCid)));
 }
 
 /* =========================================================
@@ -4042,7 +4220,7 @@ function renderOseProgramacoes(){
 
 function renderOseListaInto(area, list){
   area.innerHTML = `<div class="panel"><div class="table-scroll"><table>
-    <thead><tr><th>ID</th><th>Data</th><th>Município</th><th>Subestação</th><th>Tipo</th><th>Equipe</th><th>Status Doc.</th><th>Atividades</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>ID</th><th>Data</th><th>Nº OSE</th><th>Município</th><th>Subestação</th><th>Tipo</th><th>Equipe</th><th>Status Doc.</th><th>Atividades</th><th>Status</th><th></th></tr></thead>
     <tbody>${list.map(x=>{
       const p=x.programacao, a=x.atribuicao, eq=findEquipe(a.equipeId);
       const late = a.dataProgramada < todayISO() && !['Concluído','Cancelado'].includes(a.status);
@@ -4050,6 +4228,7 @@ function renderOseListaInto(area, list){
       return `<tr style="cursor:pointer;" data-ose-open="${a.id}">
         <td class="mono" style="white-space:nowrap;">${oseProgLabel(p)}</td>
         <td class="mono">${fmtDate(a.dataProgramada)} ${late?'<div class="late-flag">VENCIDA</div>':''}</td>
+        <td class="mono">${esc(p.numeroOse||'—')}</td>
         <td>${esc(p.municipio||'—')}</td>
         <td>${esc(p.subestacao||'—')}</td>
         <td><span class="badge" style="color:${p.tipoIntervencao==='Aéreo'?'var(--blue)':p.tipoIntervencao==='Subterrâneo'?'var(--accent)':'var(--purple)'};background:${p.tipoIntervencao==='Aéreo'?'rgba(78,140,235,.14)':p.tipoIntervencao==='Subterrâneo'?'rgba(224,164,88,.14)':'rgba(180,140,224,.14)'};">${esc(p.tipoIntervencao||'—')}</span></td>
@@ -4555,9 +4734,11 @@ function openOseProgramacaoModal(id){
       <div class="field"><label>Subestação</label><input type="text" name="subestacao" value="${esc(pg?.subestacao||'')}" placeholder="Nome da subestação"></div>
     </div>
     <div class="field-row">
+      <div class="field"><label>Número da OSE</label><input type="text" name="numeroOse" value="${esc(pg?.numeroOse||'')}"></div>
       <div class="field"><label>Tipo de Intervenção</label><select name="tipoIntervencao"><option value="">Selecione…</option>${TIPO_INTERVENCAO_OPCOES.map(v=>`<option ${pg?.tipoIntervencao===v?'selected':''}>${v}</option>`).join('')}</select></div>
-      <div class="field"><label>Status Documentação</label><select name="statusDocumentacao"><option value="">Selecione…</option>${STATUS_DOC_OPCOES.map(v=>`<option ${pg?.statusDocumentacao===v?'selected':''}>${v}</option>`).join('')}</select></div>
     </div>
+    <div class="field-row">
+      <div class="field"><label>Status Documentação</label><select name="statusDocumentacao"><option value="">Selecione…</option>${STATUS_DOC_OPCOES.map(v=>`<option ${pg?.statusDocumentacao===v?'selected':''}>${v}</option>`).join('')}</select></div>
     <div class="field-row">
       <div class="field"><label>Data início <span class="req">*</span></label><input type="date" name="dataProgramacao" required value="${pg?.dataProgramacao||todayISO()}"></div>
       <div class="field"><label>Data fim (opcional)</label><input type="date" name="dataFim" value="${pg?.dataProgramacao||''}"><div class="field-hint">Se preenchido, cria uma programação para cada dia no intervalo. Deixe vazio para criar apenas 1.</div></div>
@@ -4762,6 +4943,7 @@ function openOseProgramacaoModal(id){
       (DB.customFields.programacoes||[]).forEach(f=>{ const v=fd.get('cf_'+f.id); if(v!=null) custom[f.id]=v; });
       const base = {
         municipio, subestacao: fd.get('subestacao').trim(),
+        numeroOse: fd.get('numeroOse').trim(),
         tipoIntervencao: fd.get('tipoIntervencao'),
         dataProgramacao, statusDocumentacao: fd.get('statusDocumentacao'),
         observacoes, orientacoesPlanejamento, custom,
