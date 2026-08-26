@@ -5,7 +5,7 @@
    sincroniza sozinho quando a internet volta.
    - RDO: antes de visualizar os dados da equipe, o usuário deve
      responder ao questionário Saída da Base Obrigatória (RDO).
-   - Acesso bloqueado se a data da programação vencer.
+   - Permite envio após a data, mas registra atraso visível.
 ========================================================= */
 const firebaseConfig = {
   apiKey: "AIzaSyDFQCMsX04fwh7MVyEpvXnXD0U4TD5Or5w",
@@ -196,12 +196,18 @@ function setStatus(txt, kind){
   statusEl.className = 'team-conn ' + (kind||'');
 }
 
-function checkDataProgramadaExpirada(){
+function diasAtrasoProgramacao(){
   const dataRef = teamDataRef();
-  if(!prog || !dataRef) return false;
-  const hoje = new Date().toISOString().split('T')[0];
-  const progData = new Date(dataRef).toISOString().split('T')[0];
-  return progData < hoje && !['Concluído','Cancelado'].includes(prog.status||'');
+  if(!prog || !dataRef) return 0;
+  if(['Concluído','Cancelado'].includes(prog.status||'')) return 0;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const progData = new Date(dataRef); progData.setHours(0,0,0,0);
+  const diff = Math.floor((hoje - progData) / 86400000);
+  return diff > 0 ? diff : 0;
+}
+function atrasoLabel(dias){
+  if(!dias) return '';
+  return `Enviado ${dias} dia${dias>1?'s':''} após a programação prevista`;
 }
 
 function dbToEditors(db){
@@ -474,11 +480,20 @@ function render(){
     if(!ocndsId){ root.innerHTML = `<div class="panel"><div class="empty-state"><p>Link inválido — faltou identificar a ocorrência.</p></div></div>`; return; }
     if(!ocndsItem){ root.innerHTML = `<div class="panel"><div class="empty-state"><p>Ocorrência não encontrada.</p><p style="font-size:12px;color:var(--muted-2);">Conecte-se ao menos uma vez para carregar os dados, ou tente novamente com internet.</p></div></div>`; return; }
     if(enviado){
+      const _diasEnvioOc = (()=>{
+        if(!ocndsItem || !ocndsItem.data) return 0;
+        if(['Baixada','Cancelada'].includes(ocndsItem.status||'')) return 0;
+        const hoje = new Date(); hoje.setHours(0,0,0,0);
+        const d = new Date(ocndsItem.data); d.setHours(0,0,0,0);
+        const diff = Math.floor((hoje - d) / 86400000);
+        return diff > 0 ? diff : 0;
+      })();
       root.innerHTML = `
         <div class="panel section-gap team-ok">
           <div class="brand-mark team-ok-logo">G2</div>
           <h3>Dados enviados e sincronizados</h3>
           <p>Obrigado, equipe! Os dados da ocorrência foram enviados ao escritório.</p>
+          ${_diasEnvioOc? `<p style="margin-top:8px;padding:8px 12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;font-size:13px;color:#92400e;font-weight:600;">${icon('alert',14)} ${esc(atrasoLabel(_diasEnvioOc))}</p>` : ''}
           <p class="team-ok-meta">${ocndsItem.gid||'G26-'+String(ocndsItem.id).padStart(7,'0')} · ${ocndsItem.tipo} · ${fmtDate(ocndsItem.data)}</p>
         </div>`;
       setStatus('Sincronizado', 'ok');
@@ -592,32 +607,22 @@ function render(){
 
   /* Após o envio, a página mostra apenas a confirmação com a logo */
   if(enviado){
+    const _diasEnvio = diasAtrasoProgramacao();
     root.innerHTML = `
       <div class="panel section-gap team-ok">
         <div class="brand-mark team-ok-logo">G2</div>
         <h3>Dados enviados e sincronizados</h3>
         <p>Obrigado, equipe! Suas atividades, quantidades executadas, fotos e o RDO foram enviados ao escritório.</p>
+        ${_diasEnvio? `<p style="margin-top:8px;padding:8px 12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;font-size:13px;color:#92400e;font-weight:600;">${icon('alert',14)} ${esc(atrasoLabel(_diasEnvio))}</p>` : ''}
         <p class="team-ok-meta">${teamMode()==='poda'?'Programação PODA':teamMode()==='ose'?'Programação OSE':'Programação'} ${teamGidLabel(prog)} · ${fmtDate(teamDataRef())}</p>
       </div>`;
     setStatus('Sincronizado', 'ok');
     return;
   }
   
-  /* Verificar se data da programação venceu */
-  if(checkDataProgramadaExpirada()){
-    root.innerHTML = `
-      <div class="panel" style="background:var(--red);color:#fff;padding:40px 20px;">
-        <div style="max-width:500px;margin:0 auto;">
-          <h3 style="color:#fff;">Acesso negado — Programação vencida</h3>
-          <p style="font-size:16px;margin:16px 0 8px;">A data da programação ${fmtDate(teamDataRef())} já venceu.</p>
-          <p style="font-size:14px;opacity:0.9;">Equipe não pode mais acessar esta programação após o prazo.</p>
-          <button class="btn btn-secondary" id="voltar-dashboard" style="margin-top:24px;padding:12px 24px;">Voltar ao Dashboard</button>
-        </div>
-      </div>`;
-    document.getElementById('voltar-dashboard').addEventListener('click', ()=>{ window.location.href='index.html'; });
-    return;
-  }
-  
+  /* Aviso de atraso — se a data já venceu, exibe banner mas permite acesso */
+  const _diasAtraso = diasAtrasoProgramacao();
+
   /* Se RDO nao completado, mostrar questionario */
   if(!rdoCompletado){
     root.innerHTML = renderRDOForm();
@@ -652,6 +657,7 @@ function render(){
   ].filter(Boolean).join(' — ');
   resetFotos();
   root.innerHTML = `
+    ${_diasAtraso? `<div class="panel" style="background:var(--amber,#f59e0b);color:#1a1206;padding:12px 16px;border-radius:10px;margin-bottom:12px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;">${icon('alert',15)} ${esc(atrasoLabel(_diasAtraso))}</div>` : ''}
     ${anexosDoProgramadorHtml()}
     ${orientacoesPlanejamentoHtml()}
     <div class="panel section-gap">
@@ -1322,8 +1328,9 @@ function init(){
     if(!isOcndsMode){
       const pg = teamFindProg(DB);
       if(pg){
-        if(checkDataProgramadaExpirada()){
-          setStatus('Programação vencida — acesso negado', 'warn');
+        const _d = diasAtrasoProgramacao();
+        if(_d){
+          setStatus(`Envio atrasado — ${_d} dia${_d>1?'s':''} após a programação`, 'warn');
         }
       }
       atualizaRDOCompletado();
