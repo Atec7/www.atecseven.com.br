@@ -150,6 +150,7 @@ function icon(name,size=18){ return `<svg width="${size}" height="${size}" viewB
 /* --- estado --- */
 let DB = null;
 const progId = Number(new URLSearchParams(location.search).get('equipe')) || null;
+const filterEquipeId = Number(new URLSearchParams(location.search).get('e')) || null;
 const ocndsId = Number(new URLSearchParams(location.search).get('ocnds')) || null;
 const podaId = Number(new URLSearchParams(location.search).get('poda')) || null;
 const oseId = Number(new URLSearchParams(location.search).get('ose')) || null;
@@ -230,7 +231,8 @@ function dbToEditors(db){
   if(!pg) return null;
   prog = pg;
   editors = {};
-  (pg.atribuicoes||[]).forEach(at=>{
+  const atrs = filterEquipeId? (pg.atribuicoes||[]).filter(at=>at.equipeId===filterEquipeId) : (pg.atribuicoes||[]);
+  atrs.forEach(at=>{
     editors[at.equipeId] = (at.atividades||[]).map(a=>({ atividadeId:String(a.atividadeId), quantidadePrevista: a.quantidadePrevista??'', quantidadeExecutada: a.quantidadeExecutada??'', qtdAnomalia: a.qtdAnomalia??'', qtdAnomaliaExecutada: a.qtdAnomaliaExecutada??'' }));
   });
   return pg;
@@ -1208,7 +1210,7 @@ async function syncNow(){
 /* --- documento de campo (PDF / impressão) --- */
 const PRINT_PROG = Number(new URLSearchParams(location.search).get('print')) || null;
 const PRINT_EQUIPE = new URLSearchParams(location.search).get('e') || null;
-function teamPageUrl(pgId){ return location.origin + location.pathname + '?equipe=' + pgId; }
+function teamPageUrl(pgId, eqId){ return location.origin + location.pathname + '?equipe=' + pgId + (eqId? '&e='+eqId : ''); }
 function qrSvgHtml(url, cellSize){
   if(typeof qrcode==='undefined' || !url) return '';
   try{
@@ -1243,7 +1245,7 @@ function buildDocEquipeHtml(pg, eqId){
     <div class="ps-block">
       <div class="ps-block-head">
         <div>${pg.gid||'G26-'+String(pg.id).padStart(7,'0')} — ${esc(pr?.nome||'Projeto')} (${esc(pr?.codigo||'')}) — ${esc(equipeLabel(eq))} — ${fmtDate(atrib?.dataProgramada||pg.dataProgramada)}</div>
-        <div class="ps-qr">${qrSvgHtml(teamPageUrl(pg.id), 3)}<div class="ps-qr-cap">Escaneie para alterar as atividades</div></div>
+        <div class="ps-qr">${qrSvgHtml(teamPageUrl(pg.id, eqId), 3)}<div class="ps-qr-cap">Escaneie para alterar as atividades</div></div>
       </div>
       <table class="ps-info">
         <tr><th>Supervisor</th><td>${esc(eq?.supervisor||'—')}</td><th>Encarregado</th><td>${esc(eq?.encarregado||'—')}</td></tr>

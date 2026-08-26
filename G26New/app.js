@@ -2774,7 +2774,7 @@ function atribDetalheHtml(programacao, atrib, comAcoes=true){
           ${STATUS_PROG.filter(s=>s!==atrib.status).map(s=>`<button type="button" class="btn btn-sm" data-set-status="${s}">→ ${s}</button>`).join('')}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="btn btn-sm" data-whats-detail="${programacao.id}">${icon('whatsapp',13)} Encaminhar WhatsApp</button>
+          <button type="button" class="btn btn-sm" data-whats-detail="${programacao.id}" data-whats-eq="${atrib.equipeId}">${icon('whatsapp',13)} Encaminhar WhatsApp</button>
           <button type="button" class="btn btn-sm" data-edit-detail="${programacao.id}">${icon('edit',13)} Editar programação</button>
           <button type="button" class="btn btn-sm" data-doc-detail="${programacao.id}">${icon('print',13)} Documento de campo</button>
           <button type="button" class="btn btn-sm" data-reprog-detail="${programacao.id}|${atrib.id}">${icon('reprog',13)} Reprogramar</button>
@@ -2795,7 +2795,7 @@ function openAtribDetalhe(atribId){
         if(!requerEscrita()) return;
         pedirMotivoStatus(atrib.id, b.dataset.setStatus);
       }));
-      root.querySelectorAll('[data-whats-detail]').forEach(b=>b.addEventListener('click', ()=>encaminharWhats(b.dataset.whatsDetail)));
+      root.querySelectorAll('[data-whats-detail]').forEach(b=>b.addEventListener('click', ()=>encaminharWhats(b.dataset.whatsDetail, b.dataset.whatsEq)));
       root.querySelectorAll('[data-edit-detail]').forEach(b=>b.addEventListener('click', ()=>{
         document.getElementById('modal-root').innerHTML='';
         openProgramacaoModal(b.dataset.editDetail);
@@ -3217,23 +3217,23 @@ function openReprogramarManual(pgId, atId){
 /* =========================================================
    DOCUMENTO DE CAMPO (impressão / PDF)
 ========================================================= */
-function equipePageUrl(progId){
+function equipePageUrl(progId, equipeId){
   let base = location.href.split(/[?#]/)[0];
   base = base.replace(/[\\/]index\.html$/i, '');
   if(base && !base.endsWith('/')) base += '/';
-  return base + 'team.html?equipe=' + progId;
+  return base + 'team.html?equipe=' + progId + (equipeId? '&e='+equipeId : '');
 }
-function equipePageUrlPoda(id){
+function equipePageUrlPoda(id, equipeId){
   let base = location.href.split(/[?#]/)[0];
   base = base.replace(/[\\/]index\.html$/i, '');
   if(base && !base.endsWith('/')) base += '/';
-  return base + 'team.html?poda=' + id;
+  return base + 'team.html?poda=' + id + (equipeId? '&e='+equipeId : '');
 }
-function equipePageUrlOse(id){
+function equipePageUrlOse(id, equipeId){
   let base = location.href.split(/[?#]/)[0];
   base = base.replace(/[\\/]index\.html$/i, '');
   if(base && !base.endsWith('/')) base += '/';
-  return base + 'team.html?ose=' + id;
+  return base + 'team.html?ose=' + id + (equipeId? '&e='+equipeId : '');
 }
 
 /* ── WHATSAPP ── */
@@ -3355,16 +3355,17 @@ function buildWhatsMessage(prog, atrib){
     `*Encarregado:* ${eq?.encarregado||'—'}  ·  *Motorista:* ${eq?.motorista||'—'}`,
     ``,
     `*Acesso da equipe (QR):*`,
-    equipePageUrl(prog.id),
+    equipePageUrl(prog.id, atrib.equipeId),
     ``,
     `_Caso tenha problemas técnicos com a ferramenta, entre em contato:_`,
     `https://wa.me/${WHATS_SUPORTE}`
   ].join('\n');
 }
-function encaminharWhats(progId){
+function encaminharWhats(progId, filtroEquipeId){
   const prog = DB.programacoes.find(p=>p.id===Number(progId));
   if(!prog) return;
-  const teams = (prog.atribuicoes||[]).filter(a=>a.status!=='Cancelado');
+  let teams = (prog.atribuicoes||[]).filter(a=>a.status!=='Cancelado');
+  if(filtroEquipeId) teams = teams.filter(a=>String(a.equipeId)===String(filtroEquipeId));
   if(!teams.length) return;
   const semWhats = [];
   let enviadas = 0;
@@ -3566,7 +3567,7 @@ function docAtribuicaoHtml(prog, atrib){
       <td></td>
     </tr>`;
   }).join('');
-  const qrUrl = equipePageUrl(prog.id);
+  const qrUrl = equipePageUrl(prog.id, atrib.equipeId);
   return `
   <div class="ps-block">
     <div class="ps-block-head">
@@ -4554,7 +4555,7 @@ function buildOseWhatsMessage(prog, atrib){
     `*Encarregado:* ${eq?.encarregado||'—'}  ·  *Motorista:* ${eq?.motorista||'—'}`,
     ``,
     `*Acesso da equipe (QR):*`,
-    equipePageUrlOse(prog.id),
+    equipePageUrlOse(prog.id, atrib.equipeId),
     ``,
     `_Caso tenha problemas técnicos, entre em contato:_`,
     `https://wa.me/${WHATS_SUPORTE}`
@@ -4600,7 +4601,7 @@ function oseDocAtribuicaoHtml(prog, atrib){
   <div class="ps-block">
     <div class="ps-block-head">
       <div>${oseProgLabel(prog)} — ${esc(prog.municipio||'Município')} — ${equipeLabel(eq)} — ${fmtDate(atrib.dataProgramada)}</div>
-      <div class="ps-qr">${qrSvgHtml(equipePageUrlOse(prog.id), 3)}<div class="ps-qr-cap">Escaneie para acessar a página de serviço</div></div>
+      <div class="ps-qr">${qrSvgHtml(equipePageUrlOse(prog.id, atrib.equipeId), 3)}<div class="ps-qr-cap">Escaneie para acessar a página de serviço</div></div>
     </div>
     <table class="ps-info">
       <tr><th>Supervisor</th><td>${esc(eq?.supervisor||'—')}</td><th>Encarregado</th><td>${esc(eq?.encarregado||'—')}</td></tr>
@@ -5832,7 +5833,7 @@ function buildPodaWhatsMessage(prog, atrib){
     `*Encarregado:* ${eq?.encarregado||'—'}  ·  *Motorista:* ${eq?.motorista||'—'}`,
     ``,
     `*Acesso da equipe (QR):*`,
-    equipePageUrlPoda(prog.id),
+    equipePageUrlPoda(prog.id, atrib.equipeId),
     ``,
     `_Caso tenha problemas técnicos, entre em contato:_`,
     `https://wa.me/${WHATS_SUPORTE}`
@@ -5878,7 +5879,7 @@ function podaDocAtribuicaoHtml(prog, atrib){
   <div class="ps-block">
     <div class="ps-block-head">
       <div>${podaProgLabel(prog)} — ${esc(prog.osi||'OSI')} — ${equipeLabel(eq)} — ${fmtDate(atrib.dataProgramada)}</div>
-      <div class="ps-qr">${qrSvgHtml(equipePageUrlPoda(prog.id), 3)}<div class="ps-qr-cap">Escaneie para acessar a página de serviço</div></div>
+      <div class="ps-qr">${qrSvgHtml(equipePageUrlPoda(prog.id, atrib.equipeId), 3)}<div class="ps-qr-cap">Escaneie para acessar a página de serviço</div></div>
     </div>
     <table class="ps-info">
       <tr><th>Supervisor</th><td>${esc(eq?.supervisor||'—')}</td><th>Encarregado</th><td>${esc(eq?.encarregado||'—')}</td></tr>
