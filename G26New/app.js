@@ -818,10 +818,10 @@ function exportAlertasCSV(){
 }
 function exportProgramacoesCSV(){
   exportCSV('programacoes.csv',
-    ['Data','Projeto','Setor','Coordenação','Ciclo','Equipe','Equipe comp.','Atividades','Valor previsto','Status'],
+    ['Data','Código','Projeto','Setor','Coordenação','Ciclo','Equipe','Equipe comp.','Atividades','Valor previsto','Status'],
     programacoesFiltradas().map(x=>{
       const p=x.atribuicao, pr=findProjeto(x.programacao.projetoId), eq=findEquipe(p.equipeId);
-      return [fmtDate(p.dataProgramada), pr?.nome||'-', pr?.setor||'', pr?.coordenacao||'', x.programacao.ciclo||'', eqtlLabel(eq), prtnLabel(eq), atividadesResumo(p.atividades), fmtMoney(valorProgramadoAtrib(p)), p.status];
+      return [fmtDate(p.dataProgramada), pr?.codigo||'', pr?.nome||'-', pr?.setor||'', pr?.coordenacao||'', x.programacao.ciclo||'', eqtlLabel(eq), prtnLabel(eq), atividadesResumo(p.atividades), fmtMoney(valorProgramadoAtrib(p)), p.status];
     }));
 }
 function exportPodaProgramacoesCSV(){
@@ -1461,7 +1461,7 @@ function renderDashboard(){
             const valPrev = p.atividades.reduce((s,a)=> s + (a.quantidadePrevista||0)*(findAtividade(a.atividadeId)?.valorUnitario||0), 0);
             return `<tr class="clickable-row" data-open-prog="${p.id}" title="Abrir detalhes">
               <td class="mono">${fmtDate(p.dataProgramada)} ${late?`<div class="blink-red" style="font-size:10.5px;color:var(--red);">VENCIDA</div>`:''}</td>
-              <td>${esc(pr?.nome||'—')}</td>
+              <td>${esc(pr?.nome||'—')}<div style="color:var(--muted-2);font-size:11px;">${esc(pr?.codigo||'')}</div></td>
               <td><span class="badge-prefix">${eqtlLabel(eq)}</span></td>
               <td><span class="badge-prefix">${prtnLabel(eq)}</span></td>
               <td style="font-size:12px;color:var(--muted);">${atividadesResumo(p.atividades)}</td>
@@ -2003,7 +2003,7 @@ function openPlanoFisicoModal(pjId){
   const pj = findProjeto(pjId); if(!pj) return;
   let editor = null;
   const body = `
-    <div style="font-size:12.5px;color:var(--muted);margin-bottom:2px;">Projeto: <strong>${esc(pj.nome)}</strong></div>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:2px;">Projeto: <strong>${esc(pj.nome)}</strong> (${esc(pj.codigo||'')})</div>
     <div class="field"><label>Plano físico — atividades e quantidades previstas</label>
       <div class="ae-list"></div>
       <button type="button" class="btn btn-sm" id="pf-add" style="margin-top:6px;align-self:flex-start;">${icon('plus',13)} Adicionar atividade</button>
@@ -2349,7 +2349,7 @@ function renderProgListaInto(area, list){
       return `<tr ${late?'style="background:#ffe4e1;"':''} data-programacao-id="${x.programacao.id}" style="cursor:pointer;">
         <td class="mono" style="white-space:nowrap;">${gid}</td>
         <td class="mono">${fmtDate(p.dataProgramada)} ${late?`<div class="late-flag">VENCIDA</div>`:''}</td>
-        <td>${esc(pr?.nome||'—')}<div style="color:var(--muted-2);font-size:11px;">${esc(pr?.setor||'')} · ${esc(pr?.coordenacao||'')}</div></td>
+        <td>${esc(pr?.nome||'—')}<div style="color:var(--muted-2);font-size:11px;">${esc(pr?.codigo||'')} · ${esc(pr?.setor||'')} · ${esc(pr?.coordenacao||'')}</div></td>
         <td><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);font-size:10.5px;">${esc(x.programacao.ciclo||'—')}</span></td>
         <td><span class="badge-prefix">${eqtlLabel(eq)}</span></td>
         <td><span class="badge-prefix">${prtnLabel(eq)}</span>${metaWarn? `<div style="margin-top:4px;">${metaWarn}</div>`:''}</td>
@@ -2399,7 +2399,7 @@ function renderProgFluxoInto(area, list){
         return `<div class="kcard ${late?'pending':''}" draggable="true" data-atrib="${p.id}" data-open-prog="${p.id}">
           <div class="kc-code ${late?'late-blink late':''}">${late?'VENCIDA · ':''}${equipeLabel(eq)}</div>
           <div class="kc-title">${esc(atividadesResumo(p.atividades))}</div>
-          <div class="kc-meta"><span>${esc(pr?.nome||'—')}<span style="color:var(--muted-2);"> · ${esc(pr?.setor||'')} · ${esc(pr?.coordenacao||'')}</span></span><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);font-size:10px;">${esc(x.programacao.ciclo||'')}</span></div>
+          <div class="kc-meta"><span>${esc(pr?.nome||'—')}<span style="color:var(--muted-2);"> · ${esc(pr?.codigo||'')} · ${esc(pr?.setor||'')} · ${esc(pr?.coordenacao||'')}</span></span><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);font-size:10px;">${esc(x.programacao.ciclo||'')}</span></div>
           <div class="kc-meta"><span>${fmtDate(p.dataProgramada)}</span><span class="mono" style="color:var(--accent);">${progGid(x.programacao)}</span><span class="mono" style="color:var(--muted);">${p.atividades.length} ativ. · ${fmtMoney(valPrev)}</span></div>
           ${metaWarn? `<div class="kc-meta" style="justify-content:flex-start;">${metaWarn}</div>`:''}
           ${teamBadgeHtml(p)? `<div class="kc-meta" style="justify-content:flex-start;">${teamBadgeHtml(p)}</div>`:''}
@@ -2576,7 +2576,7 @@ function renderDayList(dayList){
     const valPrev = p.atividades.reduce((s,a)=> s + (a.quantidadePrevista||0)*(findAtividade(a.atividadeId)?.valorUnitario||0), 0);
     return `<div class="panel">
       <div class="panel-head">
-        <div><h3>${esc(pr?.nome||'—')}</h3><div class="admin-field-meta">${progGid(x.programacao)} · ${esc(x.programacao.ciclo||'')} · ${equipeLabel(eq)} · ${fmtDate(p.dataProgramada)}</div></div>
+        <div><h3>${esc(pr?.nome||'—')} <span style="font-size:14px;font-weight:400;color:var(--muted-2);">(${esc(pr?.codigo||'')})</span></h3><div class="admin-field-meta">${progGid(x.programacao)} · ${esc(x.programacao.ciclo||'')} · ${equipeLabel(eq)} · ${fmtDate(p.dataProgramada)}</div></div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${metaWarningHtml(p)}${teamBadgeHtml(p)}${statusBadge(p.status, late)}</div>
       </div>
       <div style="padding:12px 16px;">
@@ -3696,7 +3696,7 @@ function renderHistorico(){
     <div class="panel-head" style="padding:0;margin-bottom:16px;border:none;">
       <div class="filters">
         <select id="f-h-tipo">${HIST_TIPOS.map(t=>`<option value="${t.v}" ${histFilters.tipo===t.v?'selected':''}>${t.l}</option>`).join('')}</select>
-        <select id="f-h-projeto"><option value="">Todos os projetos</option>${projetosVisiveis().map(p=>`<option value="${p.id}" ${histFilters.projeto==String(p.id)?'selected':''}>${esc(p.nome)}</option>`).join('')}</select>
+        <select id="f-h-projeto"><option value="">Todos os projetos</option>${projetosVisiveis().map(p=>`<option value="${p.id}" ${histFilters.projeto==String(p.id)?'selected':''}>${esc(p.codigo)} · ${esc(p.nome)}</option>`).join('')}</select>
         <input type="date" id="f-h-data-de" value="${histFilters.dataDe}" title="Data inicial">
         <span style="color:var(--muted);font-size:12px;">até</span>
         <input type="date" id="f-h-data-ate" value="${histFilters.dataAte}" title="Data final">
@@ -3733,7 +3733,7 @@ function renderHistoricoTimeline(events, withContext){
     else if(h.tipo==='confirmacao'){ dotColor='var(--green)'; title='Execução confirmada'; }
     else if(h.tipo==='equipe'){ dotColor='var(--accent)'; title='Atividades alteradas pela equipe'; }
     else if(h.tipo==='rdo_edicao'){ dotColor='var(--purple)'; title='Registro RDO editado'; }
-    const ctx = withContext && pg ? `<div class="tl-meta">${esc(findProjeto(pg.projetoId)?.nome||'')} · Equipe ${equipeLabel(eq)}</div>` : '';
+    const ctx = withContext && pg ? `<div class="tl-meta">${esc(findProjeto(pg.projetoId)?.codigo||'')} · ${esc(findProjeto(pg.projetoId)?.nome||'')} · Equipe ${equipeLabel(eq)}</div>` : '';
     return `<div class="tl-item ${withContext?'clickable':''}" ${withContext?`data-open-atrib="${h.atribId}"`:''} style="--dot-c:${dotColor}"><div class="tl-title">${title}</div><div class="tl-meta">${fmtDateTime(h.ts)} · <strong style="color:var(--muted);">${autor(h)}</strong></div>${ctx}${h.motivo? `<div class="tl-motivo"><strong>Motivo:</strong> ${esc(h.motivo)}${h.obs? ' — '+esc(h.obs):''}</div>`:''}</div>`;
   }).join('')}</div>`;
 }
@@ -3949,7 +3949,7 @@ function paintAdminRdoList(){
         <h4>Dados da Programação</h4>
         <p><strong>Data programada:</strong> ${fmtDate(entry.prog.dataProgramada)}</p>
         <p><strong>Ciclo:</strong> ${entry.prog.ciclo||'—'}</p>
-        <p><strong>Projeto:</strong> ${entry.prog.projetoId ? (DB.projetos||[]).find(p=>p.id===entry.prog.projetoId)?.nome||'—' : '—'}</p>
+        <p><strong>Projeto:</strong> ${entry.prog.projetoId ? ((()=>{ const _p=(DB.projetos||[]).find(p=>p.id===entry.prog.projetoId); return _p? `${_p.codigo||''} · ${_p.nome}`:'—'; })()) : '—'}</p>
         <p><strong>Local de execução:</strong> ${entry.prog.local? esc(entry.prog.local) : '—'}${entry.prog.local||entry.prog.localLat!=null? ` <a href="${esc(localMapsHref(entry.prog.local,entry.prog.localLat,entry.prog.localLng))}" target="_blank" rel="noopener" style="color:var(--blue);font-weight:600;font-size:12px;">${icon('pin',11)} Ver no Google Maps</a>`:''}</p>
         ${(entry.prog.localLat!=null && entry.prog.localLng!=null)? `<a href="${esc(staticMapUrl(entry.prog.localLat,entry.prog.localLng,17,800,360))}" target="_blank" rel="noopener" style="display:inline-block;max-width:480px;">${localThumbHtml(entry.prog.local,entry.prog.localLat,entry.prog.localLng)}</a>`:''}
       </div>
@@ -7393,7 +7393,7 @@ function rastrearItem(itemTipo, itemId){
     const p = DB.programacoes.find(x=>x.id===itemId);
     if(p){
       const pr = findProjeto(p.projetoId);
-      present = `GID ${progGid(p)} · ${esc(pr?.nome||'Projeto removido')} · Ciclo ${esc(p.ciclo||'—')} · ${(p.atribuicoes||[]).length} equipe(s) · ${(p.atribuicoes||[]).map(a=>esc(a.status)).join(' / ')||'—'}`;
+      present = `GID ${progGid(p)} · ${esc(pr?.codigo||'')} ${esc(pr?.nome||'Projeto removido')} · Ciclo ${esc(p.ciclo||'—')} · ${(p.atribuicoes||[]).length} equipe(s) · ${(p.atribuicoes||[]).map(a=>esc(a.status)).join(' / ')||'—'}`;
       (p.atribuicoes||[]).forEach(a=>{ (a.historico||[]).forEach(h=>push(histTipo(h.tipo), h.ts, h.nome||h.login||'?', eqLbl(findEquipe(a.equipeId))+' · '+histDet(h), 'atribuicao')); });
     }
   } else if(itemTipo==='atribuicao'){
@@ -7860,7 +7860,7 @@ function renderRdoProjetos(){
       </div>
       <div class="filters">
         <label style="font-weight:600;">Projeto</label>
-        <select id="rdo-f-projeto"><option value="">Todos</option>${projetos.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join('')}</select>
+        <select id="rdo-f-projeto"><option value="">Todos</option>${projetos.map(p=>`<option value="${p.id}">${esc(p.codigo)} · ${esc(p.nome)}</option>`).join('')}</select>
         <label style="font-weight:600;">Equipe</label>
         <select id="rdo-f-equipe"><option value="">Todas</option>${equipes.map(e=>`<option value="${e.id}">${esc(equipeLabel(e))}</option>`).join('')}</select>
         <label style="font-weight:600;">Status</label>
@@ -8753,9 +8753,9 @@ function openProgramacaoDetalheModal(id){
   const pr = findProjeto(pg.projetoId);
   const eq = (pg.atribuicoes||[]).map(a=>findEquipe(a.equipeId)).find(Boolean);
   const atrib = (pg.atribuicoes||[])[0];
-  const headTitulo = 'Programação — '+(pr?.nome||'Projeto');
+  const headTitulo = 'Programação — '+(pr?.nome||'Projeto')+' ('+(pr?.codigo||'')+')';
   const headSub = [teamGidLabel(pg),
-    pr?.codigo? 'Ciclo '+pr.ciclo : '',
+    pr?.ciclo? 'Ciclo '+pr.ciclo : '',
     eq? equipeLabel(eq) : ''
   ].filter(Boolean).join(' — ');
   const rows = (atrib?.atividades||[]).map((a,idx)=>{
