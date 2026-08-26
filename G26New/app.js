@@ -1461,7 +1461,7 @@ function renderDashboard(){
             const valPrev = p.atividades.reduce((s,a)=> s + (a.quantidadePrevista||0)*(findAtividade(a.atividadeId)?.valorUnitario||0), 0);
             return `<tr class="clickable-row" data-open-prog="${p.id}" title="Abrir detalhes">
               <td class="mono">${fmtDate(p.dataProgramada)} ${late?`<div class="blink-red" style="font-size:10.5px;color:var(--red);">VENCIDA</div>`:''}</td>
-              <td>${esc(pr?.nome||'—')}<div style="color:var(--muted-2);font-size:11px;">${esc(pr?.codigo||'')}</div></td>
+              <td><strong>${esc(pr?.codigo||'—')}</strong><div style="color:var(--muted-2);font-size:11px;">${esc(pr?.nome||'')}</div></td>
               <td><span class="badge-prefix">${eqtlLabel(eq)}</span></td>
               <td><span class="badge-prefix">${prtnLabel(eq)}</span></td>
               <td style="font-size:12px;color:var(--muted);">${atividadesResumo(p.atividades)}</td>
@@ -1587,7 +1587,7 @@ function renderAlertasReprogsPanel(list){
         const late = isLate(p);
         return `<tr>
           <td class="mono">${fmtDate(p.dataProgramada)} ${late?`<div class="blink-red" style="font-size:10.5px;color:var(--red);">NOVAMENTE VENCIDA</div>`:''}</td>
-          <td>${esc(pr?.nome||'—')}<div style="color:var(--muted-2);font-size:11px;">${esc(pr?.codigo||'')}</div></td>
+          <td><strong>${esc(pr?.codigo||'—')}</strong><div style="color:var(--muted-2);font-size:11px;">${esc(pr?.nome||'')}</div></td>
           <td>${equipeLabel(eq)}</td>
           <td style="font-size:12px;color:var(--muted);">${esc(last?.motivo||'—')}${last?.obs? ' — '+esc(last.obs):''}</td>
           <td class="mono">${reprogs.length}</td>
@@ -2349,7 +2349,7 @@ function renderProgListaInto(area, list){
       return `<tr ${late?'style="background:#ffe4e1;"':''} data-programacao-id="${x.programacao.id}" style="cursor:pointer;">
         <td class="mono" style="white-space:nowrap;">${gid}</td>
         <td class="mono">${fmtDate(p.dataProgramada)} ${late?`<div class="late-flag">VENCIDA</div>`:''}</td>
-        <td>${esc(pr?.nome||'—')}<div style="color:var(--muted-2);font-size:11px;">${esc(pr?.codigo||'')} · ${esc(pr?.setor||'')} · ${esc(pr?.coordenacao||'')}</div></td>
+        <td><strong>${esc(pr?.codigo||'—')}</strong><div style="color:var(--muted-2);font-size:11px;">${esc(pr?.nome||'')} · ${esc(pr?.setor||'')} · ${esc(pr?.coordenacao||'')}</div></td>
         <td><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);font-size:10.5px;">${esc(x.programacao.ciclo||'—')}</span></td>
         <td><span class="badge-prefix">${eqtlLabel(eq)}</span></td>
         <td><span class="badge-prefix">${prtnLabel(eq)}</span>${metaWarn? `<div style="margin-top:4px;">${metaWarn}</div>`:''}</td>
@@ -2399,7 +2399,7 @@ function renderProgFluxoInto(area, list){
         return `<div class="kcard ${late?'pending':''}" draggable="true" data-atrib="${p.id}" data-open-prog="${p.id}">
           <div class="kc-code ${late?'late-blink late':''}">${late?'VENCIDA · ':''}${equipeLabel(eq)}</div>
           <div class="kc-title">${esc(atividadesResumo(p.atividades))}</div>
-          <div class="kc-meta"><span>${esc(pr?.nome||'—')}<span style="color:var(--muted-2);"> · ${esc(pr?.codigo||'')} · ${esc(pr?.setor||'')} · ${esc(pr?.coordenacao||'')}</span></span><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);font-size:10px;">${esc(x.programacao.ciclo||'')}</span></div>
+          <div class="kc-meta"><span><strong>${esc(pr?.codigo||'—')}</strong><span style="color:var(--muted-2);"> · ${esc(pr?.nome||'')} · ${esc(pr?.setor||'')} · ${esc(pr?.coordenacao||'')}</span></span><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);font-size:10px;">${esc(x.programacao.ciclo||'')}</span></div>
           <div class="kc-meta"><span>${fmtDate(p.dataProgramada)}</span><span class="mono" style="color:var(--accent);">${progGid(x.programacao)}</span><span class="mono" style="color:var(--muted);">${p.atividades.length} ativ. · ${fmtMoney(valPrev)}</span></div>
           ${metaWarn? `<div class="kc-meta" style="justify-content:flex-start;">${metaWarn}</div>`:''}
           ${teamBadgeHtml(p)? `<div class="kc-meta" style="justify-content:flex-start;">${teamBadgeHtml(p)}</div>`:''}
@@ -2576,7 +2576,7 @@ function renderDayList(dayList){
     const valPrev = p.atividades.reduce((s,a)=> s + (a.quantidadePrevista||0)*(findAtividade(a.atividadeId)?.valorUnitario||0), 0);
     return `<div class="panel">
       <div class="panel-head">
-        <div><h3>${esc(pr?.nome||'—')} <span style="font-size:14px;font-weight:400;color:var(--muted-2);">(${esc(pr?.codigo||'')})</span></h3><div class="admin-field-meta">${progGid(x.programacao)} · ${esc(x.programacao.ciclo||'')} · ${equipeLabel(eq)} · ${fmtDate(p.dataProgramada)}</div></div>
+        <div><h3>${esc(pr?.codigo||'—')} <span style="font-size:14px;font-weight:400;color:var(--muted-2);">${esc(pr?.nome||'')}</span></h3><div class="admin-field-meta">${progGid(x.programacao)} · ${esc(x.programacao.ciclo||'')} · ${equipeLabel(eq)} · ${fmtDate(p.dataProgramada)}</div></div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${metaWarningHtml(p)}${teamBadgeHtml(p)}${statusBadge(p.status, late)}</div>
       </div>
       <div style="padding:12px 16px;">
@@ -3367,20 +3367,55 @@ function encaminharWhats(progId, filtroEquipeId){
   let teams = (prog.atribuicoes||[]).filter(a=>a.status!=='Cancelado');
   if(filtroEquipeId) teams = teams.filter(a=>String(a.equipeId)===String(filtroEquipeId));
   if(!teams.length) return;
-  const semWhats = [];
-  let enviadas = 0;
-  teams.forEach(atrib=>{
+  if(teams.length===1){
+    const atrib = teams[0];
     const eq = findEquipe(atrib.equipeId);
-    if(!eq?.whatsapp || !phoneDigits(eq.whatsapp)){ semWhats.push(equipeLabel(eq)); return; }
+    if(!eq?.whatsapp || !phoneDigits(eq.whatsapp)){ toast('Sem WhatsApp cadastrado para: '+equipeLabel(eq)+'. Edite a equipe e informe o número.', 'error'); return; }
     window.open(waLink(eq.whatsapp, buildWhatsMessage(prog, atrib)), '_blank');
-    enviadas++;
-  });
-  if(semWhats.length){
-    toast('Sem WhatsApp cadastrado para: '+semWhats.join(', ')+'. Edite a equipe e informe o número.', 'error');
-  }else{
-    toast(enviadas>1? `Mensagem encaminhada para ${enviadas} equipes.` : 'Mensagem encaminhada para a equipe.');
+    toast('Mensagem encaminhada para '+equipeLabel(eq)+'.');
+    registrarEvento('compartilhamento','programacao',prog.id,progGid(prog), 'Encaminhado via WhatsApp para '+equipeLabel(eq));
+    return;
   }
-  registrarEvento('compartilhamento','programacao',prog.id,progGid(prog), 'Encaminhado via WhatsApp para '+(enviadas>0? enviadas+' equipe(s)':'nenhuma equipe')+(semWhats.length? ' · sem WhatsApp: '+semWhats.join(', '):''));
+  const body = teams.map(atrib=>{
+    const eq = findEquipe(atrib.equipeId);
+    const temWhats = eq?.whatsapp && phoneDigits(eq.whatsapp);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">
+      <div>
+        <div style="font-weight:600;font-size:13px;">${esc(equipeLabel(eq))}</div>
+        <div style="font-size:11px;color:var(--muted-2);">${temWhats? esc(eq.whatsapp) : 'Sem WhatsApp cadastrado'}</div>
+      </div>
+      <button type="button" class="btn btn-sm${temWhats?' btn-primary':' btn-ghost'}" ${temWhats?`data-wa-send="${atrib.equipeId}"`:'disabled'} style="white-space:nowrap;">${icon('whatsapp',13)} Enviar</button>
+    </div>`;
+  }).join('');
+  openModal({
+    title: 'Encaminhar para equipe(s)',
+    bodyHtml: `<div style="margin-bottom:8px;font-size:12px;color:var(--muted);">Selecione a equipe para enviar a programação via WhatsApp. Cada equipe receberá apenas suas atividades.</div>${body}`,
+    submitLabel: 'Enviar para todas',
+    onSubmit: ()=>{
+      teams.forEach(atrib=>{
+        const eq = findEquipe(atrib.equipeId);
+        if(eq?.whatsapp && phoneDigits(eq.whatsapp)){
+          window.open(waLink(eq.whatsapp, buildWhatsMessage(prog, atrib)), '_blank');
+        }
+      });
+      toast(teams.length+' mensagem(ns) encaminhada(s).');
+      registrarEvento('compartilhamento','programacao',prog.id,progGid(prog), 'Encaminhado via WhatsApp para '+teams.length+' equipe(s)');
+      return true;
+    },
+    onMount: (root)=>{
+      root.querySelectorAll('[data-wa-send]').forEach(b=>b.addEventListener('click', ()=>{
+        const eqId = Number(b.dataset.waSend);
+        const atrib = teams.find(a=>a.equipeId===eqId);
+        if(!atrib) return;
+        const eq = findEquipe(atrib.equipeId);
+        if(eq?.whatsapp && phoneDigits(eq.whatsapp)){
+          window.open(waLink(eq.whatsapp, buildWhatsMessage(prog, atrib)), '_blank');
+          toast('Mensagem encaminhada para '+equipeLabel(eq)+'.');
+          registrarEvento('compartilhamento','programacao',prog.id,progGid(prog), 'Encaminhado via WhatsApp para '+equipeLabel(eq));
+        }
+      }));
+    }
+  });
 }
 function qrSvgHtml(url, cellSize){
   if(typeof qrcode==='undefined' || !url) return '';
@@ -4567,20 +4602,55 @@ function encaminharOseWhats(progId){
   if(!prog) return;
   const teams = (prog.atribuicoes||[]).filter(a=>a.status!=='Cancelado');
   if(!teams.length) return;
-  const semWhats = [];
-  let enviadas = 0;
-  teams.forEach(atrib=>{
+  if(teams.length===1){
+    const atrib = teams[0];
     const eq = findEquipe(atrib.equipeId);
-    if(!eq?.whatsapp || !phoneDigits(eq.whatsapp)){ semWhats.push(equipeLabel(eq)); return; }
+    if(!eq?.whatsapp || !phoneDigits(eq.whatsapp)){ toast('Sem WhatsApp cadastrado para: '+equipeLabel(eq)+'. Edite a equipe e informe o número.', 'error'); return; }
     window.open(waLink(eq.whatsapp, buildOseWhatsMessage(prog, atrib)), '_blank');
-    enviadas++;
-  });
-  if(semWhats.length){
-    toast('Sem WhatsApp cadastrado para: '+semWhats.join(', ')+'. Edite a equipe e informe o número.', 'error');
-  }else{
-    toast(enviadas>1? `Mensagem encaminhada para ${enviadas} equipes.` : 'Mensagem encaminhada para a equipe.');
+    toast('Mensagem encaminhada para '+equipeLabel(eq)+'.');
+    registrarEvento('compartilhamento','programacao',prog.id,oseProgLabel(prog), 'Encaminhado via WhatsApp para '+equipeLabel(eq));
+    return;
   }
-  registrarEvento('compartilhamento','programacao',prog.id,oseProgLabel(prog), 'Encaminhado via WhatsApp para '+(enviadas>0? enviadas+' equipe(s)':'nenhuma equipe')+(semWhats.length? ' · sem WhatsApp: '+semWhats.join(', '):''));
+  const body = teams.map(atrib=>{
+    const eq = findEquipe(atrib.equipeId);
+    const temWhats = eq?.whatsapp && phoneDigits(eq.whatsapp);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">
+      <div>
+        <div style="font-weight:600;font-size:13px;">${esc(equipeLabel(eq))}</div>
+        <div style="font-size:11px;color:var(--muted-2);">${temWhats? esc(eq.whatsapp) : 'Sem WhatsApp cadastrado'}</div>
+      </div>
+      <button type="button" class="btn btn-sm${temWhats?' btn-primary':' btn-ghost'}" ${temWhats?`data-wa-ose-send="${atrib.equipeId}"`:'disabled'} style="white-space:nowrap;">${icon('whatsapp',13)} Enviar</button>
+    </div>`;
+  }).join('');
+  openModal({
+    title: 'Encaminhar para equipe(s)',
+    bodyHtml: `<div style="margin-bottom:8px;font-size:12px;color:var(--muted);">Selecione a equipe para enviar a programação OSE via WhatsApp.</div>${body}`,
+    submitLabel: 'Enviar para todas',
+    onSubmit: ()=>{
+      teams.forEach(atrib=>{
+        const eq = findEquipe(atrib.equipeId);
+        if(eq?.whatsapp && phoneDigits(eq.whatsapp)){
+          window.open(waLink(eq.whatsapp, buildOseWhatsMessage(prog, atrib)), '_blank');
+        }
+      });
+      toast(teams.length+' mensagem(ns) encaminhada(s).');
+      registrarEvento('compartilhamento','programacao',prog.id,oseProgLabel(prog), 'Encaminhado via WhatsApp para '+teams.length+' equipe(s)');
+      return true;
+    },
+    onMount: (root)=>{
+      root.querySelectorAll('[data-wa-ose-send]').forEach(b=>b.addEventListener('click', ()=>{
+        const eqId = Number(b.dataset.waOseSend);
+        const atrib = teams.find(a=>a.equipeId===eqId);
+        if(!atrib) return;
+        const eq = findEquipe(atrib.equipeId);
+        if(eq?.whatsapp && phoneDigits(eq.whatsapp)){
+          window.open(waLink(eq.whatsapp, buildOseWhatsMessage(prog, atrib)), '_blank');
+          toast('Mensagem encaminhada para '+equipeLabel(eq)+'.');
+          registrarEvento('compartilhamento','programacao',prog.id,oseProgLabel(prog), 'Encaminhado via WhatsApp para '+equipeLabel(eq));
+        }
+      }));
+    }
+  });
 }
 
 /* --- OSE Documento de Campo --- */
@@ -5845,20 +5915,55 @@ function encaminharPodaWhats(progId){
   if(!prog) return;
   const teams = (prog.atribuicoes||[]).filter(a=>a.status!=='Cancelado');
   if(!teams.length) return;
-  const semWhats = [];
-  let enviadas = 0;
-  teams.forEach(atrib=>{
+  if(teams.length===1){
+    const atrib = teams[0];
     const eq = findEquipe(atrib.equipeId);
-    if(!eq?.whatsapp || !phoneDigits(eq.whatsapp)){ semWhats.push(equipeLabel(eq)); return; }
+    if(!eq?.whatsapp || !phoneDigits(eq.whatsapp)){ toast('Sem WhatsApp cadastrado para: '+equipeLabel(eq)+'. Edite a equipe e informe o número.', 'error'); return; }
     window.open(waLink(eq.whatsapp, buildPodaWhatsMessage(prog, atrib)), '_blank');
-    enviadas++;
-  });
-  if(semWhats.length){
-    toast('Sem WhatsApp cadastrado para: '+semWhats.join(', ')+'. Edite a equipe e informe o número.', 'error');
-  }else{
-    toast(enviadas>1? `Mensagem encaminhada para ${enviadas} equipes.` : 'Mensagem encaminhada para a equipe.');
+    toast('Mensagem encaminhada para '+equipeLabel(eq)+'.');
+    registrarEvento('compartilhamento','programacao',prog.id,podaProgLabel(prog), 'Encaminhado via WhatsApp para '+equipeLabel(eq));
+    return;
   }
-  registrarEvento('compartilhamento','programacao',prog.id,podaProgLabel(prog), 'Encaminhado via WhatsApp para '+(enviadas>0? enviadas+' equipe(s)':'nenhuma equipe')+(semWhats.length? ' · sem WhatsApp: '+semWhats.join(', '):''));
+  const body = teams.map(atrib=>{
+    const eq = findEquipe(atrib.equipeId);
+    const temWhats = eq?.whatsapp && phoneDigits(eq.whatsapp);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">
+      <div>
+        <div style="font-weight:600;font-size:13px;">${esc(equipeLabel(eq))}</div>
+        <div style="font-size:11px;color:var(--muted-2);">${temWhats? esc(eq.whatsapp) : 'Sem WhatsApp cadastrado'}</div>
+      </div>
+      <button type="button" class="btn btn-sm${temWhats?' btn-primary':' btn-ghost'}" ${temWhats?`data-wa-poda-send="${atrib.equipeId}"`:'disabled'} style="white-space:nowrap;">${icon('whatsapp',13)} Enviar</button>
+    </div>`;
+  }).join('');
+  openModal({
+    title: 'Encaminhar para equipe(s)',
+    bodyHtml: `<div style="margin-bottom:8px;font-size:12px;color:var(--muted);">Selecione a equipe para enviar a programação de PODA via WhatsApp.</div>${body}`,
+    submitLabel: 'Enviar para todas',
+    onSubmit: ()=>{
+      teams.forEach(atrib=>{
+        const eq = findEquipe(atrib.equipeId);
+        if(eq?.whatsapp && phoneDigits(eq.whatsapp)){
+          window.open(waLink(eq.whatsapp, buildPodaWhatsMessage(prog, atrib)), '_blank');
+        }
+      });
+      toast(teams.length+' mensagem(ns) encaminhada(s).');
+      registrarEvento('compartilhamento','programacao',prog.id,podaProgLabel(prog), 'Encaminhado via WhatsApp para '+teams.length+' equipe(s)');
+      return true;
+    },
+    onMount: (root)=>{
+      root.querySelectorAll('[data-wa-poda-send]').forEach(b=>b.addEventListener('click', ()=>{
+        const eqId = Number(b.dataset.waPodaSend);
+        const atrib = teams.find(a=>a.equipeId===eqId);
+        if(!atrib) return;
+        const eq = findEquipe(atrib.equipeId);
+        if(eq?.whatsapp && phoneDigits(eq.whatsapp)){
+          window.open(waLink(eq.whatsapp, buildPodaWhatsMessage(prog, atrib)), '_blank');
+          toast('Mensagem encaminhada para '+equipeLabel(eq)+'.');
+          registrarEvento('compartilhamento','programacao',prog.id,podaProgLabel(prog), 'Encaminhado via WhatsApp para '+equipeLabel(eq));
+        }
+      }));
+    }
+  });
 }
 
 /* --- Poda Documento de Campo --- */
