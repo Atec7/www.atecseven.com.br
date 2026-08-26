@@ -66,10 +66,10 @@ input,select,textarea{font-family:'Inter',sans-serif;}
 .pending-banner .pb-text{font-size:13px;color:var(--text);}
 
 /* destaque de atribuição vencida (agenda/fluxo/lista) */
-.late-flag{display:inline-block;font-size:10.5px;color:var(--purple);animation:blinkLate 1.1s infinite;}
+.late-flag{display:inline-block;font-size:10.5px;color:var(--red);animation:blinkLate 1.1s infinite;}
 .late-blink{animation:blinkLate 1.1s infinite;}
-.kc-code.late{color:var(--purple);}
-.cal-chip.late{color:var(--purple)!important;border-color:rgba(180,140,224,.5)!important;}
+.kc-code.late{color:var(--red);}
+.cal-chip.late{color:var(--red)!important;border-color:rgba(239,68,68,.5)!important;}
 @keyframes blinkLate{0%,100%{opacity:1;}50%{opacity:.5;}}
 .blink-red{animation:blinkText 1s infinite;}
 @keyframes blinkText{0%,100%{opacity:1;}50%{opacity:.35;}}
