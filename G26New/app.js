@@ -2844,24 +2844,23 @@ function openAtribDetalhe(atribId){
         eqList.push(currentEq);
       }
     }
-    const searchId = `prog-act-search-${i}`;
     return `<div class="atrib-block" data-idx="${i}">
       <div class="atrib-head">
         <select class="atrib-equipe" data-idx="${i}"><option value="">Selecione a equipe…</option>${eqList.map(e=>`<option value="${e.id}" ${String(a.equipeId)===String(e.id)?'selected':''}>${equipeLabel(e)}${e.encarregado? ' · '+esc(e.encarregado):''}</option>`).join('')}</select>
         ${atribs.length>1? `<button type="button" class="icon-btn atrib-remove" data-idx="${i}">${icon('trash',14)}</button>`:''}
       </div>
       <div class="atrib-meta-live" data-idx="${i}"></div>
-      <div class="field" style="margin-bottom:8px;">
-        <label for="${searchId}">${icon('search',14)} Buscar atividade (código ou descrição)</label>
-        <input type="search" id="${searchId}" placeholder="Filtrar atividades…" style="width:100%;">
-      </div>
       <div class="atrib-activities">${a.atividades.map((at,j)=>activityRowHtml(a,i,at,j)).join('')}</div>
       <button type="button" class="btn btn-sm btn-ghost atrib-add-activity" data-idx="${i}">${icon('plus',13)} Adicionar atividade</button>
     </div>`;
   }
   function activityRowHtml(a,i,at,j){
-    return `<div class="activity-row" data-idx="${i}" data-jdx="${j}">
-      <select class="act-select" data-idx="${i}" data-jdx="${j}"><option value="">Atividade…</option>${atividadesOrdenadas().map(x=>`<option value="${x.id}" ${String(at.atividadeId)===String(x.id)?'selected':''}>${isFavorita(x.id)?'★ ':''}${esc(x.codigo)} · ${esc(x.descricao)}</option>`).join('')}</select>
+    const atDef = at.atividadeId? findAtividade(at.atividadeId) : null;
+    return `<div class="activity-row act-ac-row" data-idx="${i}" data-jdx="${j}">
+      <div class="act-ac" data-idx="${i}" data-jdx="${j}">
+        <input type="text" class="act-ac-input" data-idx="${i}" data-jdx="${j}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+        <div class="act-ac-list" data-idx="${i}" data-jdx="${j}" style="display:none;"></div>
+      </div>
       <input type="number" step="0.01" min="0" class="act-qty" data-idx="${i}" data-jdx="${j}" placeholder="Qtd." value="${at.quantidadePrevista??''}">
       ${a.atividades.length>1? `<button type="button" class="icon-btn act-remove" data-idx="${i}" data-jdx="${j}">${icon('close',13)}</button>`:''}
     </div>`;
@@ -2972,26 +2971,9 @@ function openAtribDetalhe(atribId){
         root.querySelectorAll('.atrib-equipe').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].equipeId = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.atrib-remove').forEach(b=>b.addEventListener('click', e=>{ atribs.splice(Number(e.currentTarget.dataset.idx),1); refreshContainer(); }));
         root.querySelectorAll('.atrib-add-activity').forEach(b=>b.addEventListener('click', e=>{ atribs[Number(e.currentTarget.dataset.idx)].atividades.push({atividadeId:'',quantidadePrevista:''}); refreshContainer(); }));
-        root.querySelectorAll('.act-select').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].atividadeId = e.target.value; atualizarMetaIndicadores(); }));
+        bindActAutocomplete(root, atribs, atualizarMetaIndicadores);
         root.querySelectorAll('.act-qty').forEach(s=>s.addEventListener('input', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].quantidadePrevista = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.act-remove').forEach(b=>b.addEventListener('click', e=>{ const i=Number(e.currentTarget.dataset.idx), j=Number(e.currentTarget.dataset.jdx); atribs[i].atividades.splice(j,1); refreshContainer(); }));
-        root.querySelectorAll('input[type="search"][id^="prog-act-search-"]').forEach(input=>{
-          const idx = input.id.replace('prog-act-search-','');
-          input.addEventListener('input', ()=>{
-            const term = input.value.toLowerCase();
-            root.querySelectorAll(`.act-select[data-idx="${idx}"]`).forEach(sel=>{
-              const selected = sel.value;
-              Array.from(sel.options).forEach(opt=>{
-                if(opt.value==='') return;
-                const txt = opt.textContent.toLowerCase();
-                opt.style.display = txt.includes(term) ? '' : 'none';
-              });
-              if(selected && !Array.from(sel.options).find(o=>o.value===selected && o.style.display!=='none')){
-                sel.value = '';
-              }
-            });
-          });
-        });
         atualizarMetaIndicadores();
       }
       bindDynamic();
@@ -4790,6 +4772,75 @@ function openOseHistoricoModal(atribId){
   openModal({ title:'Histórico — '+oseProgLabel(r.programacao), bodyHtml:html, submitLabel:'Fechar', onSubmit:()=>true, wide:true });
 }
 
+/* --- Autocomplete de atividades (OSE / PODA) --- */
+function bindActAutocomplete(root, atribs, onChange){
+  const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const acList = atividadesOrdenadas();
+  root.querySelectorAll('.act-ac').forEach(ac=>{
+    const idx = Number(ac.dataset.idx), jdx = Number(ac.dataset.jdx);
+    const input = ac.querySelector('.act-ac-input');
+    const listEl = ac.querySelector('.act-ac-list');
+    let arrow = -1;
+    const getAt = ()=> atribs[idx] && atribs[idx].atividades[jdx];
+    const selDef = ()=>{ const at=getAt(); return at && at.atividadeId ? findAtividade(at.atividadeId) : null; };
+    function syncInput(){
+      const d = selDef();
+      input.value = d ? (d.codigo+' · '+d.descricao) : '';
+      listEl.style.display='none';
+    }
+    function openList(){
+      if(!listEl) return;
+      const d = selDef();
+      const currentLabel = d ? (d.codigo+' · '+d.descricao) : '';
+      const normQ = norm(input.value);
+      let items = acList;
+      if(normQ && input.value !== currentLabel){
+        items = items.filter(a=> norm(a.codigo).includes(normQ) || norm(a.descricao).includes(normQ));
+      }
+      items = items.slice(0, 60);
+      listEl.scrollTop = 0;
+      if(!items.length){
+        listEl.innerHTML = `<div class="act-ac-empty">Nenhuma atividade encontrada</div>`;
+        listEl.style.display='block'; arrow=-1; return;
+      }
+      listEl.innerHTML = items.map(a=>{
+        const sel = d && String(d.id)===String(a.id);
+        const fav = isFavorita(a.id) ? `<span class="ac-fav">${icon('star',12)}</span>` : '';
+        return `<div class="act-ac-item${sel?' ac-selected':''}" data-id="${a.id}">${fav}<span class="ac-cc">${esc(a.codigo)}</span><span class="ac-desc">${esc(a.descricao)}</span></div>`;
+      }).join('');
+      listEl.style.display='block'; arrow=-1;
+      listEl.querySelectorAll('.act-ac-item').forEach(it=>{
+        it.addEventListener('mousedown', e=>{ e.preventDefault(); selectActivity(it.dataset.id); });
+      });
+    }
+    function selectActivity(id){
+      const at = getAt();
+      if(at) at.atividadeId = id;
+      syncInput();
+      listEl.style.display='none';
+      onChange && onChange();
+    }
+    function highlight(items){
+      items.forEach((it,i)=> it.classList.toggle('active', i===arrow));
+    }
+    input.addEventListener('focus', ()=>{ input.select(); openList(); });
+    input.addEventListener('input', openList);
+    input.addEventListener('keydown', e=>{
+      const items = listEl.querySelectorAll('.act-ac-item');
+      if(e.key==='ArrowDown'){ e.preventDefault(); if(items.length){ arrow = Math.min(arrow+1, items.length-1); highlight(items); } }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); if(items.length){ arrow = Math.max(arrow-1, 0); highlight(items); } }
+      else if(e.key==='Enter'){
+        e.preventDefault();
+        if(arrow>=0 && items[arrow]) selectActivity(items[arrow].dataset.id);
+        else if(items.length===1) selectActivity(items[0].dataset.id);
+        else { syncInput(); input.blur(); }
+      }
+      else if(e.key==='Escape'){ syncInput(); input.blur(); }
+    });
+    input.addEventListener('blur', ()=>{ setTimeout(syncInput, 130); });
+  });
+}
+
 /* --- openOseProgramacaoModal --- */
 function openOseProgramacaoModal(id){
   if(!requerEscrita()) return;
@@ -4802,26 +4853,25 @@ function openOseProgramacaoModal(id){
   let localLng = pg?.localLng??null;
 
   function atribBlockHtml(a,i){
-    const searchId = `ose-act-search-${i}`;
     return `<div class="atrib-block" data-idx="${i}">
       <div class="atrib-head">
         <select class="atrib-equipe" data-idx="${i}"><option value="">Selecione a equipe…</option>${equipesVisiveis().filter(e=>e.ativo!==false).map(e=>`<option value="${e.id}" ${String(a.equipeId)===String(e.id)?'selected':''}>${equipeLabel(e)}${e.encarregado? ' · '+esc(e.encarregado):''}</option>`).join('')}</select>
         ${atribs.length>1? `<button type="button" class="icon-btn atrib-remove" data-idx="${i}">${icon('trash',14)}</button>`:''}
       </div>
       <div class="atrib-meta-live" data-idx="${i}"></div>
-      <div class="field" style="margin-bottom:8px;">
-        <label for="${searchId}">${icon('search',14)} Buscar atividade (código ou descrição)</label>
-        <input type="search" id="${searchId}" placeholder="Filtrar atividades…" style="width:100%;">
-      </div>
       <div class="atrib-activities">${a.atividades.map((at,j)=>activityRowHtml(a,i,at,j)).join('')}</div>
       <button type="button" class="btn btn-sm btn-ghost atrib-add-activity" data-idx="${i}">${icon('plus',13)} Adicionar atividade</button>
     </div>`;
   }
   function activityRowHtml(a,i,at,j){
-    return `<div class="activity-row" data-idx="${i}" data-jdx="${j}">
-      <select class="act-select" data-idx="${i}" data-jdx="${j}"><option value="">Atividade…</option>${atividadesOrdenadas().map(x=>`<option value="${x.id}" ${String(at.atividadeId)===String(x.id)?'selected':''}>${isFavorita(x.id)?'★ ':''}${esc(x.codigo)} · ${esc(x.descricao)}</option>`).join('')}</select>
+    const atDef = at.atividadeId? findAtividade(at.atividadeId) : null;
+    return `<div class="activity-row act-ac-row" data-idx="${i}" data-jdx="${j}">
+      <div class="act-ac" data-idx="${i}" data-jdx="${j}">
+        <input type="text" class="act-ac-input" data-idx="${i}" data-jdx="${j}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+        <div class="act-ac-list" data-idx="${i}" data-jdx="${j}" style="display:none;"></div>
+      </div>
       <input type="number" step="0.01" min="0" class="act-qty" data-idx="${i}" data-jdx="${j}" placeholder="Qtd." value="${at.quantidadePrevista??''}">
-      <input type="number" step="1" min="0" class="act-anom" data-idx="${i}" data-jdx="${j}" placeholder="Anom." title="Quantidade de anomalias programadas" style="max-width:90px;" value="${at.qtdAnomalia??''}">
+      <input type="number" step="1" min="0" class="act-anom" data-idx="${i}" data-jdx="${j}" placeholder="Anom." title="Quantidade de anomalias programadas" value="${at.qtdAnomalia??''}">
       ${a.atividades.length>1? `<button type="button" class="icon-btn act-remove" data-idx="${i}" data-jdx="${j}">${icon('close',13)}</button>`:''}
     </div>`;
   }
@@ -4883,24 +4933,10 @@ function openOseProgramacaoModal(id){
         root.querySelectorAll('.atrib-equipe').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].equipeId = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.atrib-remove').forEach(b=>b.addEventListener('click', e=>{ atribs.splice(Number(e.currentTarget.dataset.idx),1); refreshContainer(); }));
         root.querySelectorAll('.atrib-add-activity').forEach(b=>b.addEventListener('click', e=>{ atribs[Number(e.currentTarget.dataset.idx)].atividades.push({atividadeId:'',quantidadePrevista:'',qtdAnomalia:''}); refreshContainer(); }));
-        root.querySelectorAll('.act-select').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].atividadeId = e.target.value; atualizarMetaIndicadores(); }));
+        bindActAutocomplete(root, atribs, atualizarMetaIndicadores);
         root.querySelectorAll('.act-qty').forEach(s=>s.addEventListener('input', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].quantidadePrevista = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.act-anom').forEach(s=>s.addEventListener('input', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].qtdAnomalia = e.target.value; }));
         root.querySelectorAll('.act-remove').forEach(b=>b.addEventListener('click', e=>{ const i=Number(e.currentTarget.dataset.idx), j=Number(e.currentTarget.dataset.jdx); atribs[i].atividades.splice(j,1); refreshContainer(); }));
-        root.querySelectorAll('input[type="search"][id^="ose-act-search-"]').forEach(input=>{
-          const idx = input.id.replace('ose-act-search-','');
-          input.addEventListener('input', ()=>{
-            const term = input.value.toLowerCase();
-            root.querySelectorAll(`.act-select[data-idx="${idx}"]`).forEach(sel=>{
-              const selected = sel.value;
-              Array.from(sel.options).forEach(opt=>{
-                if(opt.value==='') return;
-                opt.style.display = opt.textContent.toLowerCase().includes(term) ? '' : 'none';
-              });
-              if(selected && !Array.from(sel.options).find(o=>o.value===selected && o.style.display!=='none')) sel.value = '';
-            });
-          });
-        });
         atualizarMetaIndicadores();
       }
       function atualizarMetaIndicadores(){
@@ -5057,8 +5093,8 @@ function openOseProgramacaoModal(id){
       if(pg){
         Object.assign(pg, base);
         pg.atribuicoes = base.atividades.map((a,i)=>{
-          const existing = pg.atribuicoes.find(x=>x.equipeId===a.equipeId);
-          if(existing){ existing.atividades = a.atividades; return existing; }
+          const existing = pg.atribuicoes.find(x=>String(x.equipeId)===String(a.equipeId));
+          if(existing){ existing.atividades = a.atividades.map(nv=>({...nv, quantidadeExecutada: existing.atividades.find(ev=>ev.atividadeId===nv.atividadeId)?.quantidadeExecutada ?? null})); return existing; }
           return { id: nextId(), equipeId:a.equipeId, dataProgramada:dataProgramacao, status:'Programado', atividades:a.atividades, historico:[{...currentAutor(), ts:Date.now(),tipo:'criacao',de:null,para:'Programado',motivo:'Atribuição criada'}] };
         });
         pg.atribuicoes.forEach(at=>{ at.dataProgramada = dataProgramacao; });
@@ -6130,24 +6166,23 @@ function openPodaProgramacaoModal(id){
   let localLng = pg?.localLng??null;
 
   function atribBlockHtml(a,i){
-    const searchId = `poda-act-search-${i}`;
     return `<div class="atrib-block" data-idx="${i}">
       <div class="atrib-head">
         <select class="atrib-equipe" data-idx="${i}"><option value="">Selecione a equipe…</option>${equipesVisiveis().filter(e=>e.ativo!==false).map(e=>`<option value="${e.id}" ${String(a.equipeId)===String(e.id)?'selected':''}>${equipeLabel(e)}${e.encarregado? ' · '+esc(e.encarregado):''}</option>`).join('')}</select>
         ${atribs.length>1? `<button type="button" class="icon-btn atrib-remove" data-idx="${i}">${icon('trash',14)}</button>`:''}
       </div>
       <div class="atrib-meta-live" data-idx="${i}"></div>
-      <div class="field" style="margin-bottom:8px;">
-        <label for="${searchId}">${icon('search',14)} Buscar atividade (código ou descrição)</label>
-        <input type="search" id="${searchId}" placeholder="Filtrar atividades…" style="width:100%;">
-      </div>
       <div class="atrib-activities">${a.atividades.map((at,j)=>activityRowHtml(a,i,at,j)).join('')}</div>
       <button type="button" class="btn btn-sm btn-ghost atrib-add-activity" data-idx="${i}">${icon('plus',13)} Adicionar atividade</button>
     </div>`;
   }
   function activityRowHtml(a,i,at,j){
-    return `<div class="activity-row" data-idx="${i}" data-jdx="${j}">
-      <select class="act-select" data-idx="${i}" data-jdx="${j}"><option value="">Atividade…</option>${atividadesOrdenadas().map(x=>`<option value="${x.id}" ${String(at.atividadeId)===String(x.id)?'selected':''}>${isFavorita(x.id)?'★ ':''}${esc(x.codigo)} · ${esc(x.descricao)}</option>`).join('')}</select>
+    const atDef = at.atividadeId? findAtividade(at.atividadeId) : null;
+    return `<div class="activity-row act-ac-row" data-idx="${i}" data-jdx="${j}">
+      <div class="act-ac" data-idx="${i}" data-jdx="${j}">
+        <input type="text" class="act-ac-input" data-idx="${i}" data-jdx="${j}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+        <div class="act-ac-list" data-idx="${i}" data-jdx="${j}" style="display:none;"></div>
+      </div>
       <input type="number" step="0.01" min="0" class="act-qty" data-idx="${i}" data-jdx="${j}" placeholder="Qtd." value="${at.quantidadePrevista??''}">
       ${a.atividades.length>1? `<button type="button" class="icon-btn act-remove" data-idx="${i}" data-jdx="${j}">${icon('close',13)}</button>`:''}
     </div>`;
@@ -6215,23 +6250,9 @@ function openPodaProgramacaoModal(id){
         root.querySelectorAll('.atrib-equipe').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].equipeId = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.atrib-remove').forEach(b=>b.addEventListener('click', e=>{ atribs.splice(Number(e.currentTarget.dataset.idx),1); refreshContainer(); }));
         root.querySelectorAll('.atrib-add-activity').forEach(b=>b.addEventListener('click', e=>{ atribs[Number(e.currentTarget.dataset.idx)].atividades.push({atividadeId:'',quantidadePrevista:''}); refreshContainer(); }));
-        root.querySelectorAll('.act-select').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].atividadeId = e.target.value; atualizarMetaIndicadores(); }));
+        bindActAutocomplete(root, atribs, atualizarMetaIndicadores);
         root.querySelectorAll('.act-qty').forEach(s=>s.addEventListener('input', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].quantidadePrevista = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.act-remove').forEach(b=>b.addEventListener('click', e=>{ const i=Number(e.currentTarget.dataset.idx), j=Number(e.currentTarget.dataset.jdx); atribs[i].atividades.splice(j,1); refreshContainer(); }));
-        root.querySelectorAll('input[type="search"][id^="poda-act-search-"]').forEach(input=>{
-          const idx = input.id.replace('poda-act-search-','');
-          input.addEventListener('input', ()=>{
-            const term = input.value.toLowerCase();
-            root.querySelectorAll(`.act-select[data-idx="${idx}"]`).forEach(sel=>{
-              const selected = sel.value;
-              Array.from(sel.options).forEach(opt=>{
-                if(opt.value==='') return;
-                opt.style.display = opt.textContent.toLowerCase().includes(term) ? '' : 'none';
-              });
-              if(selected && !Array.from(sel.options).find(o=>o.value===selected && o.style.display!=='none')) sel.value = '';
-            });
-          });
-        });
         atualizarMetaIndicadores();
       }
       function atualizarMetaIndicadores(){
@@ -6388,8 +6409,8 @@ function openPodaProgramacaoModal(id){
       if(pg){
         Object.assign(pg, base);
         pg.atribuicoes = base.atividades.map((a,i)=>{
-          const existing = pg.atribuicoes.find(x=>x.equipeId===a.equipeId);
-          if(existing){ existing.atividades = a.atividades; return existing; }
+          const existing = pg.atribuicoes.find(x=>String(x.equipeId)===String(a.equipeId));
+          if(existing){ existing.atividades = a.atividades.map(nv=>({...nv, quantidadeExecutada: existing.atividades.find(ev=>ev.atividadeId===nv.atividadeId)?.quantidadeExecutada ?? null})); return existing; }
           return { id: nextId(), equipeId:a.equipeId, dataProgramada:dataProgramacao, status:'Programado', atividades:a.atividades, historico:[{...currentAutor(), ts:Date.now(),tipo:'criacao',de:null,para:'Programado',motivo:'Atribuição criada'}] };
         });
         pg.atribuicoes.forEach(at=>{ at.dataProgramada = dataProgramacao; });
