@@ -159,7 +159,7 @@ function autor(h){
    CONSTANTES DE DOMÍNIO
 ========================================================= */
 const STATUS_PROG = ['Programado','Em Execução','Concluído','Reprogramado','Cancelado'];
-const STATUS_COLOR = { 'Programado':'var(--blue)','Em Execução':'var(--accent)','Concluído':'var(--green)','Reprogramado':'var(--purple)','Cancelado':'var(--red)','Despachada':'var(--blue)','Baixada':'var(--accent)','Concluída':'var(--green)' };
+const STATUS_COLOR = { 'Programado':'var(--blue)','Em Execução':'var(--accent)','Concluído':'var(--green)','Reprogramado':'var(--red)','Cancelado':'var(--red)','Despachada':'var(--blue)','Baixada':'var(--accent)','Concluída':'var(--green)' };
 const STATUS_OC_NDS = ['Despachada','Baixada','Concluída'];
 const STATUS_OC_NDS_COLOR = { 'Despachada':'var(--blue)','Baixada':'var(--accent)','Concluída':'var(--green)' };
 const STATUS_PROJETO = ['Aguardando Viabilidade','Em Andamento','Concluído','Encerrado','Cancelado'];
@@ -728,7 +728,7 @@ function toast(msg, kind='ok'){
   setTimeout(()=>{ t.style.opacity='0'; t.style.transition='.25s'; setTimeout(()=>t.remove(),250); }, 2600);
 }
 function bgFromVar(cssVar){
-  const map = {'var(--blue)':'rgba(91,141,239,.14)','var(--accent)':'rgba(224,164,88,.14)','var(--green)':'rgba(76,175,109,.14)','var(--purple)':'rgba(180,140,224,.14)','var(--red)':'rgba(224,97,91,.14)'};
+  const map = {'var(--blue)':'rgba(91,141,239,.14)','var(--accent)':'rgba(224,164,88,.14)','var(--green)':'rgba(76,175,109,.14)','var(--red)':'rgba(224,97,91,.14)'};
   return map[cssVar] || 'rgba(255,255,255,.06)';
 }
 function statusBadge(status, pending){
@@ -1449,7 +1449,7 @@ function renderDashboard(){
       <div class="stat-card clickable" data-go="hoje" style="--accent-c:var(--accent)"><div class="lbl">Programado p/ hoje</div><div class="val">${progHoje}</div></div>
       <div class="stat-card clickable" data-go="vencidas" style="--accent-c:var(--red)"><div class="lbl">Vencidas (aguardando confirmação)</div><div class="val">${atrasadas}</div></div>
       <div class="stat-card clickable" data-go="concluidas" style="--accent-c:var(--green)"><div class="lbl">Programações concluídas</div><div class="val">${concluidas}</div></div>
-      <div class="stat-card clickable" data-go="avanco" style="--accent-c:var(--purple)"><div class="lbl">Orçado × executado</div><div class="val" style="font-size:19px;">${fmtMoney(valorExecutadoTotal)}<small style="font-size:10.5px;"> de ${fmtMoney(valorOrcadoTotal)}</small></div></div>
+      <div class="stat-card clickable" data-go="avanco" style="--accent-c:var(--red)"><div class="lbl">Orçado × executado</div><div class="val" style="font-size:19px;">${fmtMoney(valorExecutadoTotal)}<small style="font-size:10.5px;"> de ${fmtMoney(valorOrcadoTotal)}</small></div></div>
     </div>
     <div class="panel section-gap">
       <div class="panel-head"><h3>Próximas programações</h3><button class="btn btn-sm btn-ghost" id="go-prog">Ver todas →</button></div>
@@ -1520,7 +1520,7 @@ function renderAlertas(){
       <div class="stat-card" style="--accent-c:var(--red)"><div class="lbl">Projetos em 100%</div><div class="val">${proj100.length}</div></div>
       <div class="stat-card" style="--accent-c:var(--red)"><div class="lbl">Projetos vencidos</div><div class="val">${vencidos.length}</div></div>
       <div class="stat-card" style="--accent-c:var(--accent)"><div class="lbl">Vencimento hoje</div><div class="val">${venceHoje.length}</div></div>
-      <div class="stat-card" style="--accent-c:var(--purple)"><div class="lbl">Reprogramações pendentes</div><div class="val">${reprog.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--red)"><div class="lbl">Reprogramações pendentes</div><div class="val">${reprog.length}</div></div>
       <div class="stat-card" style="--accent-c:var(--red)"><div class="lbl">Viabilização em atraso</div><div class="val">${viabVencidos.length}</div></div>
     </div>
     ${renderAlertasCemPanel(proj100)}
@@ -2346,7 +2346,7 @@ function renderProgListaInto(area, list){
       const valPrev = p.atividades.reduce((s,a)=> s + (a.quantidadePrevista||0)*(findAtividade(a.atividadeId)?.valorUnitario||0), 0);
       const metaWarn = metaWarningHtml(p);
       const gid = progGid(x.programacao);
-      return `<tr ${late?'style="background:#ffe4e1;"':''} data-programacao-id="${x.programacao.id}" style="cursor:pointer;">
+      return `<tr style="cursor:pointer;${late?'background:rgba(239,68,68,.08);border-left:3px solid var(--red);':''}" data-programacao-id="${x.programacao.id}" data-atrib-id="${p.id}">
         <td class="mono" style="white-space:nowrap;">${gid}</td>
         <td class="mono">${fmtDate(p.dataProgramada)} ${late?`<div class="late-flag">VENCIDA</div>`:''}</td>
         <td><strong>${esc(pr?.codigo||'—')}</strong><div style="color:var(--muted-2);font-size:11px;">${esc(pr?.nome||'')} · ${esc(pr?.setor||'')} · ${esc(pr?.coordenacao||'')}</div></td>
@@ -2376,7 +2376,21 @@ function bindProgRowActions(area){
   area.querySelectorAll('[data-edit-prog]').forEach(b=>b.addEventListener('click', ()=>openProgramacaoModal(b.dataset.editProg)));
   area.querySelectorAll('[data-del-atrib]').forEach(b=>b.addEventListener('click', ()=>{ const [pgId,atId]=b.dataset.delAtrib.split('|'); deleteAtribuicao(pgId, atId); }));
   // Clicar na linha da programação abre o modal
-  area.querySelectorAll('tr[data-programacao-id]').forEach(tr=>tr.addEventListener('click', ()=>{ const pgId = tr.dataset.programacaoId; openProgramacaoDetalheModal(pgId); }));
+  let _lastTrClick = null;
+  area.querySelectorAll('tr[data-programacao-id]').forEach(tr=>{
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('.icon-btn') || e.target.closest('.row-actions')) return;
+      const pgId = tr.dataset.programacaoId;
+      const atId = tr.dataset.atribId;
+      if(_lastTrClick && _lastTrClick.pgId===pgId && (Date.now()-_lastTrClick.ts)<350){
+        _lastTrClick = null;
+        if(atId) openAtribDetalhe(atId);
+      }else{
+        _lastTrClick = { pgId, ts: Date.now() };
+        setTimeout(()=>{ if(_lastTrClick && _lastTrClick.pgId===pgId){ _lastTrClick=null; openProgramacaoDetalheModal(pgId); } }, 360);
+      }
+    });
+  });
 }
 function deleteAtribuicao(pgId, atId){
   if(!confirm('Remover esta equipe desta programação?')) return;
@@ -2547,7 +2561,7 @@ function renderProgCalendarioInto(area, list){
       <div class="cal-daynum" data-day-view="${iso}" style="cursor:pointer;" title="Ver dia">${d} ${items.length?`<span style="color:var(--accent);">· ${items.length}</span>`:''}</div>
       ${items.slice(0,3).map(x=>{
         const eq=findEquipe(x.atribuicao.equipeId); const late=isLate(x.atribuicao); const c=STATUS_COLOR[x.atribuicao.status];
-        return `<div class="cal-chip ${late?'late-blink late':''}" style="color:${late?'var(--purple)':c};border-color:${late?'rgba(180,140,224,.5)':'var(--border)'}" data-open-prog="${x.atribuicao.id}">${equipeLabel(eq)}</div>`;
+        return `<div class="cal-chip ${late?'late-blink late':''}" style="color:${late?'var(--red)':c};border-color:${late?'rgba(239,68,68,.5)':'var(--border)'}" data-open-prog="${x.atribuicao.id}">${equipeLabel(eq)}</div>`;
       }).join('')}
       ${items.length>3? `<div style="font-size:10px;color:var(--accent);cursor:pointer;" data-day-view="${iso}">+${items.length-3} mais</div>`:''}
     </div>`;
@@ -3765,10 +3779,10 @@ function renderHistoricoTimeline(events, withContext){
     let dotColor='var(--muted)', title='';
     if(h.tipo==='criacao'){ dotColor='var(--blue)'; title='Programação criada'; }
     else if(h.tipo==='status'){ dotColor=STATUS_COLOR[h.para]||'var(--muted)'; title=`Status alterado: ${h.de} → ${h.para}`; }
-    else if(h.tipo==='reprogramacao'){ dotColor='var(--purple)'; title=`Reprogramada: ${fmtDate(h.de)} → ${fmtDate(h.para)}`; }
+    else if(h.tipo==='reprogramacao'){ dotColor='var(--red)'; title=`Reprogramada: ${fmtDate(h.de)} → ${fmtDate(h.para)}`; }
     else if(h.tipo==='confirmacao'){ dotColor='var(--green)'; title='Execução confirmada'; }
     else if(h.tipo==='equipe'){ dotColor='var(--accent)'; title='Atividades alteradas pela equipe'; }
-    else if(h.tipo==='rdo_edicao'){ dotColor='var(--purple)'; title='Registro RDO editado'; }
+    else if(h.tipo==='rdo_edicao'){ dotColor='var(--red)'; title='Registro RDO editado'; }
     const ctx = withContext && pg ? `<div class="tl-meta">${esc(findProjeto(pg.projetoId)?.codigo||'')} · ${esc(findProjeto(pg.projetoId)?.nome||'')} · Equipe ${equipeLabel(eq)}</div>` : '';
     return `<div class="tl-item ${withContext?'clickable':''}" ${withContext?`data-open-atrib="${h.atribId}"`:''} style="--dot-c:${dotColor}"><div class="tl-title">${title}</div><div class="tl-meta">${fmtDateTime(h.ts)} · <strong style="color:var(--muted);">${autor(h)}</strong></div>${ctx}${h.motivo? `<div class="tl-motivo"><strong>Motivo:</strong> ${esc(h.motivo)}${h.obs? ' — '+esc(h.obs):''}</div>`:''}</div>`;
   }).join('')}</div>`;
@@ -4261,13 +4275,13 @@ function renderOseListaInto(area, list){
       const p=x.programacao, a=x.atribuicao, eq=findEquipe(a.equipeId);
       const late = a.dataProgramada < todayISO() && !['Concluído','Cancelado'].includes(a.status);
       const ativResumo = (a.atividades||[]).map(at=>{ const atd=findAtividade(at.atividadeId); return `${esc(atd?.codigo||'?')} ×${at.quantidadePrevista??'—'}`; }).join(', ');
-      return `<tr style="cursor:pointer;" data-ose-open="${a.id}">
+      return `<tr style="cursor:pointer;" data-ose-open="${a.id}" data-ose-pg-id="${p.id}">
         <td class="mono" style="white-space:nowrap;">${oseProgLabel(p)}</td>
         <td class="mono">${fmtDate(a.dataProgramada)} ${late?'<div class="late-flag">VENCIDA</div>':''}</td>
         <td class="mono">${esc(p.numeroOse||'—')}</td>
         <td>${esc(p.municipio||'—')}</td>
         <td>${esc(p.subestacao||'—')}</td>
-        <td><span class="badge" style="color:${p.tipoIntervencao==='Aéreo'?'var(--blue)':p.tipoIntervencao==='Subterrâneo'?'var(--accent)':'var(--purple)'};background:${p.tipoIntervencao==='Aéreo'?'rgba(78,140,235,.14)':p.tipoIntervencao==='Subterrâneo'?'rgba(224,164,88,.14)':'rgba(180,140,224,.14)'};">${esc(p.tipoIntervencao||'—')}</span></td>
+        <td><span class="badge" style="color:${p.tipoIntervencao==='Aéreo'?'var(--blue)':p.tipoIntervencao==='Subterrâneo'?'var(--accent)':'var(--red)'};background:${p.tipoIntervencao==='Aéreo'?'rgba(78,140,235,.14)':p.tipoIntervencao==='Subterrâneo'?'rgba(224,164,88,.14)':'rgba(180,140,224,.14)'};">${esc(p.tipoIntervencao||'—')}</span></td>
         <td><span class="badge-prefix">${eqtlLabel(eq)}</span></td>
         <td><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${esc(p.statusDocumentacao||'—')}</span></td>
         <td style="font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${ativResumo||'—'}</td>
@@ -4286,7 +4300,21 @@ function renderOseListaInto(area, list){
 }
 
 function bindOseRowActions(area){
-  area.querySelectorAll('[data-ose-open]').forEach(c=>c.addEventListener('click', (e)=>{ if(e.target.closest('.row-actions')) return; openOseDetalhe(c.dataset.oseOpen); }));
+  let _lastOseClick = null;
+  area.querySelectorAll('tr[data-ose-open]').forEach(tr=>{
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('.icon-btn') || e.target.closest('.row-actions')) return;
+      const atId = tr.dataset.oseOpen;
+      const pgId = tr.dataset.osePgId;
+      if(_lastOseClick && _lastOseClick.pgId===pgId && (Date.now()-_lastOseClick.ts)<350){
+        _lastOseClick = null;
+        if(atId) openOseDetalhe(atId);
+      }else{
+        _lastOseClick = { pgId, ts: Date.now() };
+        setTimeout(()=>{ if(_lastOseClick && _lastOseClick.pgId===pgId){ _lastOseClick=null; openOseDetalhe(atId); } }, 360);
+      }
+    });
+  });
   area.querySelectorAll('[data-ose-whats]').forEach(b=>b.addEventListener('click', ()=>encaminharOseWhats(b.dataset.oseWhats)));
   area.querySelectorAll('[data-ose-doc]').forEach(b=>b.addEventListener('click', ()=>openOseDocProgramacao(b.dataset.oseDoc)));
   area.querySelectorAll('[data-ose-hist]').forEach(b=>b.addEventListener('click', ()=>openOseHistoricoModal(b.dataset.oseHist)));
@@ -4418,7 +4446,7 @@ function renderOseCalendarioInto(area, list){
       <div class="cal-daynum" data-day-view="${iso}" style="cursor:pointer;" title="Ver dia">${d} ${items.length?`<span style="color:var(--accent);">· ${items.length}</span>`:''}</div>
       ${items.slice(0,3).map(x=>{
         const eq=findEquipe(x.atribuicao.equipeId); const late=x.atribuicao.dataProgramada < todayISO() && !['Concluído','Cancelado'].includes(x.atribuicao.status); const c=STATUS_COLOR[x.atribuicao.status]||'var(--muted)';
-        return `<div class="cal-chip ${late?'late-blink late':''}" style="color:${late?'var(--purple)':c};border-color:${late?'rgba(180,140,224,.5)':'var(--border)'}" data-open-ose="${x.atribuicao.id}">${equipeLabel(eq)}</div>`;
+        return `<div class="cal-chip ${late?'late-blink late':''}" style="color:${late?'var(--red)':c};border-color:${late?'rgba(239,68,68,.5)':'var(--border)'}" data-open-ose="${x.atribuicao.id}">${equipeLabel(eq)}</div>`;
       }).join('')}
       ${items.length>3? `<div style="font-size:10px;color:var(--accent);cursor:pointer;" data-day-view="${iso}">+${items.length-3} mais</div>`:''}
     </div>`;
@@ -4487,7 +4515,7 @@ function oseDetalheHtml(programacao, atrib, comAcoes=true){
         <div class="dtl-tile"><div class="dtl-tile-lbl">Encarregado</div><div class="dtl-tile-val">${esc(eq?.encarregado||'—')}</div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Status</div><div class="dtl-tile-val">${statusBadge(atrib.status, late)}</div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Status Doc.</div><div class="dtl-tile-val"><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${esc(programacao.statusDocumentacao||'—')}</span></div></div>
-        <div class="dtl-tile"><div class="dtl-tile-lbl">Tipo Intervenção</div><div class="dtl-tile-val"><span class="badge" style="color:${programacao.tipoIntervencao==='Aéreo'?'var(--blue)':programacao.tipoIntervencao==='Subterrâneo'?'var(--accent)':'var(--purple)'};background:${programacao.tipoIntervencao==='Aéreo'?'rgba(78,140,235,.14)':programacao.tipoIntervencao==='Subterrâneo'?'rgba(224,164,88,.14)':'rgba(180,140,224,.14)'};">${esc(programacao.tipoIntervencao||'—')}</span></div></div>
+        <div class="dtl-tile"><div class="dtl-tile-lbl">Tipo Intervenção</div><div class="dtl-tile-val"><span class="badge" style="color:${programacao.tipoIntervencao==='Aéreo'?'var(--blue)':programacao.tipoIntervencao==='Subterrâneo'?'var(--accent)':'var(--red)'};background:${programacao.tipoIntervencao==='Aéreo'?'rgba(78,140,235,.14)':programacao.tipoIntervencao==='Subterrâneo'?'rgba(224,164,88,.14)':'rgba(180,140,224,.14)'};">${esc(programacao.tipoIntervencao||'—')}</span></div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Município</div><div class="dtl-tile-val">${esc(programacao.municipio||'—')}</div></div>
         <div class="dtl-tile" style="grid-column:1/-1;"><div class="dtl-tile-lbl">Local de execução</div><div class="dtl-tile-val">${programacao.local? esc(programacao.local) : '—'}</div>${(programacao.local||programacao.localLat!=null)? `<div style="margin-top:4px;font-size:11.5px;"><a href="${esc(localMapsHref(programacao.local,programacao.localLat,programacao.localLng))}" target="_blank" rel="noopener" style="color:var(--blue);font-weight:600;">${icon('pin',11)} Abrir no Google Maps</a></div>`:''}</div>
       </div>
@@ -4755,7 +4783,7 @@ function openOseHistoricoModal(atribId){
     let dotColor='var(--muted)', title='';
     if(h.tipo==='criacao'){ dotColor='var(--blue)'; title='Programação criada'; }
     else if(h.tipo==='status'){ dotColor=STATUS_COLOR[h.para]||'var(--muted)'; title=`Status alterado: ${h.de} → ${h.para}`; }
-    else if(h.tipo==='reprogramacao'){ dotColor='var(--purple)'; title=`Reprogramada: ${fmtDate(h.de)} → ${fmtDate(h.para)}`; }
+    else if(h.tipo==='reprogramacao'){ dotColor='var(--red)'; title=`Reprogramada: ${fmtDate(h.de)} → ${fmtDate(h.para)}`; }
     else { title=h.tipo||'Evento'; }
     return `<div class="tl-item" style="--dot-c:${dotColor}"><div class="tl-title">${title}</div><div class="tl-meta">${fmtDateTime(h.ts)} · <strong style="color:var(--muted);">${autor(h)}</strong></div>${h.motivo? `<div class="tl-motivo"><strong>Motivo:</strong> ${esc(h.motivo)}${h.obs? ' — '+esc(h.obs):''}</div>`:''}</div>`;
   }).join('')}</div>`;
@@ -5576,7 +5604,7 @@ function renderPodaListaInto(area, list){
       const p=x.programacao, a=x.atribuicao, eq=findEquipe(a.equipeId);
       const late = a.dataProgramada < todayISO() && !['Concluído','Cancelado'].includes(a.status);
       const ativResumo = (a.atividades||[]).map(at=>{ const atd=findAtividade(at.atividadeId); return `${esc(atd?.codigo||'?')} ×${at.quantidadePrevista??'—'}`; }).join(', ');
-      return `<tr style="cursor:pointer;" data-poda-open="${a.id}">
+      return `<tr style="cursor:pointer;" data-poda-open="${a.id}" data-poda-pg-id="${p.id}">
         <td class="mono" style="white-space:nowrap;">${podaProgLabel(p)}</td>
         <td class="mono">${fmtDate(a.dataProgramada)} ${late?'<div class="late-flag">VENCIDA</div>':''}</td>
         <td>${esc(p.osi||'—')}</td>
@@ -5600,7 +5628,21 @@ function renderPodaListaInto(area, list){
 }
 
 function bindPodaRowActions(area){
-  area.querySelectorAll('[data-poda-open]').forEach(c=>c.addEventListener('click', (e)=>{ if(e.target.closest('.row-actions')) return; openPodaDetalhe(c.dataset.podaOpen); }));
+  let _lastPodaClick = null;
+  area.querySelectorAll('tr[data-poda-open]').forEach(tr=>{
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('.icon-btn') || e.target.closest('.row-actions')) return;
+      const atId = tr.dataset.podaOpen;
+      const pgId = tr.dataset.podaPgId;
+      if(_lastPodaClick && _lastPodaClick.pgId===pgId && (Date.now()-_lastPodaClick.ts)<350){
+        _lastPodaClick = null;
+        if(atId) openPodaDetalhe(atId);
+      }else{
+        _lastPodaClick = { pgId, ts: Date.now() };
+        setTimeout(()=>{ if(_lastPodaClick && _lastPodaClick.pgId===pgId){ _lastPodaClick=null; openPodaDetalhe(atId); } }, 360);
+      }
+    });
+  });
   area.querySelectorAll('[data-poda-whats]').forEach(b=>b.addEventListener('click', ()=>encaminharPodaWhats(b.dataset.podaWhats)));
   area.querySelectorAll('[data-poda-doc]').forEach(b=>b.addEventListener('click', ()=>openPodaDocProgramacao(b.dataset.podaDoc)));
   area.querySelectorAll('[data-poda-hist]').forEach(b=>b.addEventListener('click', ()=>openPodaHistoricoModal(b.dataset.podaHist)));
@@ -5732,7 +5774,7 @@ function renderPodaCalendarioInto(area, list){
       <div class="cal-daynum" data-day-view="${iso}" style="cursor:pointer;" title="Ver dia">${d} ${items.length?`<span style="color:var(--accent);">· ${items.length}</span>`:''}</div>
       ${items.slice(0,3).map(x=>{
         const eq=findEquipe(x.atribuicao.equipeId); const late=x.atribuicao.dataProgramada < todayISO() && !['Concluído','Cancelado'].includes(x.atribuicao.status); const c=STATUS_COLOR[x.atribuicao.status]||'var(--muted)';
-        return `<div class="cal-chip ${late?'late-blink late':''}" style="color:${late?'var(--purple)':c};border-color:${late?'rgba(180,140,224,.5)':'var(--border)'}" data-open-poda="${x.atribuicao.id}">${equipeLabel(eq)}</div>`;
+        return `<div class="cal-chip ${late?'late-blink late':''}" style="color:${late?'var(--red)':c};border-color:${late?'rgba(239,68,68,.5)':'var(--border)'}" data-open-poda="${x.atribuicao.id}">${equipeLabel(eq)}</div>`;
       }).join('')}
       ${items.length>3? `<div style="font-size:10px;color:var(--accent);cursor:pointer;" data-day-view="${iso}">+${items.length-3} mais</div>`:''}
     </div>`;
@@ -6069,7 +6111,7 @@ function openPodaHistoricoModal(atribId){
     let dotColor='var(--muted)', title='';
     if(h.tipo==='criacao'){ dotColor='var(--blue)'; title='Programação criada'; }
     else if(h.tipo==='status'){ dotColor=STATUS_COLOR[h.para]||'var(--muted)'; title=`Status alterado: ${h.de} → ${h.para}`; }
-    else if(h.tipo==='reprogramacao'){ dotColor='var(--purple)'; title=`Reprogramada: ${fmtDate(h.de)} → ${fmtDate(h.para)}`; }
+    else if(h.tipo==='reprogramacao'){ dotColor='var(--red)'; title=`Reprogramada: ${fmtDate(h.de)} → ${fmtDate(h.para)}`; }
     else { title=h.tipo||'Evento'; }
     return `<div class="tl-item" style="--dot-c:${dotColor}"><div class="tl-title">${title}</div><div class="tl-meta">${fmtDateTime(h.ts)} · <strong style="color:var(--muted);">${autor(h)}</strong></div>${h.motivo? `<div class="tl-motivo"><strong>Motivo:</strong> ${esc(h.motivo)}${h.obs? ' — '+esc(h.obs):''}</div>`:''}</div>`;
   }).join('')}</div>`;
@@ -7260,7 +7302,7 @@ const MON_TIPOS = {
   criacao:{l:'Criação',c:'var(--green)'},
   edicao:{l:'Edição',c:'var(--accent)'},
   exclusao:{l:'Exclusão',c:'var(--red)'},
-  status:{l:'Status',c:'var(--purple)'},
+  status:{l:'Status',c:'var(--red)'},
   reprogramacao:{l:'Reprogramação',c:'var(--red)'},
   rdo:{l:'RDO',c:'var(--teal)'},
   compartilhamento:{l:'Compartilhamento',c:'var(--green)'},
@@ -7928,7 +7970,7 @@ function rdoConfData(x){
 }
 function rdoStatusBadge(status){
   const s = status||'Programado';
-  const cor = { 'Programado':'var(--blue)','Em Execução':'var(--accent)','Concluído':'var(--green)','Reprogramado':'var(--purple)','Cancelado':'var(--red)' }[s]||'var(--muted)';
+  const cor = { 'Programado':'var(--blue)','Em Execução':'var(--accent)','Concluído':'var(--green)','Reprogramado':'var(--red)','Cancelado':'var(--red)' }[s]||'var(--muted)';
   const bg = { 'Programado':'rgba(78,140,235,.14)','Em Execução':'rgba(224,164,88,.14)','Concluído':'rgba(34,139,34,.14)','Reprogramado':'rgba(142,110,235,.14)','Cancelado':'rgba(224,97,91,.14)' }[s]||'rgba(128,128,128,.14)';
   return `<span class="badge" style="color:${cor};background:${bg};">${esc(s)}</span>`;
 }
