@@ -569,7 +569,7 @@ function render(){
         </div>
       </div>`;
     document.getElementById('team-obs').addEventListener('input', e=>{ observacao = e.target.value; });
-    root.querySelectorAll('.te-select').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tes.split('|'); editors[eid][Number(idx)].atividadeId = e.target.value; }));
+    bindTeamActAutocomplete(root);
     root.querySelectorAll('.te-qty').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.teq.split('|'); editors[eid][Number(idx)].quantidadePrevista = e.target.value; }));
     root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; }));
     root.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', e=>{ const [eid,idx]=e.currentTarget.dataset.eqRm.split('|'); editors[eid].splice(Number(idx),1); resetFotos(); render(); }));
@@ -581,23 +581,6 @@ function render(){
       const n = fotosCount(eid, Number(idx));
       h.textContent = n? `${n} foto${n>1?'s':''} adicionada${n>1?'s':''}` : 'Obrigatório: adicione ao menos 1 foto';
       h.className = 'te-photo-hint ' + (n? 'ok':'missing');
-    });
-    root.querySelectorAll('input[type="search"][id^="te-search-"]').forEach(input=>{
-      const eqId = input.id.replace('te-search-','');
-      input.addEventListener('input', ()=>{
-        const term = input.value.toLowerCase();
-        root.querySelectorAll(`.te-select[data-tes^="${eqId}|"]`).forEach(sel=>{
-          const selected = sel.value;
-          Array.from(sel.options).forEach(opt=>{
-            if(opt.value==='') return;
-            const txt = opt.textContent.toLowerCase();
-            opt.style.display = txt.includes(term) ? '' : 'none';
-          });
-          if(selected && !Array.from(sel.options).find(o=>o.value===selected && o.style.display!=='none')){
-            sel.value = '';
-          }
-        });
-      });
     });
     document.getElementById('team-submit').addEventListener('click', submitEditOcNds);
     return;
@@ -678,7 +661,7 @@ function render(){
       </div>
     </div>`;
   document.getElementById('team-obs').addEventListener('input', e=>{ observacao = e.target.value; });
-  root.querySelectorAll('.te-select').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tes.split('|'); editors[eid][Number(idx)].atividadeId = e.target.value; }));
+  bindTeamActAutocomplete(root);
   root.querySelectorAll('.te-qty').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.teq.split('|'); editors[eid][Number(idx)].quantidadePrevista = e.target.value; }));
   root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; }));
   root.querySelectorAll('.te-anom').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tea.split('|'); editors[eid][Number(idx)].qtdAnomaliaExecutada = e.target.value; }));
@@ -691,23 +674,6 @@ function render(){
     const n = fotosCount(eid, Number(idx));
     h.textContent = n? `${n} foto${n>1?'s':''} adicionada${n>1?'s':''}` : 'Obrigatório: adicione ao menos 1 foto';
     h.className = 'te-photo-hint ' + (n? 'ok':'missing');
-  });
-  root.querySelectorAll('input[type="search"][id^="te-search-"]').forEach(input=>{
-    const eqId = input.id.replace('te-search-','');
-    input.addEventListener('input', ()=>{
-      const term = input.value.toLowerCase();
-      root.querySelectorAll(`.te-select[data-tes^="${eqId}|"]`).forEach(sel=>{
-        const selected = sel.value;
-        Array.from(sel.options).forEach(opt=>{
-          if(opt.value==='') return;
-          const txt = opt.textContent.toLowerCase();
-          opt.style.display = txt.includes(term) ? '' : 'none';
-        });
-        if(selected && !Array.from(sel.options).find(o=>o.value===selected && o.style.display!=='none')){
-          sel.value = '';
-        }
-      });
-    });
   });
   document.getElementById('team-submit').addEventListener('click', submitEdit);
   const btnAcidente = document.getElementById('btn-informar-acidente');
@@ -813,22 +779,23 @@ function abrirModalAcidente(){
 function renderTeamBlock(eqId){
   const eq = findEquipe(DB, Number(eqId));
   const rows = editors[eqId];
-  const searchId = `te-search-${eqId}`;
+  const qtyStyle = 'flex:0 0 90px;';
   return `<div class="panel" style="border-color:var(--border);">
     <div class="panel-head"><h4>${equipeLabel(eq)}</h4><span class="badge-prefix">${eqtlLabel(eq)}</span></div>
     <div style="padding:12px 14px;">
-      <div class="field" style="margin-bottom:12px;">
-        <label for="${searchId}">${icon('search',14)} Buscar atividade (código ou descrição)</label>
-        <input type="search" id="${searchId}" placeholder="Filtrar atividades…" style="width:100%;">
-      </div>
-      ${rows.map((r,i)=>`
+      ${rows.map((r,i)=>{
+        const atDef = r.atividadeId? findAtividade(DB, r.atividadeId) : null;
+        return `
         <div class="team-atividade">
-          <div class="activity-row">
-            <select class="te-select" data-tes="${eqId}|${i}"><option value="">Atividade…</option>${DB.atividades.map(a=>`<option value="${a.id}" ${String(r.atividadeId)===String(a.id)?'selected':''}>${esc(a.codigo)} · ${esc(a.descricao)}</option>`).join('')}</select>
-            <div class="qty-field"><label>Prevista</label><input type="number" step="0.01" min="0" class="te-qty" data-teq="${eqId}|${i}" placeholder="Qtd." value="${r.atividadeId ? r.quantidadePrevista : '0'}" readonly>${r.atividadeId?'':' (bloqueado)'}</div>
-            <div class="qty-field"><label>Executada</label><input type="number" step="0.01" min="0" class="te-exec" data-tee="${eqId}|${i}" placeholder="Qtd." value="${r.quantidadeExecutada??''}"></div>
-            ${teamMode()==='ose'? `<div class="qty-field"><label title="Quantidade de anomalias executadas">Anomalias</label><input type="number" step="1" min="0" class="te-anom" data-tea="${eqId}|${i}" placeholder="Qtd." value="${r.qtdAnomaliaExecutada??''}"></div>`:''}
-            <button type="button" class="icon-btn te-remove" data-eq-rm="${eqId}|${i}" title="Remover atividade" ${r.atividadeId?'disabled':''}>${icon('close',13)}</button>
+          <div class="activity-row act-ac-row">
+            <div class="act-ac" data-tes="${eqId}|${i}">
+              <input type="text" class="act-ac-input te-ac-input" data-tes="${eqId}|${i}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+              <div class="act-ac-list" data-tes="${eqId}|${i}" style="display:none;"></div>
+            </div>
+            <div class="qty-field" style="${qtyStyle}"><label>Prevista</label><input type="number" step="0.01" min="0" class="te-qty" data-teq="${eqId}|${i}" placeholder="Qtd." value="${r.atividadeId ? r.quantidadePrevista : '0'}" readonly>${r.atividadeId?'':'<span class="te-bloq" style="font-size:9px;color:var(--muted-2);">bloqueado</span>'}</div>
+            <div class="qty-field" style="${qtyStyle}"><label>Executada</label><input type="number" step="0.01" min="0" class="te-exec" data-tee="${eqId}|${i}" placeholder="Qtd." value="${r.quantidadeExecutada??''}"></div>
+            ${teamMode()==='ose'? `<div class="qty-field" style="${qtyStyle}"><label title="Quantidade de anomalias executadas">Anomalias</label><input type="number" step="1" min="0" class="te-anom" data-tea="${eqId}|${i}" placeholder="Qtd." value="${r.qtdAnomaliaExecutada??''}"></div>`:''}
+            <button type="button" class="icon-btn act-remove te-remove" data-eq-rm="${eqId}|${i}" title="Remover atividade" ${r.atividadeId?'disabled':''}>${icon('close',13)}</button>
           </div>
           <div class="activity-fotos">
             <div class="te-thumbs" data-tef="${eqId}|${i}"></div>
@@ -838,10 +805,84 @@ function renderTeamBlock(eqId){
               <button type="button" class="btn btn-sm btn-ghost te-gallery" data-teg="${eqId}|${i}">${icon('image',13)} Galeria</button>
             </div>
           </div>
-        </div>`).join('')}
+        </div>`;}).join('')}
       <button type="button" class="btn btn-sm te-add" data-eq-add="${eqId}">${icon('plus',13)} Adicionar atividade</button>
     </div>
   </div>`;
+}
+function bindTeamActAutocomplete(root){
+  if(!DB || !DB.atividades) return;
+  const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const list = DB.atividades;
+  const bind = ac=>{
+    const [eid, i] = ac.dataset.tes.split('|');
+    const idx = Number(i);
+    const input = ac.querySelector('.act-ac-input');
+    const listEl = ac.querySelector('.act-ac-list');
+    let arrow = -1;
+    const row = ()=> (editors[eid]||[])[idx];
+    const selDef = ()=>{ const r=row(); return r && r.atividadeId ? findAtividade(DB, r.atividadeId) : null; };
+    function syncInput(){
+      const d = selDef();
+      input.value = d ? (d.codigo+' · '+d.descricao) : '';
+      listEl.style.display='none';
+    }
+    function openList(){
+      const d = selDef();
+      const currentLabel = d ? (d.codigo+' · '+d.descricao) : '';
+      const normQ = norm(input.value);
+      let items = list;
+      if(normQ && input.value !== currentLabel){
+        items = items.filter(a=> norm(a.codigo).includes(normQ) || norm(a.descricao).includes(normQ));
+      }
+      items = items.slice(0, 30);
+      listEl.scrollTop = 0;
+      if(!items.length){
+        listEl.innerHTML = `<div class="act-ac-empty">Nenhuma atividade encontrada</div>`;
+        listEl.style.display='block'; arrow=-1; return;
+      }
+      listEl.innerHTML = items.map(a=>{
+        const sel = d && String(d.id)===String(a.id);
+        return `<div class="act-ac-item${sel?' ac-selected':''}" data-id="${a.id}"><span class="ac-cc">${esc(a.codigo)}</span><span class="ac-desc">${esc(a.descricao)}</span></div>`;
+      }).join('');
+      listEl.style.display='block'; arrow=-1;
+      listEl.querySelectorAll('.act-ac-item').forEach(it=>{
+        it.addEventListener('mousedown', e=>{ e.preventDefault(); selectActivity(it.dataset.id); });
+      });
+    }
+    function highlight(items){ items.forEach((it,k)=> it.classList.toggle('active', k===arrow)); }
+    function selectActivity(id){
+      const r = row();
+      if(r) r.atividadeId = id;
+      syncInput();
+      const rowEl = ac.closest('.activity-row');
+      if(rowEl){
+        const qty = rowEl.querySelector('.te-qty');
+        if(qty && r) qty.value = r.quantidadePrevista!=null && r.quantidadePrevista!=='' ? r.quantidadePrevista : '0';
+        const bloq = rowEl.querySelector('.te-bloq');
+        if(bloq) bloq.remove();
+        const rm = rowEl.querySelector('.te-remove');
+        if(rm) rm.disabled = false;
+      }
+      listEl.style.display='none';
+    }
+    input.addEventListener('focus', ()=>{ input.select(); openList(); });
+    input.addEventListener('input', openList);
+    input.addEventListener('keydown', e=>{
+      const items = listEl.querySelectorAll('.act-ac-item');
+      if(e.key==='ArrowDown'){ e.preventDefault(); if(items.length){ arrow=Math.min(arrow+1,items.length-1); highlight(items);} }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); if(items.length){ arrow=Math.max(arrow-1,0); highlight(items);} }
+      else if(e.key==='Enter'){
+        e.preventDefault();
+        if(arrow>=0 && items[arrow]) selectActivity(items[arrow].dataset.id);
+        else if(items.length===1) selectActivity(items[0].dataset.id);
+        else syncInput();
+      }
+      else if(e.key==='Escape'){ syncInput(); input.blur(); }
+    });
+    input.addEventListener('blur', ()=>{ setTimeout(syncInput, 130); });
+  };
+  root.querySelectorAll('.act-ac[data-tes]').forEach(bind);
 }
 
 /* --- envio / fila offline --- */
