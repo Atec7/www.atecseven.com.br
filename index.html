@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AtecSeven Tecnologia | Inovando o Futuro</title>
-  <meta name="description" content="AtecSeven Tecnologia: redes e infraestrutura, suporte técnico, design, sistemas de gestão, apps e marketing digital para micro, pequenas e médias empresas em Belo Horizonte - MG.">
-  <meta name="theme-color" content="#007bff">
+  <title>AtecSeven Tecnologia | Infraestrutura, Sistemas e Suporte para Empresas</title>
+  <meta name="description" content="AtecSeven Tecnologia: redes e infraestrutura, suporte técnico, sistemas de gestão, apps, design e marketing digital para micro, pequenas e médias empresas. Sede em Belo Horizonte - MG.">
+  <meta name="theme-color" content="#004aad">
   <link rel="icon" href="logo2.png" type="image/png">
   <link rel="apple-touch-icon" href="logo2.png">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="AtecSeven Tecnologia">
-  <meta property="og:title" content="AtecSeven Tecnologia | Inovando o Futuro">
+  <meta property="og:title" content="AtecSeven Tecnologia | Infraestrutura, Sistemas e Suporte para Empresas">
   <meta property="og:description" content="Soluções em infraestrutura, sistemas, aplicativos, design e marketing digital para o seu negócio crescer com segurança.">
   <meta property="og:image" content="logo2.png">
   <meta property="og:locale" content="pt_BR">
@@ -20,8 +20,9 @@
 
   <!-- Fonts & Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 
   <!-- Dados estruturados para busca (Google) -->
@@ -34,6 +35,7 @@
     "image": "logo2.png",
     "telephone": "+55-64-99295-2748",
     "email": "comercial@atecseven.com.br",
+    "founder": { "@type": "Person", "name": "Arnaldo S. Lima" },
     "address": {
       "@type": "PostalAddress",
       "streetAddress": "Rua da Bahia, 1148 - Sala 1208",
@@ -54,23 +56,27 @@
     :root{
       --bg:#f4f7fb;
       --card:#ffffff;
-      --glass: rgba(255,255,255,0.06);
-      --primary:#007bff; /* azul */
-      --secondary:#00d4ff; /* ciano predominante */
-      --accent:#ffd43b;
-      --muted:#6b7280;
-      --dark:#0b0f19;
+      --primary:#0057c7;      /* azul mais denso, mais "corporativo" que o azul claro anterior */
+      --primary-deep:#00337a; /* usado em textos/headers para reforçar solidez */
+      --secondary:#00c2e0;    /* ciano, mantido como identidade da marca */
+      --accent:#ffb020;       /* âmbar quente, usado com moderação em selos/destaques */
+      --ink:#0b1c2c;          /* texto principal, mais escuro que preto puro */
+      --muted:#5b6b7d;
+      --line: rgba(11,28,44,0.08);
+      --dark:#071021;
       --radius:14px;
       --transition:all .35s cubic-bezier(.2,.9,.3,1);
-      --glass-bg: rgba(255,255,255,0.6);
+      --font-display:"Sora",system-ui,sans-serif;
+      --font-body:"Inter",system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
+    html{scroll-behavior:smooth}
     body{
       margin:0;
-      font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
+      font-family:var(--font-body);
       background: linear-gradient(180deg,var(--bg),#e9eef6);
-      color:#0b1724;
+      color:var(--ink);
       -webkit-font-smoothing:antialiased;
       -moz-osx-font-smoothing:grayscale;
       transition:var(--transition);
@@ -81,379 +87,461 @@
       background: linear-gradient(180deg,#071021,#071824);
       color:#e6eef8;
     }
+    h1,h2,h3,h4{font-family:var(--font-display);letter-spacing:-0.01em}
 
-    /* ---------- Particle canvas (full background) ---------- */
-    .particle-canvas {
-      position:fixed;
-      inset:0;
-      z-index:0;
-      pointer-events:none; /* não atrapalha interações */
-      mix-blend-mode:screen; /* leve brilho sobre o fundo */
-      opacity:0.95;
-    }
+    /* ---------- Particle canvas ---------- */
+    .particle-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;mix-blend-mode:screen;opacity:0.95}
+
+    /* ---------- Skip link ---------- */
+    .skip-link{position:absolute;left:12px;top:-60px;background:var(--primary);color:#fff;padding:10px 16px;border-radius:8px;z-index:200;transition:top .2s ease;font-weight:700;text-decoration:none}
+    .skip-link:focus{top:12px}
+    a:focus-visible, button:focus-visible, summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+    /* ---------- Top trust bar ---------- */
+    .trust-bar{background:var(--primary-deep);color:#fff;font-size:0.82rem;text-align:center;padding:8px 14px;position:relative;z-index:11;letter-spacing:.2px}
+    .trust-bar span{margin:0 10px;white-space:nowrap;display:inline-block}
+    .trust-bar i{margin-right:6px;color:var(--secondary)}
 
     /* ---------- Header & Nav ---------- */
-    header{
-      padding:48px 20px;
-      text-align:center;
-      background:linear-gradient(135deg,var(--primary),var(--secondary));
-      color:#fff;
-      position:relative;
-      z-index:10;
-      overflow:visible;
+    header{padding:56px 20px 48px;text-align:center;background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;position:relative;z-index:10;overflow:visible}
+    header .logo-wrap{position:relative;display:inline-block;margin:0 auto;width:112px;height:112px;border-radius:50%}
+    header img{width:112px;border-radius:50%;box-shadow:0 8px 30px rgba(0,0,0,0.18);display:block;position:relative;z-index:2}
+    header .logo-wrap::before{
+      content:"";position:absolute;top:50%;left:50%;width:220px;height:220px;border-radius:50%;transform:translate(-50%,-50%);
+      background:conic-gradient(from 0deg, rgba(0,194,224,0.95), rgba(0,87,199,0.95), rgba(0,194,224,0.95));
+      filter:blur(14px) saturate(120%);animation:neon-rotate 6.2s ease-in-out infinite alternate;z-index:1;opacity:.95;pointer-events:none
     }
-
-    /* Logo wrapper necessário para neon */
-    header .logo-wrap {
-      position:relative;
-      display:inline-block;
-      margin:0 auto;
-      width:112px;
-      height:112px;
-      border-radius:50%;
+    header .logo-wrap::after{
+      content:"";position:absolute;top:50%;left:50%;width:150px;height:150px;transform:translate(-50%,-50%);border-radius:50%;
+      box-shadow:0 0 40px rgba(0,194,224,0.25), inset 0 0 8px rgba(255,255,255,0.06);z-index:1;pointer-events:none;opacity:.65;mix-blend-mode:screen;
+      animation:neon-pulse 3.6s ease-in-out infinite
     }
+    @keyframes neon-rotate{0%{transform:translate(-50%,-50%) rotate(0deg) scale(.98);filter:blur(12px) brightness(1.15) saturate(110%)}50%{transform:translate(-50%,-50%) rotate(180deg) scale(1.03);filter:blur(18px) brightness(1.45) saturate(130%)}100%{transform:translate(-50%,-50%) rotate(360deg) scale(.98);filter:blur(12px) brightness(1.15) saturate(110%)}}
+    @keyframes neon-pulse{0%{opacity:.55;transform:translate(-50%,-50%) scale(.98)}50%{opacity:.95;transform:translate(-50%,-50%) scale(1.04)}100%{opacity:.55;transform:translate(-50%,-50%) scale(.98)}}
 
-    header img{
-      width:112px;border-radius:50%;
-      box-shadow:0 8px 30px rgba(0,0,0,0.18);
-      display:block;
-      position:relative;
-      z-index:2;
-    }
+    header h1{margin:16px 0 6px;font-weight:800;font-size:clamp(1.5rem,3.4vw,2.3rem);letter-spacing:0.2px;position:relative;z-index:3}
+    header p.tagline{margin:0 auto;max-width:560px;color:rgba(255,255,255,0.95);font-weight:400;font-size:1.05rem;position:relative;z-index:3}
+    header .cnpj-note{margin-top:14px;font-size:.78rem;color:rgba(255,255,255,0.8);position:relative;z-index:3}
 
-    /* ==== Neon animado ao redor da logo ==== */
-    header .logo-wrap::before {
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 220px;
-      height: 220px;
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      background: conic-gradient(
-        from 0deg,
-        rgba(0,212,255,0.95),
-        rgba(0,123,255,0.95),
-        rgba(0,212,255,0.95)
-      );
-      filter: blur(14px) saturate(120%);
-      animation: neon-rotate 6.2s ease-in-out infinite alternate;
-      z-index:1;
-      opacity: 0.95;
-      pointer-events: none;
-    }
-
-    header .logo-wrap::after {
-      /* subtle ring sharp highlight */
-      content:"";
-      position:absolute;
-      top:50%;
-      left:50%;
-      width:150px;
-      height:150px;
-      transform:translate(-50%,-50%);
-      border-radius:50%;
-      box-shadow:0 0 40px rgba(0,212,255,0.25), inset 0 0 8px rgba(255,255,255,0.06);
-      z-index:1;
-      pointer-events:none;
-      opacity:0.65;
-      mix-blend-mode:screen;
-      animation: neon-pulse 3.6s ease-in-out infinite;
-    }
-
-    @keyframes neon-rotate {
-      0% {
-        transform: translate(-50%, -50%) rotate(0deg) scale(0.98);
-        filter: blur(12px) brightness(1.15) saturate(110%);
-      }
-      50% {
-        transform: translate(-50%, -50%) rotate(180deg) scale(1.03);
-        filter: blur(18px) brightness(1.45) saturate(130%);
-      }
-      100% {
-        transform: translate(-50%, -50%) rotate(360deg) scale(0.98);
-        filter: blur(12px) brightness(1.15) saturate(110%);
-      }
-    }
-
-    @keyframes neon-pulse {
-      0% { opacity:0.55; transform: translate(-50%,-50%) scale(0.98); }
-      50% { opacity:0.95; transform: translate(-50%,-50%) scale(1.04); }
-      100% { opacity:0.55; transform: translate(-50%,-50%) scale(0.98); }
-    }
-
-    header h1{margin:10px 0 6px;font-weight:800;letter-spacing:0.6px;position:relative;z-index:3}
-    header p{margin:0;color:rgba(255,255,255,0.92);font-weight:300;position:relative;z-index:3}
-
-    nav{
-      display:flex;
-      flex-wrap:wrap;
-      justify-content:center;
-      gap:18px;
-      padding:14px;
-      background: rgba(255,255,255,0.95);
-      position:sticky;
-      top:0;
-      z-index:60;
-      box-shadow:0 6px 20px rgba(12,20,30,0.06);
-      align-items:center;
-    }
-    body.dark-mode nav{background:rgba(8,14,22,0.75);box-shadow:0 6px 20px rgba(0,0,0,0.3)}
-    nav a, nav button{background:none;border:none;color:var(--muted);font-weight:600;padding:6px 8px;cursor:pointer;transition:var(--transition);font-family:inherit;font-size:1rem}
-    nav a:hover, nav button:hover{color:var(--primary)}
-    nav .nav-link.active{color:var(--primary);border-bottom:3px solid rgba(0,123,255,0.12);padding-bottom:4px}
+    nav{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:10px;background:rgba(255,255,255,0.96);position:sticky;top:0;z-index:60;box-shadow:0 6px 20px rgba(12,20,30,0.06);align-items:center}
+    body.dark-mode nav{background:rgba(8,14,22,0.85);box-shadow:0 6px 20px rgba(0,0,0,0.3)}
+    nav button{background:none;border:none;color:var(--muted);font-weight:600;padding:9px 14px;border-radius:8px;cursor:pointer;transition:var(--transition);font-family:var(--font-body);font-size:0.94rem}
+    nav button:hover{color:var(--primary);background:rgba(0,87,199,0.06)}
+    nav .nav-link.active{color:var(--primary);background:rgba(0,87,199,0.09)}
+    nav .nav-sep{width:1px;height:22px;background:var(--line);margin:0 4px}
 
     /* ---------- Layout ---------- */
-    main{max-width:1200px;margin:36px auto;padding:0 20px;position:relative;z-index:5}
-    section{display:none;opacity:0;transform:translateY(10px);transition:var(--transition);padding:36px 0}
+    main{max-width:1180px;margin:0 auto;padding:0 20px;position:relative;z-index:5}
+    section{display:none;opacity:0;transform:translateY(10px);transition:var(--transition);padding:52px 0}
     section.active{display:block;opacity:1;transform:none}
-    h2{color:var(--primary);text-align:center;margin-bottom:18px}
+    .eyebrow{display:block;text-align:center;color:var(--secondary);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:.76rem;margin-bottom:8px}
+    h2{color:var(--primary-deep);text-align:center;margin:0 0 14px;font-size:clamp(1.4rem,2.6vw,2rem)}
+    body.dark-mode h2{color:#dff1ff}
+    .section-lede{max-width:680px;margin:0 auto 34px;text-align:center;color:var(--muted);line-height:1.6}
 
-    /* Services grid */
-    .services{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
-    .service{
-      background:var(--card);
-      padding:22px;border-radius:12px;
-      box-shadow:0 10px 30px rgba(14,20,40,0.06);
-      text-align:center;transition:var(--transition)
-    }
-    body.dark-mode .service{background:#0f1724;box-shadow:0 10px 30px rgba(0,0,0,0.45)}
-    .service i{font-size:28px;color:var(--secondary);margin-bottom:12px}
-    .service h3{margin:8px 0 6px}
-    .service p{color:var(--muted);font-size:0.95rem}
+    /* divider */
+    .divider{max-width:220px;height:3px;margin:0 auto 40px;border-radius:3px;background:linear-gradient(90deg,transparent,var(--secondary),var(--primary),transparent);opacity:.55}
 
-    .cta{display:inline-block;margin-top:20px;padding:12px 22px;border-radius:10px;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;text-decoration:none;font-weight:700;transition:var(--transition)}
+    /* ---------- Trust badges under hero ---------- */
+    .badge-row{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin:26px auto 4px;max-width:900px}
+    .badge{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);padding:10px 16px;border-radius:999px;font-size:.86rem;font-weight:600;color:var(--ink);box-shadow:0 4px 14px rgba(10,20,40,0.04)}
+    body.dark-mode .badge{background:#0f1724;border-color:rgba(255,255,255,0.06);color:#e6eef8}
+    .badge i{color:var(--primary)}
+
+    /* ---------- Diferenciais ---------- */
+    .diferenciais{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px;max-width:1040px;margin:0 auto}
+    .diferencial{text-align:center;padding:20px 14px;background:var(--card);border-radius:12px;border:1px solid var(--line);box-shadow:0 8px 24px rgba(10,20,40,0.04)}
+    body.dark-mode .diferencial{background:#0f1724;border-color:rgba(255,255,255,0.06)}
+    .diferencial i{font-size:24px;color:var(--secondary);margin-bottom:10px;display:block}
+    .diferencial h4{margin:6px 0 4px;font-size:1rem}
+    .diferencial p{margin:0;color:var(--muted);font-size:.88rem;line-height:1.5}
+
+    /* ---------- Processo (numbered - real sequence) ---------- */
+    .processo{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:22px;max-width:1080px;margin:0 auto;counter-reset:step}
+    .step{position:relative;padding:26px 18px 18px;background:var(--card);border-radius:14px;border:1px solid var(--line);box-shadow:0 8px 24px rgba(10,20,40,0.04)}
+    body.dark-mode .step{background:#0f1724;border-color:rgba(255,255,255,0.06)}
+    .step .num{position:absolute;top:-16px;left:18px;width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:.92rem;box-shadow:0 6px 16px rgba(0,87,199,0.35)}
+    .step h4{margin:14px 0 6px;font-size:1.02rem}
+    .step p{margin:0;color:var(--muted);font-size:.9rem;line-height:1.55}
+
+    /* ---------- CTA banner ---------- */
+    .cta-banner{margin:52px auto 0;max-width:1080px;background:linear-gradient(120deg,var(--primary-deep),var(--primary) 55%,var(--secondary));border-radius:18px;padding:34px 28px;text-align:center;color:#fff;box-shadow:0 20px 50px rgba(0,60,140,0.25)}
+    .cta-banner h3{margin:0 0 8px;font-size:1.3rem}
+    .cta-banner p{margin:0 0 18px;color:rgba(255,255,255,0.92);font-size:.95rem}
+
+    .cta{display:inline-block;margin-top:6px;padding:13px 26px;border-radius:10px;background:#fff;color:var(--primary-deep);text-decoration:none;font-weight:700;transition:var(--transition);box-shadow:0 10px 26px rgba(0,0,0,0.15)}
     .cta:hover{transform:translateY(-4px);filter:brightness(1.03)}
+    .cta.cta-outline{background:transparent;color:#fff;border:2px solid rgba(255,255,255,0.7);box-shadow:none;margin-left:10px}
+    .cta-row{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+    .cta-solid{display:inline-block;padding:12px 22px;border-radius:10px;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;text-decoration:none;font-weight:700;transition:var(--transition)}
+    .cta-solid:hover{transform:translateY(-4px);filter:brightness(1.03)}
 
-    footer{margin-top:40px;padding:28px;text-align:center;color:#fff;background:linear-gradient(90deg,var(--primary),var(--secondary));border-radius:12px;margin:40px 20px;position:relative;z-index:5}
+    /* ---------- Services ---------- */
+    .service-category{margin-bottom:38px}
+    .service-category h3{color:var(--primary);font-size:1.05rem;text-align:left;margin:0 0 16px;padding-bottom:8px;border-bottom:2px solid var(--line);display:flex;align-items:center;gap:10px}
+    .services{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+    .service{background:var(--card);padding:24px 22px;border-radius:12px;box-shadow:0 10px 30px rgba(14,20,40,0.06);text-align:left;transition:var(--transition);border:1px solid transparent}
+    .service:hover{border-color:rgba(0,87,199,0.18);transform:translateY(-3px)}
+    body.dark-mode .service{background:#0f1724;box-shadow:0 10px 30px rgba(0,0,0,0.45)}
+    .service i{font-size:24px;color:var(--secondary);margin-bottom:12px}
+    .service h3{margin:8px 0 6px;font-size:1.02rem;text-align:left;border:none;padding:0}
+    .service p{color:var(--muted);font-size:.9rem;line-height:1.55;margin:0}
+
+    footer{margin:40px 20px 0;padding:0;color:#fff;background:linear-gradient(180deg,var(--primary-deep),#001a44);border-radius:16px;position:relative;z-index:5;overflow:hidden}
+    .footer-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:28px;padding:36px 30px}
+    .footer-col h5{margin:0 0 12px;font-family:var(--font-display);font-size:.95rem;letter-spacing:.04em;text-transform:uppercase;color:rgba(255,255,255,0.75)}
+    .footer-col p, .footer-col li{color:rgba(255,255,255,0.85);font-size:.88rem;line-height:1.7}
+    .footer-col ul{list-style:none;padding:0;margin:0}
+    .footer-col ul li button{background:none;border:none;color:rgba(255,255,255,0.85);cursor:pointer;font-size:.88rem;padding:0;font-family:var(--font-body)}
+    .footer-col ul li button:hover{color:#fff;text-decoration:underline}
+    .footer-social a{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.12);color:#fff;margin-right:8px}
+    .footer-bottom{border-top:1px solid rgba(255,255,255,0.14);padding:16px 30px;text-align:center;font-size:.8rem;color:rgba(255,255,255,0.7)}
+    @media(max-width:760px){.footer-grid{grid-template-columns:1fr;padding:30px 22px}}
 
     /* ---------- Contact info boxes ---------- */
     .info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:18px}
-    .info{background:linear-gradient(180deg,rgba(255,255,255,0.98),var(--card));padding:18px;border-radius:12px;box-shadow:0 8px 30px rgba(10,20,40,0.04)}
-    body.dark-mode .info{background:linear-gradient(180deg,#0b1220,#0a1020);box-shadow:0 8px 30px rgba(0,0,0,0.5)}
-    .info h4{color:var(--primary);margin-bottom:8px}
-    .info p{margin:6px 0;color:var(--muted);font-size:0.95rem}
+    .info{background:linear-gradient(180deg,rgba(255,255,255,0.98),var(--card));padding:18px;border-radius:12px;box-shadow:0 8px 30px rgba(10,20,40,0.04);border:1px solid var(--line)}
+    body.dark-mode .info{background:linear-gradient(180deg,#0b1220,#0a1020);box-shadow:0 8px 30px rgba(0,0,0,0.5);border-color:rgba(255,255,255,0.06)}
+    .info h4{color:var(--primary);margin-bottom:8px;font-size:1rem}
+    .info p{margin:6px 0;color:var(--muted);font-size:0.92rem}
     .info strong{color:inherit}
 
-    /* =========== ASSISTANT (VISUAL RICH) =========== */
-    .assistant-toggle{
-      position:fixed;right:22px;bottom:22px;width:66px;height:66px;border-radius:50%;
-      background:linear-gradient(135deg,var(--primary),var(--secondary));
-      display:flex;align-items:center;justify-content:center;color:#fff;z-index:120;
-      box-shadow:0 10px 30px rgba(0,0,0,0.25);cursor:pointer;transition:transform .22s ease, box-shadow .22s ease
+    .contact-layout{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start;max-width:1080px;margin:0 auto 30px}
+    @media(max-width:860px){.contact-layout{grid-template-columns:1fr}}
+    .map-wrap{border-radius:14px;overflow:hidden;box-shadow:0 10px 30px rgba(10,20,40,0.08);border:1px solid var(--line)}
+    .map-wrap iframe{width:100%;height:100%;min-height:320px;border:0;display:block}
+    .hours-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:16px;box-shadow:0 8px 24px rgba(10,20,40,0.04)}
+    body.dark-mode .hours-card{background:#0f1724;border-color:rgba(255,255,255,0.06)}
+    .hours-card h4{margin:0 0 10px;color:var(--primary);font-size:1rem}
+    .hours-row{display:flex;justify-content:space-between;font-size:.88rem;color:var(--muted);padding:4px 0}
+
+    /* contact form */
+    .contact-form{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px;box-shadow:0 10px 30px rgba(10,20,40,0.06)}
+    body.dark-mode .contact-form{background:#0f1724;border-color:rgba(255,255,255,0.06)}
+    .contact-form h4{margin:0 0 4px;color:var(--primary-deep);font-size:1.08rem}
+    body.dark-mode .contact-form h4{color:#dff1ff}
+    .contact-form p.form-sub{margin:0 0 16px;color:var(--muted);font-size:.86rem}
+    .field{margin-bottom:14px;display:flex;flex-direction:column;gap:6px}
+    .field label{font-size:.82rem;font-weight:600;color:var(--ink)}
+    body.dark-mode .field label{color:#e6eef8}
+    .field input, .field select, .field textarea{
+      padding:10px 12px;border-radius:8px;border:1px solid var(--line);font-family:var(--font-body);font-size:.92rem;background:#fff;color:var(--ink)
     }
+    body.dark-mode .field input, body.dark-mode .field select, body.dark-mode .field textarea{background:#0a1220;border-color:rgba(255,255,255,0.1);color:#e6eef8}
+    .field textarea{resize:vertical;min-height:90px}
+    .form-submit{width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;font-weight:700;cursor:pointer;font-size:.95rem}
+    .form-submit:hover{filter:brightness(1.05)}
+    .form-note{font-size:.76rem;color:var(--muted);margin-top:10px}
+
+    /* ---------- About / values ---------- */
+    .about-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:32px;max-width:1080px;margin:0 auto;align-items:start}
+    @media(max-width:860px){.about-grid{grid-template-columns:1fr}}
+    .about-copy p{color:var(--muted);line-height:1.7;font-size:.98rem}
+    .ceo-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 10px 30px rgba(10,20,40,0.06)}
+    body.dark-mode .ceo-card{background:#0f1724;border-color:rgba(255,255,255,0.06)}
+    .ceo-card .ceo-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-display);font-weight:700;font-size:1.3rem;margin-bottom:14px}
+    .ceo-card blockquote{margin:0;font-style:italic;color:var(--ink);line-height:1.6;font-size:.98rem;border-left:3px solid var(--secondary);padding-left:14px}
+    body.dark-mode .ceo-card blockquote{color:#e6eef8}
+    .ceo-card figcaption{margin-top:12px;font-size:.86rem;color:var(--muted);font-weight:600}
+
+    .values-list{list-style:none;margin:22px 0 0;padding:0;display:grid;gap:12px}
+    .values-list li{display:flex;gap:12px;align-items:flex-start;color:var(--muted);font-size:.92rem;line-height:1.5}
+    .values-list li i{color:var(--primary);margin-top:3px}
+    .values-list li strong{color:var(--ink);display:block;font-size:.94rem}
+    body.dark-mode .values-list li strong{color:#e6eef8}
+
+    /* ---------- FAQ ---------- */
+    .faq-list{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+    .faq-item{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 6px 18px rgba(10,20,40,0.04)}
+    body.dark-mode .faq-item{background:#0f1724;border-color:rgba(255,255,255,0.06)}
+    .faq-item summary{list-style:none;cursor:pointer;padding:16px 18px;font-weight:700;font-size:.96rem;display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--ink)}
+    body.dark-mode .faq-item summary{color:#e6eef8}
+    .faq-item summary::-webkit-details-marker{display:none}
+    .faq-item summary .chev{transition:transform .25s ease;color:var(--primary);flex:0 0 auto}
+    .faq-item[open] summary .chev{transform:rotate(180deg)}
+    .faq-item .faq-answer{padding:0 18px 18px;color:var(--muted);font-size:.9rem;line-height:1.6}
+
+    /* =========== ASSISTANT =========== */
+    .assistant-toggle{position:fixed;right:22px;bottom:22px;width:66px;height:66px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;color:#fff;z-index:120;box-shadow:0 10px 30px rgba(0,0,0,0.25);cursor:pointer;transition:transform .22s ease, box-shadow .22s ease;border:none}
     .assistant-toggle:hover{transform:translateY(-6px) scale(1.02);box-shadow:0 16px 40px rgba(0,0,0,0.32)}
-
-    .assistant {
-      position:fixed;right:22px;bottom:100px;width:360px;max-width:calc(100% - 44px);
-      background:linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.5));
-      backdrop-filter: blur(8px) saturate(120%);
-      border-radius:16px;box-shadow:0 18px 50px rgba(6,12,24,0.28);
-      z-index:119;overflow:hidden;display:none;flex-direction:column;transition:var(--transition)
-    }
-    body.dark-mode .assistant{background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));border:1px solid rgba(255,255,255,0.03)}
-
-    .assistant-header{
-      display:flex;align-items:center;gap:12px;padding:12px 14px;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;
-    }
-    .assistant-header .avatar{
-      width:48px;height:48px;border-radius:50%;flex:0 0 48px;background:linear-gradient(180deg,#ffd;#fff);position:relative;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,0.25)
-    }
-    /* avatar circle graphic */
-    .avatar .face{
-      width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#ffffff22,#ffffff44);
-      border-radius:50%;position:relative;z-index:2
-    }
-    /* voice waves */
-    .avatar .waves{
-      position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-      width:68px;height:68px;border-radius:50%;z-index:1;pointer-events:none;
-    }
+    .assistant{position:fixed;right:22px;bottom:100px;width:360px;max-width:calc(100% - 44px);background:linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.7));backdrop-filter:blur(8px) saturate(120%);border-radius:16px;box-shadow:0 18px 50px rgba(6,12,24,0.28);z-index:119;overflow:hidden;display:none;flex-direction:column;transition:var(--transition)}
+    body.dark-mode .assistant{background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.03));border:1px solid rgba(255,255,255,0.03)}
+    .assistant-header{display:flex;align-items:center;gap:12px;padding:12px 14px;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff}
+    .assistant-header .avatar{width:48px;height:48px;border-radius:50%;flex:0 0 48px;position:relative;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,0.25)}
+    .avatar .face{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#ffffff22,#ffffff44);border-radius:50%;position:relative;z-index:2}
+    .avatar .waves{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:68px;height:68px;border-radius:50%;z-index:1;pointer-events:none}
     .avatar .wave{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;border:2px solid rgba(255,255,255,0.12);opacity:0;animation:wave 2s infinite}
     .avatar .wave:nth-child(1){animation-delay:0s}
     .avatar .wave:nth-child(2){animation-delay:.5s}
     .avatar .wave:nth-child(3){animation-delay:1s}
-    @keyframes wave{
-      0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}
-      20%{opacity:.35}
-      100%{opacity:0;transform:translate(-50%,-50%) scale(1.7)}
-    }
-
-    .assistant-header .title{font-weight:700}
+    @keyframes wave{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}20%{opacity:.35}100%{opacity:0;transform:translate(-50%,-50%) scale(1.7)}}
+    .assistant-header .title{font-weight:700;font-family:var(--font-display)}
     .assistant-header .subtitle{font-size:12px;opacity:.9;color:rgba(255,255,255,0.95)}
-
-    .assistant-body{
-      padding:12px;display:flex;flex-direction:column;gap:10px;max-height:320px;overflow:auto;scrollbar-width:thin;
-    }
+    .assistant-body{padding:12px;display:flex;flex-direction:column;gap:10px;max-height:320px;overflow:auto;scrollbar-width:thin}
     .assistant-message{max-width:85%;padding:10px 12px;border-radius:12px;font-size:0.95rem;line-height:1.3}
-    .assistant-message.bot{
-      background:linear-gradient(180deg,#ffffff,#f6fbff);
-      color:#052337;align-self:flex-start;box-shadow:0 6px 20px rgba(8,16,30,0.06)
-    }
+    .assistant-message.bot{background:linear-gradient(180deg,#ffffff,#f6fbff);color:#052337;align-self:flex-start;box-shadow:0 6px 20px rgba(8,16,30,0.06)}
     body.dark-mode .assistant-message.bot{background:linear-gradient(180deg,#071428,#0a1730);color:#e8f6ff;box-shadow:0 8px 30px rgba(0,0,0,0.55)}
-    .assistant-message.user{background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;align-self:flex-end}
-    .assistant-footer{display:flex;gap:8px;padding:10px;border-top:1px solid rgba(0,0,0,0.06);align-items:center;background:transparent}
-    body.dark-mode .assistant-footer{border-top:1px solid rgba(255,255,255,0.03)}
-
-    .assistant-actions{display:flex;gap:8px;justify-content:center;padding:12px;border-top:1px solid rgba(0,0,0,0.04);background:transparent}
-    .assistant-actions button{background:none;border:1px solid rgba(0,0,0,0.06);padding:8px 10px;border-radius:10px;color:var(--primary);font-weight:700;cursor:pointer}
+    .assistant-actions{display:flex;gap:8px;justify-content:center;padding:12px;border-top:1px solid rgba(0,0,0,0.04);background:transparent;flex-wrap:wrap}
+    .assistant-actions button{background:none;border:1px solid rgba(0,0,0,0.06);padding:8px 10px;border-radius:10px;color:var(--primary);font-weight:700;cursor:pointer;font-size:.85rem}
     .assistant-actions button:hover{transform:translateY(-3px)}
     body.dark-mode .assistant-actions button{border-color:rgba(255,255,255,0.04);color:var(--secondary)}
-
-    /* typing indicator */
     .typing{display:inline-block;vertical-align:middle}
     .dot{display:inline-block;width:7px;height:7px;margin:0 2px;background:rgba(0,0,0,0.18);border-radius:50%;animation:dot 1s infinite}
     .dot:nth-child(2){animation-delay:.12s}
     .dot:nth-child(3){animation-delay:.24s}
     @keyframes dot{0%{transform:translateY(0)}50%{transform:translateY(-6px)}100%{transform:translateY(0)}}
 
-    /* responsive */
+    /* utility floating buttons */
+    .util-btn{position:fixed;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;z-index:118;box-shadow:0 10px 26px rgba(0,0,0,0.22);cursor:pointer;border:none;transition:transform .2s ease, box-shadow .2s ease, opacity .25s ease;text-decoration:none}
+    .util-btn:hover{transform:translateY(-4px)}
+    #whatsappFloat{left:22px;bottom:22px;background:#25D366;font-size:24px}
+    #backToTop{right:22px;bottom:96px;background:linear-gradient(135deg,var(--dark),#1f2937);opacity:0;pointer-events:none}
+    #backToTop.show{opacity:1;pointer-events:auto}
+
+    /* scroll reveal */
+    .service, .info, .diferencial, .step, .faq-item{opacity:0;transform:translateY(18px);transition:opacity .55s ease, transform .55s ease}
+    .service.in-view, .info.in-view, .diferencial.in-view, .step.in-view, .faq-item.in-view{opacity:1;transform:none}
+
+    .floating-deco{position:absolute;border-radius:12px;opacity:0.05;z-index:2;pointer-events:none;mix-blend-mode:screen}
+    .float-1{width:320px;height:120px;top:60px;left:-40px;background:linear-gradient(90deg,var(--secondary),transparent);animation:floatX 9s ease-in-out infinite}
+    .float-2{width:220px;height:80px;bottom:140px;right:-30px;background:linear-gradient(90deg,var(--primary),transparent);animation:floatX 11s ease-in-out infinite reverse}
+    @keyframes floatX{0%{transform:translateY(0) translateX(0);opacity:.06}50%{transform:translateY(-18px) translateX(6px);opacity:.09}100%{transform:translateY(0) translateX(0);opacity:.06}}
+
     @media(max-width:540px){
       .assistant{right:6px;left:6px;width:auto;bottom:88px}
       .assistant-toggle{right:18px;bottom:16px}
       header h1{font-size:20px}
-      nav{gap:10px;padding:12px}
-      header .logo-wrap::before { width:180px; height:180px; }
-      header .logo-wrap::after { width:130px; height:130px; }
-    }
-
-    /* small decorative floats for minimal motion (subtle) */
-    .floating-deco{
-      position:absolute;
-      border-radius:12px;
-      opacity:0.05;
-      z-index:2;
-      pointer-events:none;
-      mix-blend-mode:screen;
-    }
-    .float-1{width:320px;height:120px;top:60px;left:-40px;background:linear-gradient(90deg,var(--secondary),transparent);animation:floatX 9s ease-in-out infinite;}
-    .float-2{width:220px;height:80px;bottom:140px;right:-30px;background:linear-gradient(90deg,var(--primary),transparent);animation:floatX 11s ease-in-out infinite reverse;}
-    @keyframes floatX {
-      0% { transform:translateY(0) translateX(0); opacity:0.06; }
-      50% { transform:translateY(-18px) translateX(6px); opacity:0.09; }
-      100% { transform:translateY(0) translateX(0); opacity:0.06; }
-    }
-
-    /* ---------- Skip link (a11y) ---------- */
-    .skip-link{
-      position:absolute;left:12px;top:-60px;background:var(--primary);color:#fff;
-      padding:10px 16px;border-radius:8px;z-index:200;transition:top .2s ease;font-weight:700;text-decoration:none
-    }
-    .skip-link:focus{top:12px}
-
-    /* ---------- Visible keyboard focus ---------- */
-    a:focus-visible, button:focus-visible{
-      outline:3px solid var(--accent);outline-offset:2px;border-radius:6px;
-    }
-
-    /* ---------- Scroll reveal ---------- */
-    .service, .info{opacity:0;transform:translateY(18px);transition:opacity .55s ease, transform .55s ease}
-    .service.in-view, .info.in-view{opacity:1;transform:none}
-
-    /* ---------- Utility floating buttons (top / whatsapp) ---------- */
-    .util-btn{
-      position:fixed;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-      color:#fff;z-index:118;box-shadow:0 10px 26px rgba(0,0,0,0.22);cursor:pointer;border:none;
-      transition:transform .2s ease, box-shadow .2s ease, opacity .25s ease
-    }
-    .util-btn:hover{transform:translateY(-4px)}
-    #whatsappFloat{left:22px;bottom:22px;background:#25D366;font-size:24px;text-decoration:none}
-    #backToTop{right:22px;bottom:96px;background:linear-gradient(135deg,var(--dark),#1f2937);opacity:0;pointer-events:none}
-    #backToTop.show{opacity:1;pointer-events:auto}
-    @media(max-width:540px){
+      header .logo-wrap::before{width:180px;height:180px}
+      header .logo-wrap::after{width:130px;height:130px}
       #whatsappFloat{left:16px;bottom:16px;width:48px;height:48px;font-size:20px}
       #backToTop{right:16px;bottom:170px;width:44px;height:44px}
+      .trust-bar span{display:block;margin:2px 0}
     }
 
-    /* ---------- Diferenciais ---------- */
-    .diferenciais{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;max-width:1000px;margin:32px auto 0}
-    .diferencial{text-align:center;padding:16px}
-    .diferencial i{font-size:22px;color:var(--secondary);margin-bottom:8px;display:block}
-    .diferencial h4{margin:6px 0 4px;font-size:1rem}
-    .diferencial p{margin:0;color:var(--muted);font-size:0.88rem}
-
-    /* ---------- Reduced motion: respect user preference ---------- */
     @media (prefers-reduced-motion: reduce){
       *{animation-duration:0.001ms !important;animation-iteration-count:1 !important;transition-duration:0.001ms !important;scroll-behavior:auto !important}
-      .particle-canvas{display:none}
-      .floating-deco{display:none}
+      .particle-canvas, .floating-deco{display:none}
     }
-
-    html{scroll-behavior:smooth}
   </style>
 </head>
 <body>
   <a href="#main-content" class="skip-link">Pular para o conteúdo</a>
 
-  <!-- Particle canvas (full-site subtle particles) -->
   <canvas id="bgParticles" class="particle-canvas" aria-hidden="true"></canvas>
-
-  <!-- subtle decorative floats -->
   <div class="floating-deco float-1" aria-hidden="true"></div>
   <div class="floating-deco float-2" aria-hidden="true"></div>
 
+  <div class="trust-bar">
+    <span><i class="fas fa-check-circle"></i>CNPJ 63.373.374/0001-72 ativo</span>
+    <span><i class="fas fa-map-marker-alt"></i>Sede em Belo Horizonte - MG</span>
+    <span><i class="fas fa-shield-alt"></i>Atendimento remoto e presencial</span>
+  </div>
+
   <header>
-    <div class="logo-wrap" aria-hidden="false" role="img" aria-label="Logo AtecSeven">
-      <img src="logo2.png" alt="Logo AtecSeven">
+    <div class="logo-wrap" role="img" aria-label="Logo AtecSeven">
+      <img src="logo2.png" alt="Logo AtecSeven" width="112" height="112">
     </div>
     <h1>AtecSeven Tecnologia</h1>
-    <p>Inovando o futuro, hoje!</p>
+    <p class="tagline">Infraestrutura, sistemas e suporte técnico para empresas que não podem parar.</p>
+    <p class="cnpj-note">ATECSEVEN TECNOLOGIA LTDA · Sociedade Empresária Limitada</p>
   </header>
 
   <nav aria-label="Navegação principal">
     <button type="button" class="nav-link active" data-target="home" aria-current="page">Início</button>
     <button type="button" class="nav-link" data-target="services">Serviços</button>
     <button type="button" class="nav-link" data-target="about">Sobre</button>
+    <button type="button" class="nav-link" data-target="faq">FAQ</button>
     <button type="button" class="nav-link" data-target="contact">Contato</button>
+    <span class="nav-sep" aria-hidden="true"></span>
     <button type="button" id="toggleTheme" aria-label="Alternar tema" aria-pressed="false">🌙</button>
   </nav>
 
   <main id="main-content">
     <section id="home" class="active">
-      <h2>Bem-vindo à AtecSeven Tecnologia</h2>
-      <p style="text-align:center;color:var(--muted);max-width:860px;margin:auto">
-        Transformamos tecnologia em crescimento real para sua empresa. Soluções em infra, sistemas, aplicativos, design e marketing — tudo pensado para gerar resultados mensuráveis.
-      </p>
-      <div style="text-align:center;margin-top:20px">
-        <a href="#services" id="btnServices" class="cta">Conheça nossos serviços</a>
+      <h2>Tecnologia que sustenta o crescimento do seu negócio</h2>
+      <p class="section-lede">Cuidamos da infraestrutura, dos sistemas e do suporte do dia a dia para que sua equipe possa focar no que realmente importa: atender e crescer.</p>
+
+      <div class="badge-row">
+        <div class="badge"><i class="fas fa-id-card"></i>Empresa registrada (CNPJ ativo)</div>
+        <div class="badge"><i class="fas fa-user-tie"></i>Ponto de contato direto com o CEO</div>
+        <div class="badge"><i class="fas fa-headset"></i>Suporte remoto e on-site</div>
       </div>
 
+      <div style="text-align:center;margin-top:26px">
+        <div class="cta-row">
+          <a href="#services" id="btnServices" class="cta-solid">Conheça nossos serviços</a>
+          <a href="https://wa.me/5564992952748?text=Ol%C3%A1%20AtecSeven%2C%20gostaria%20de%20conversar%20sobre%20um%20projeto." target="_blank" rel="noopener noreferrer" class="cta-solid" style="background:linear-gradient(90deg,#128C4A,#25D366)">Falar no WhatsApp</a>
+        </div>
+      </div>
+
+      <div class="divider" style="margin-top:46px" aria-hidden="true"></div>
+
       <div class="diferenciais">
-        <div class="diferencial"><i class="fas fa-handshake"></i><h4>Atendimento próximo</h4><p>Falamos direto com você, sem burocracia.</p></div>
-        <div class="diferencial"><i class="fas fa-bolt"></i><h4>Suporte ágil</h4><p>Atendimento remoto e on-site quando você precisar.</p></div>
-        <div class="diferencial"><i class="fas fa-cogs"></i><h4>Soluções sob medida</h4><p>Cada projeto pensado para o tamanho do seu negócio.</p></div>
-        <div class="diferencial"><i class="fas fa-shield-alt"></i><h4>Segurança em primeiro lugar</h4><p>Infraestrutura e processos pensados para proteger sua empresa.</p></div>
+        <div class="diferencial"><i class="fas fa-handshake"></i><h4>Atendimento próximo</h4><p>Você fala direto com quem entende do seu projeto, sem call center.</p></div>
+        <div class="diferencial"><i class="fas fa-bolt"></i><h4>Suporte remoto e presencial</h4><p>Resolvemos à distância quando dá, e vamos até você quando precisa.</p></div>
+        <div class="diferencial"><i class="fas fa-cogs"></i><h4>Soluções sob medida</h4><p>Nada de pacote fechado: o projeto é dimensionado para o seu negócio.</p></div>
+        <div class="diferencial"><i class="fas fa-shield-alt"></i><h4>Segurança em primeiro lugar</h4><p>Infraestrutura e processos pensados para proteger seus dados.</p></div>
+      </div>
+
+      <div class="divider" style="margin-top:52px" aria-hidden="true"></div>
+
+      <span class="eyebrow">Como trabalhamos</span>
+      <h2 style="margin-bottom:8px">Do diagnóstico à entrega, sem enrolação</h2>
+      <p class="section-lede">Um processo simples e transparente, para você saber exatamente em que etapa seu projeto está.</p>
+      <div class="processo">
+        <div class="step"><div class="num">1</div><h4>Diagnóstico</h4><p>Entendemos sua operação, o que já funciona e onde a tecnologia está travando o crescimento.</p></div>
+        <div class="step"><div class="num">2</div><h4>Proposta e orçamento</h4><p>Você recebe um plano claro, com escopo e prazos definidos antes de qualquer compromisso.</p></div>
+        <div class="step"><div class="num">3</div><h4>Implementação</h4><p>Colocamos a solução em prática com o mínimo de impacto na sua rotina.</p></div>
+        <div class="step"><div class="num">4</div><h4>Suporte contínuo</h4><p>Depois da entrega, seguimos disponíveis para ajustes, dúvidas e manutenção.</p></div>
+      </div>
+
+      <div class="cta-banner">
+        <h3>Pronto para tirar um projeto do papel?</h3>
+        <p>Conte pra gente o que sua empresa precisa e volte com um orçamento claro.</p>
+        <div class="cta-row">
+          <a href="#contact" class="cta" onclick="event.preventDefault(); showSection('contact');">Solicitar orçamento</a>
+          <a href="#faq" class="cta cta-outline" onclick="event.preventDefault(); showSection('faq');">Ver perguntas frequentes</a>
+        </div>
       </div>
     </section>
 
     <section id="services">
+      <span class="eyebrow">O que fazemos</span>
       <h2>Nossos Serviços</h2>
-      <div class="services" aria-live="polite">
-        <div class="service"><i class="fas fa-network-wired"></i><h3>Redes e Infraestrutura</h3><p>Planejamento, cabeamento estruturado e suporte de rede.</p></div>
-        <div class="service"><i class="fas fa-desktop"></i><h3>Suporte Técnico</h3><p>Atendimento remoto e on-site, manutenção preventiva e corretiva.</p></div>
-        <div class="service"><i class="fas fa-palette"></i><h3>Design & Identidade</h3><p>Criação de identidade visual, logotipos e materiais gráficos.</p></div>
-        <div class="service"><i class="fas fa-folder-open"></i><h3>Portfólios Profissionais</h3><p>Criação e otimização de portfólios digitais para profissionais e agências.</p></div>
-        <div class="service"><i class="fas fa-mobile-alt"></i><h3>Aplicativos & Web</h3><p>Desenvolvimento de apps mobile e sistemas web sob medida.</p></div>
-        <div class="service"><i class="fas fa-user-check"></i><h3>UI/UX</h3><p>Experiências intuitivas e protótipos interativos que aumentam conversões.</p></div>
-        <div class="service"><i class="fas fa-bullhorn"></i><h3>Marketing Digital</h3><p>SEO, campanhas pagas e gestão de redes sociais.</p></div>
-        <div class="service"><i class="fas fa-chart-line"></i><h3>Sistemas de Gestão</h3><p>ERP, integração bancária e automação de processos administrativos.</p></div>
+      <p class="section-lede">Organizados em três frentes que costumam andar juntas dentro de uma empresa: infraestrutura, software e crescimento.</p>
+
+      <div class="service-category">
+        <h3><i class="fas fa-server" style="color:var(--secondary)"></i> Infraestrutura & Suporte</h3>
+        <div class="services">
+          <div class="service"><i class="fas fa-network-wired"></i><h3>Redes e Infraestrutura</h3><p>Planejamento de rede, cabeamento estruturado, Wi-Fi corporativo e suporte contínuo para que a conexão nunca seja o gargalo.</p></div>
+          <div class="service"><i class="fas fa-desktop"></i><h3>Suporte Técnico</h3><p>Atendimento remoto e on-site, manutenção preventiva e corretiva de estações de trabalho e servidores.</p></div>
+          <div class="service"><i class="fas fa-chart-line"></i><h3>Sistemas de Gestão</h3><p>Implantação de ERP, integração bancária e automação de processos administrativos repetitivos.</p></div>
+        </div>
+      </div>
+
+      <div class="service-category">
+        <h3><i class="fas fa-code" style="color:var(--secondary)"></i> Software & Design</h3>
+        <div class="services">
+          <div class="service"><i class="fas fa-mobile-alt"></i><h3>Aplicativos & Web</h3><p>Desenvolvimento de apps mobile e sistemas web sob medida, do zero ou evoluindo o que você já tem.</p></div>
+          <div class="service"><i class="fas fa-user-check"></i><h3>UI/UX</h3><p>Fluxos e telas pensados para reduzir atrito e aumentar conversão, com protótipos testáveis antes do desenvolvimento.</p></div>
+          <div class="service"><i class="fas fa-palette"></i><h3>Design & Identidade</h3><p>Criação de identidade visual, logotipos e materiais gráficos consistentes com o posicionamento da marca.</p></div>
+        </div>
+      </div>
+
+      <div class="service-category">
+        <h3><i class="fas fa-bullhorn" style="color:var(--secondary)"></i> Presença & Crescimento</h3>
+        <div class="services">
+          <div class="service"><i class="fas fa-folder-open"></i><h3>Portfólios Profissionais</h3><p>Criação e otimização de portfólios digitais para profissionais liberais e agências.</p></div>
+          <div class="service"><i class="fas fa-bullhorn"></i><h3>Marketing Digital</h3><p>SEO, campanhas pagas e gestão de redes sociais com foco em geração de demanda real.</p></div>
+        </div>
       </div>
     </section>
 
     <section id="about">
-      <h2>Sobre Nós</h2>
-      <p style="max-width:900px;margin:auto;color:var(--muted);line-height:1.5">
-        A <strong>ATECSEVEN TECNOLOGIA LTDA</strong> foi criada com o propósito de impulsionar micro, pequenas e médias empresas a alcançarem seu máximo potencial. Oferecemos soluções tecnológicas estratégicas, pensadas para gerar eficiência e crescer com segurança.
-      </p>
-      <br>
-      <p style="max-width:900px;margin:auto;color:var(--muted);line-height:1.5">
-        Nosso CEO, <strong>Arnaldo S. Lima</strong>, tem como missão tornar a tecnologia uma alavanca real — acessível, mensurável e estratégica — para negócios de todos os tamanhos. Ele acredita que, com a combinação certa de tecnologia, processos e propósito, toda empresa pode se tornar a melhor versão de si mesma.
-      </p>
+      <span class="eyebrow">Quem somos</span>
+      <h2>Sobre a AtecSeven</h2>
+      <div class="about-grid">
+        <div class="about-copy">
+          <p>A <strong>ATECSEVEN TECNOLOGIA LTDA</strong> foi criada com o propósito de impulsionar micro, pequenas e médias empresas a alcançarem seu máximo potencial. Oferecemos soluções tecnológicas estratégicas, pensadas para gerar eficiência e crescer com segurança.</p>
+          <p>Trabalhamos com times enxutos e um relacionamento direto: quem assina a proposta é quem acompanha o projeto até a entrega — e continua disponível depois dela.</p>
+
+          <ul class="values-list">
+            <li><i class="fas fa-bullseye"></i><div><strong>Missão</strong>Tornar a tecnologia acessível, mensurável e estratégica para negócios de todos os tamanhos.</div></li>
+            <li><i class="fas fa-eye"></i><div><strong>Visão</strong>Ser o parceiro de tecnologia de referência para pequenas e médias empresas em Minas Gerais.</div></li>
+            <li><i class="fas fa-heart"></i><div><strong>Valores</strong>Transparência no orçamento, comunicação direta e compromisso com o resultado combinado.</div></li>
+          </ul>
+        </div>
+
+        <figure class="ceo-card">
+          <div class="ceo-avatar">AL</div>
+          <blockquote>"Acredito que, com a combinação certa de tecnologia, processos e propósito, toda empresa pode se tornar a melhor versão de si mesma."</blockquote>
+          <figcaption>Arnaldo S. Lima — CEO e fundador da AtecSeven Tecnologia</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="faq">
+      <span class="eyebrow">Dúvidas comuns</span>
+      <h2>Perguntas Frequentes</h2>
+      <p class="section-lede">Se sua dúvida não estiver aqui, é só chamar a gente no WhatsApp ou pelo formulário de contato.</p>
+
+      <div class="faq-list">
+        <details class="faq-item">
+          <summary>Vocês atendem só em Belo Horizonte?<i class="fas fa-chevron-down chev"></i></summary>
+          <div class="faq-answer">Nossa sede fica em Belo Horizonte - MG, e atendemos presencialmente a região. Serviços de sistemas, apps, design e marketing digital são realizados remotamente para clientes de qualquer lugar do Brasil.</div>
+        </details>
+        <details class="faq-item">
+          <summary>Como funciona o orçamento?<i class="fas fa-chevron-down chev"></i></summary>
+          <div class="faq-answer">Depois de entender sua necessidade em uma conversa inicial, enviamos uma proposta com escopo, prazo estimado e valores antes de qualquer compromisso ser assumido.</div>
+        </details>
+        <details class="faq-item">
+          <summary>Vocês dão suporte depois que o projeto termina?<i class="fas fa-chevron-down chev"></i></summary>
+          <div class="faq-answer">Sim. Ajustes, dúvidas e manutenção continuam sendo atendidos após a entrega — consulte as condições de suporte contínuo na sua proposta.</div>
+        </details>
+        <details class="faq-item">
+          <summary>Como meus dados são protegidos?<i class="fas fa-chevron-down chev"></i></summary>
+          <div class="faq-answer">Seguimos boas práticas de segurança da informação em toda a infraestrutura que implementamos e tratamos dados de clientes com confidencialidade em todos os projetos.</div>
+        </details>
+        <details class="faq-item">
+          <summary>Preciso já ter um sistema para contratar vocês?<i class="fas fa-chevron-down chev"></i></summary>
+          <div class="faq-answer">Não. Ajudamos tanto quem está começando do zero quanto quem já tem uma estrutura e precisa evoluir, corrigir ou integrar sistemas existentes.</div>
+        </details>
+      </div>
     </section>
 
     <section id="contact">
+      <span class="eyebrow">Fale com a gente</span>
       <h2>Contato e Informações Empresariais</h2>
+      <p class="section-lede">Prefere falar direto? Chame no WhatsApp. Se preferir detalhar o projeto por escrito, use o formulário ao lado.</p>
+
+      <div class="contact-layout">
+        <div>
+          <div class="map-wrap">
+            <iframe
+              title="Localização da AtecSeven Tecnologia"
+              src="https://www.google.com/maps?q=Rua+da+Bahia,+1148,+Centro,+Belo+Horizonte+-+MG,+30160-906&output=embed"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"></iframe>
+          </div>
+          <div class="hours-card">
+            <h4><i class="fas fa-clock"></i> Horário de atendimento</h4>
+            <div class="hours-row"><span>Segunda a sexta</span><span>08h às 18h</span></div>
+            <div class="hours-row"><span>Sábado</span><span>Sob consulta</span></div>
+            <div class="hours-row"><span>WhatsApp</span><span>Resposta em horário comercial</span></div>
+          </div>
+        </div>
+
+        <form class="contact-form" id="contactForm" action="mailto:comercial@atecseven.com.br" method="post" enctype="text/plain">
+          <h4>Solicite um orçamento</h4>
+          <p class="form-sub">Preencha os campos e envie — abriremos seu app de e-mail com a mensagem pronta.</p>
+          <div class="field">
+            <label for="cf-name">Nome</label>
+            <input type="text" id="cf-name" name="nome" required autocomplete="name">
+          </div>
+          <div class="field">
+            <label for="cf-email">E-mail</label>
+            <input type="email" id="cf-email" name="email" required autocomplete="email">
+          </div>
+          <div class="field">
+            <label for="cf-service">Serviço de interesse</label>
+            <select id="cf-service" name="servico">
+              <option>Redes e Infraestrutura</option>
+              <option>Suporte Técnico</option>
+              <option>Sistemas de Gestão (ERP)</option>
+              <option>Aplicativos & Web</option>
+              <option>Design & Identidade</option>
+              <option>Marketing Digital</option>
+              <option>Outro / não sei ainda</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="cf-msg">Mensagem</label>
+            <textarea id="cf-msg" name="mensagem" required placeholder="Conte um pouco sobre o que sua empresa precisa..."></textarea>
+          </div>
+          <button type="submit" class="form-submit"><i class="fas fa-paper-plane"></i> Enviar solicitação</button>
+          <p class="form-note">Este formulário abre seu programa de e-mail padrão. Se preferir resposta mais rápida, use o WhatsApp.</p>
+        </form>
+      </div>
 
       <div class="info-grid">
         <div class="info" aria-labelledby="dados-title">
@@ -488,16 +576,15 @@
           </p>
           <p><strong>WhatsApp:</strong> <a href="https://wa.me/5564992952748" target="_blank" rel="noopener noreferrer">+55 (64) 9 9295-2748</a></p>
           <div style="margin-top:10px">
-            <a href="https://facebook.com/atecseven.tecnologia" target="_blank" rel="noopener noreferrer" style="margin-right:8px"><i class="fab fa-facebook-f"></i></a>
-            <a href="https://instagram.com/atecseven_tecnologia" target="_blank" rel="noopener noreferrer" style="margin-right:8px"><i class="fab fa-instagram"></i></a>
-            <a href="https://linkedin.com/in/atecseven-tecnologia" target="_blank" rel="noopener noreferrer"><i class="fab fa-linkedin-in"></i></a>
+            <a href="https://facebook.com/atecseven.tecnologia" target="_blank" rel="noopener noreferrer" style="margin-right:8px" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+            <a href="https://instagram.com/atecseven_tecnologia" target="_blank" rel="noopener noreferrer" style="margin-right:8px" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="https://linkedin.com/in/atecseven-tecnologia" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
           </div>
         </div>
       </div>
     </section>
   </main>
 
-  <!-- Utility floating buttons -->
   <a id="whatsappFloat" class="util-btn" href="https://wa.me/5564992952748?text=Ol%C3%A1%20AtecSeven%2C%20vim%20pelo%20site!" target="_blank" rel="noopener noreferrer" aria-label="Falar no WhatsApp">
     <i class="fab fa-whatsapp"></i>
   </a>
@@ -505,20 +592,14 @@
     <i class="fas fa-arrow-up"></i>
   </button>
 
-  <!-- ASSISTANT TOGGLE -->
   <div class="assistant-toggle" id="assistantToggle" title="Abrir assistente" aria-hidden="false">
     <i class="fas fa-robot" style="font-size:20px"></i>
   </div>
 
-  <!-- ASSISTANT PANEL -->
   <div class="assistant" id="assistant" role="dialog" aria-label="Assistente AtecSeven">
     <div class="assistant-header">
       <div class="avatar" aria-hidden="true">
-        <div class="waves">
-          <div class="wave"></div>
-          <div class="wave"></div>
-          <div class="wave"></div>
-        </div>
+        <div class="waves"><div class="wave"></div><div class="wave"></div><div class="wave"></div></div>
         <div class="face"><i class="fas fa-robot" style="font-size:20px;color:rgba(255,255,255,0.95)"></i></div>
       </div>
       <div style="flex:1;text-align:left">
@@ -528,7 +609,6 @@
     </div>
 
     <div class="assistant-body" id="assistantBody" aria-live="polite">
-      <!-- messages injected here -->
       <div class="assistant-message bot" id="welcomeMessage">
         Olá! 👋 Sou a <strong>Aury</strong>, assistente virtual da AtecSeven. Escolha uma opção abaixo para eu ajudar:
       </div>
@@ -542,13 +622,44 @@
   </div>
 
   <footer>
-    <p>&copy; <span id="year"></span> AtecSeven Tecnologia. Todos os direitos reservados.</p>
+    <div class="footer-grid">
+      <div class="footer-col">
+        <h5>AtecSeven Tecnologia</h5>
+        <p>Infraestrutura, sistemas e suporte técnico para micro, pequenas e médias empresas. Sede em Belo Horizonte - MG.</p>
+        <div class="footer-social">
+          <a href="https://facebook.com/atecseven.tecnologia" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+          <a href="https://instagram.com/atecseven_tecnologia" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+          <a href="https://linkedin.com/in/atecseven-tecnologia" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h5>Navegação</h5>
+        <ul>
+          <li><button type="button" data-target="home">Início</button></li>
+          <li><button type="button" data-target="services">Serviços</button></li>
+          <li><button type="button" data-target="about">Sobre</button></li>
+          <li><button type="button" data-target="faq">FAQ</button></li>
+          <li><button type="button" data-target="contact">Contato</button></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h5>Contato</h5>
+        <p><i class="fas fa-map-marker-alt"></i> Rua da Bahia, 1148 - Sala 1208, Centro, Belo Horizonte - MG</p>
+        <p><i class="fas fa-envelope"></i> comercial@atecseven.com.br</p>
+        <p><i class="fas fa-phone"></i> (64) 9 9295-2748</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; <span id="year"></span> AtecSeven Tecnologia LTDA · CNPJ 63.373.374/0001-72 · Todos os direitos reservados.</p>
+    </div>
   </footer>
 
   <script>
-    // ---------- Basic UI & Section control ----------
+    // ---------- Section control ----------
     const navLinks = document.querySelectorAll('nav .nav-link[data-target]');
+    const footerLinks = document.querySelectorAll('.footer-col ul button[data-target]');
     const sections = document.querySelectorAll('main section');
+
     function showSection(target){
       sections.forEach(s => s.classList.remove('active'));
       navLinks.forEach(a => { a.classList.remove('active'); a.removeAttribute('aria-current'); });
@@ -557,12 +668,12 @@
       if(sec && link){
         link.classList.add('active');
         link.setAttribute('aria-current','page');
-        // small delay for nicer feel
         setTimeout(()=> sec.classList.add('active'), 80);
         window.scrollTo({top:0,behavior:'smooth'});
       }
     }
-    navLinks.forEach(a => a.addEventListener('click', e => { e.preventDefault(); showSection(a.dataset.target); }));
+    navLinks.forEach(a => a.addEventListener('click', () => showSection(a.dataset.target)));
+    footerLinks.forEach(a => a.addEventListener('click', () => showSection(a.dataset.target)));
 
     document.getElementById('btnServices').addEventListener('click', e=>{
       e.preventDefault();
@@ -576,7 +687,6 @@
       const isDark = document.body.classList.contains('dark-mode');
       toggleTheme.textContent = isDark ? '☀️' : '🌙';
       toggleTheme.setAttribute('aria-pressed', String(isDark));
-      // persist theme
       localStorage.setItem('atec-theme', isDark ? 'dark' : 'light');
     });
     if(localStorage.getItem('atec-theme') === 'dark'){
@@ -585,13 +695,24 @@
       toggleTheme.setAttribute('aria-pressed','true');
     }
 
-    // Year
     document.getElementById('year').textContent = new Date().getFullYear();
 
-    // copy email quick action
     document.getElementById('copyEmailBtn').addEventListener('click', () => {
       const txt = document.getElementById('mainEmail').textContent.trim();
       navigator.clipboard.writeText(txt).then(()=> alert('Email copiado!'), ()=> alert('Erro ao copiar'));
+    });
+
+    // ---------- Contact form -> pre-filled mailto ----------
+    const contactForm = document.getElementById('contactForm');
+    contactForm.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const nome = document.getElementById('cf-name').value.trim();
+      const email = document.getElementById('cf-email').value.trim();
+      const servico = document.getElementById('cf-service').value;
+      const mensagem = document.getElementById('cf-msg').value.trim();
+      const subject = encodeURIComponent(`Orçamento - ${servico} - ${nome}`);
+      const body = encodeURIComponent(`Nome: ${nome}\nE-mail: ${email}\nServiço de interesse: ${servico}\n\nMensagem:\n${mensagem}`);
+      window.location.href = `mailto:comercial@atecseven.com.br?subject=${subject}&body=${body}`;
     });
 
     // ---------- Assistant behavior ----------
@@ -603,61 +724,31 @@
       const isOpen = assistant.style.display === 'flex';
       assistant.style.display = isOpen ? 'none' : 'flex';
       if(!isOpen){
-        // scroll to bottom if opened
         setTimeout(()=> assistantBody.scrollTop = assistantBody.scrollHeight, 220);
       }
     });
 
-    // helper to add message
-    function addBotMessage(html, typing=false){
+    function addBotMessage(html){
       const msg = document.createElement('div');
       msg.className = 'assistant-message bot';
+      msg.innerHTML = html;
       assistantBody.appendChild(msg);
       assistantBody.scrollTop = assistantBody.scrollHeight;
-      if(typing){
-        // show typing indicator then type
-        msg.innerHTML = `<div class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>`;
-        assistantBody.scrollTop = assistantBody.scrollHeight;
-        return {
-          typeOut: (text, delay=25) => {
-            setTimeout(()=>{
-              msg.innerHTML = ''; let i=0;
-              const interval = setInterval(()=> {
-                msg.innerHTML += text[i] === '<' ? '' : text[i]; // naive, we'll just append directly
-                i++;
-                assistantBody.scrollTop = assistantBody.scrollHeight;
-                if(i>=text.length){
-                  clearInterval(interval);
-                }
-              }, delay);
-            }, 800);
-          },
-          replace: (text)=>{ setTimeout(()=> { msg.innerHTML = text; assistantBody.scrollTop = assistantBody.scrollHeight; }, 800); }
-        }
-      } else {
-        msg.innerHTML = html;
-        assistantBody.scrollTop = assistantBody.scrollHeight;
-        return null;
-      }
     }
 
-    // more precise typed message (handles html by inserting text nodes)
     function typedBotMessage(text, typingDelay=18){
       const msg = document.createElement('div');
       msg.className = 'assistant-message bot';
       assistantBody.appendChild(msg);
       assistantBody.scrollTop = assistantBody.scrollHeight;
 
-      // typing indicator first
       const typingEl = document.createElement('div');
       typingEl.className = 'typing';
       typingEl.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
       msg.appendChild(typingEl);
 
-      // after small pause, replace with text typed char-by-char
       setTimeout(()=>{
         msg.removeChild(typingEl);
-        // create text nodes safe
         let i = 0;
         const out = document.createElement('span');
         msg.appendChild(out);
@@ -673,21 +764,17 @@
       return msg;
     }
 
-    // actions: financeiro, orcamento, suporte
     const pixKey = 'comercial@atecseven.com.br';
     const phone = '5564992952748';
-    const phoneDisplay = '+55 (64) 9 9295-2748';
 
-    // Financeiro
-    document.getElementById('btnFinanceiro').addEventListener('click', async ()=>{
+    document.getElementById('btnFinanceiro').addEventListener('click', ()=>{
       if(assistant.style.display !== 'flex') assistant.style.display = 'flex';
       typedBotMessage('Aguarde enquanto eu envio a chave PIX para você regularizar... 💳');
       setTimeout(()=> {
         const html = `<div style="margin-top:8px"><strong>Chave PIX:</strong> <span id="pixValue" style="font-weight:700">${pixKey}</span>
           <button id="copyPix" style="margin-left:10px;padding:6px 8px;border-radius:8px;border:none;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;cursor:pointer"><i class="fas fa-copy"></i></button>
           </div>`;
-        addBotMessage(html, false);
-        // attach copy handler
+        addBotMessage(html);
         setTimeout(()=> {
           const btn = document.getElementById('copyPix');
           if(btn){
@@ -699,65 +786,34 @@
       }, 1400);
     });
 
-    // Orçamento
     document.getElementById('btnOrcamento').addEventListener('click', ()=>{
       if(assistant.style.display !== 'flex') assistant.style.display = 'flex';
       typedBotMessage('Aguarde enquanto te envio o WhatsApp para orçamento... 📞');
       setTimeout(()=> {
         const wa = `https://wa.me/${phone}?text=${encodeURIComponent('Olá AtecSeven, gostaria de um orçamento.')}`;
         const html = `<div style="margin-top:8px"><a href="${wa}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 12px;border-radius:10px;background:linear-gradient(90deg,var(--primary),var(--secondary));color:#fff;font-weight:700;text-decoration:none">Abrir WhatsApp para Orçamento</a></div>`;
-        addBotMessage(html,false);
+        addBotMessage(html);
       }, 1200);
     });
 
-    // Suporte
-     document.getElementById('btnSuporte').addEventListener('click', () => {
-  // Garante que o container do assistente esteja visível
-  if(assistant.style.display !== 'flex') assistant.style.display = 'flex';
-  
-  typedBotMessage('Conectando você ao portal de chamados... ⚙️');
-  
-  setTimeout(() => {
-    // URL do seu portal (adicione o https:// para garantir que não abra como subdiretório)
-    const portalUrl = 'https://www.atecseven.com.br/portaldechamados';
-    
-    const html = `
-      <div style="margin-top:8px">
-        <p style="font-size:13px; margin-bottom:8px; color:var(--text-muted);">
-          Clique no botão abaixo para abrir um ticket ou acompanhar seus chamados:
-        </p>
-        <a href="${portalUrl}" 
-           target="_blank" 
-           rel="noopener noreferrer" 
-           style="display:inline-block; padding:12px 20px; border-radius:12px; background:linear-gradient(90deg, #2563eb, #1d4ed8); color:#fff; font-weight:700; text-decoration:none; text-align:center; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); transition: transform 0.2s;">
-           🚀 Abrir Portal de Chamados
-        </a>
-      </div>`;
-      
-    addBotMessage(html, false);
-  }, 1000);
-});
+    document.getElementById('btnSuporte').addEventListener('click', () => {
+      if(assistant.style.display !== 'flex') assistant.style.display = 'flex';
+      typedBotMessage('Conectando você ao portal de chamados... ⚙️');
+      setTimeout(() => {
+        const portalUrl = 'https://www.atecseven.com.br/portaldechamados';
+        const html = `
+          <div style="margin-top:8px">
+            <p style="font-size:13px; margin-bottom:8px; color:var(--muted);">Clique no botão abaixo para abrir um ticket ou acompanhar seus chamados:</p>
+            <a href="${portalUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block; padding:12px 20px; border-radius:12px; background:linear-gradient(90deg, #2563eb, #1d4ed8); color:#fff; font-weight:700; text-decoration:none; text-align:center; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);">🚀 Abrir Portal de Chamados</a>
+          </div>`;
+        addBotMessage(html);
+      }, 1000);
+    });
 
-    // accessibility: close assistant on Escape
     document.addEventListener('keydown', (e)=>{
       if(e.key === 'Escape') assistant.style.display = 'none';
     });
 
-    // ensure first welcome message scrolls into view
-    setTimeout(()=> {
-      const wm = document.getElementById('welcomeMessage');
-      if(wm) assistantBody.scrollTop = assistantBody.scrollHeight;
-    }, 300);
-
-    // small safety: close assistant when clicking outside (mobile friendly)
-    document.addEventListener('click',(e)=>{
-      const target = e.target;
-      if(!assistant.contains(target) && !assistantToggle.contains(target)){
-        // we keep assistant open unless explicitly closed by toggle
-      }
-    });
-
-    // initial state: keep assistant closed
     assistant.style.display = 'none';
 
     // ---------- Back to top ----------
@@ -767,8 +823,8 @@
     });
     backToTop.addEventListener('click', ()=> window.scrollTo({top:0,behavior:'smooth'}));
 
-    // ---------- Scroll reveal for cards ----------
-    const revealTargets = document.querySelectorAll('.service, .info');
+    // ---------- Scroll reveal ----------
+    const revealTargets = document.querySelectorAll('.service, .info, .diferencial, .step, .faq-item');
     if('IntersectionObserver' in window && revealTargets.length){
       const io = new IntersectionObserver((entries)=>{
         entries.forEach(entry => {
@@ -777,31 +833,23 @@
             io.unobserve(entry.target);
           }
         });
-      }, { threshold: 0.15 });
+      }, { threshold: 0.12 });
       revealTargets.forEach(el => io.observe(el));
     } else {
       revealTargets.forEach(el => el.classList.add('in-view'));
     }
 
-
-    /* =======================
-       Particle system (canvas)
-       lightweight, subtle, full-page
-       ======================= */
+    /* ======= Particle system (canvas) ======= */
     (function(){
       const canvas = document.getElementById('bgParticles');
       if(!canvas) return;
       const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if(reduceMotion) return; // don't animate for users who asked for less motion
+      if(reduceMotion) return;
       const ctx = canvas.getContext('2d');
       let w = 0, h = 0, dpr = Math.max(1, window.devicePixelRatio || 1);
       let particles = [];
-      const PARTICLE_COUNT_BASE = 40; // baseline density
-      const colors = [
-        'rgba(0,212,255,0.12)',  // secondary (ciano) faint
-        'rgba(0,123,255,0.10)',  // primary faint
-        'rgba(255,255,255,0.04)' // soft white
-      ];
+      const PARTICLE_COUNT_BASE = 40;
+      const colors = ['rgba(0,194,224,0.12)','rgba(0,87,199,0.10)','rgba(255,255,255,0.04)'];
 
       function resize(){
         dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -819,23 +867,19 @@
 
       function initParticles() {
         particles = [];
-        // density scales with viewport area but capped
         const areaFactor = (w*h) / (1280*720);
         const targetCount = Math.min(180, Math.floor(PARTICLE_COUNT_BASE * areaFactor));
-        for(let i=0;i<targetCount;i++){
-          particles.push(createParticle());
-        }
+        for(let i=0;i<targetCount;i++){ particles.push(createParticle()); }
       }
 
       function createParticle(){
-        // distribute a bit more near center-top so it looks nicer near header too
         const x = rand(0, w);
         const y = rand(0, h);
         const size = rand(0.6, 3.2);
-        const speed = rand(0.1, 0.6); // very slow
+        const speed = rand(0.1, 0.6);
         const angle = rand(-Math.PI, Math.PI);
         const vx = Math.cos(angle) * speed * rand(0.2,1.2);
-        const vy = Math.sin(angle) * speed * rand(0.2,1.2) - 0.02; // slight upward drift
+        const vy = Math.sin(angle) * speed * rand(0.2,1.2) - 0.02;
         const color = colors[Math.floor(Math.random()*colors.length)];
         const life = rand(8, 40);
         return { x, y, vx, vy, size, color, life, age: rand(0, life) };
@@ -846,61 +890,40 @@
           p.x += p.vx;
           p.y += p.vy;
           p.age += 0.02;
-          // gentle wandering
           p.vx += Math.sin((p.age + p.x) * 0.002) * 0.0008;
           p.vy += Math.cos((p.age + p.y) * 0.002) * 0.0008;
-          // respawn if out of bounds or old
           if(p.x < -40 || p.x > w+40 || p.y < -40 || p.y > h+40 || p.age > p.life){
             Object.assign(p, createParticle());
             p.x = rand(0, w);
-            p.y = h + rand(0, 80); // respawn near bottom for upward drift
+            p.y = h + rand(0, 80);
           }
         }
       }
 
       function draw(){
         ctx.clearRect(0,0,w,h);
-        // subtle darkening / gradient overlay to give depth (low alpha)
-        // we won't draw heavy layers - keep minimal
         for(let p of particles){
-          ctx.beginPath();
           const alpha = Math.max(0.02, 1 - (p.age / p.life));
-          ctx.fillStyle = p.color.replace(/[\d\.]+\)$/,' ' + alpha + ')').replace(',)',')'); // keep color but adjust alpha
-          // fallback: if replace didn't work, use rgba manually
-          // draw soft circle with radial gradient
           const rad = p.size;
           const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rad*6);
           g.addColorStop(0, `rgba(255,255,255,${0.22 * alpha})`);
           g.addColorStop(0.2, p.color.replace(/[\d\.]+\)$/,' ' + (0.18 * alpha) + ')'));
           g.addColorStop(1, `rgba(255,255,255,0)`);
           ctx.fillStyle = g;
+          ctx.beginPath();
           ctx.arc(p.x, p.y, rad*6, 0, Math.PI*2);
           ctx.fill();
         }
       }
 
-      // animation loop
       let raf = null;
-      function loop(){
-        update();
-        draw();
-        raf = requestAnimationFrame(loop);
-      }
+      function loop(){ update(); draw(); raf = requestAnimationFrame(loop); }
 
-      // init
       resize();
       loop();
-      window.addEventListener('resize', ()=> {
-        cancelAnimationFrame(raf);
-        resize();
-        loop();
-      });
+      window.addEventListener('resize', ()=> { cancelAnimationFrame(raf); resize(); loop(); });
       document.addEventListener('visibilitychange', ()=>{
-        if(document.hidden){
-          cancelAnimationFrame(raf);
-        } else {
-          loop();
-        }
+        if(document.hidden){ cancelAnimationFrame(raf); } else { loop(); }
       });
     })();
   </script>
