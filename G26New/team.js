@@ -143,8 +143,56 @@ const ICONS = {
 /* ── FOTOS DOS REGISTROS (IMGGB) ── */
 var IMGGB_KEY = '95bb16ee776d7e20f26857cec98bd372';
 var FOTOS_SEP = ';;';
-var _fotos = {};        // _fotos[eqId] = [ [File,...], [File,...], ... ] (uma lista por linha de atividade)
+var _fotos = {};        // _fotos[eqId] = [ [dataUrl,...], [dataUrl,...], ... ] (uma lista por linha de atividade)
 var _fotosEnviando = false;
+
+/* FOTOS persistem no aparelho: não somem ao atualizar a página
+   e NÃO podem ser desanexadas/removidas depois de anexadas. */
+function fotosLocalKey(){ return 'g26_equipe_fotos_'+teamKey(); }
+function loadFotosPersist(){
+  try{ return JSON.parse(localStorage.getItem(fotosLocalKey())||'null'); }catch(e){ return null; }
+}
+function saveFotosPersist(obj){
+  try{ localStorage.setItem(fotosLocalKey(), JSON.stringify(obj)); }
+  catch(e){ /* quota excedida: ignora, mantém em memória */ }
+}
+function asyncFileToDataUrl(file){
+  return new Promise(resolve=>{
+    if(!file){ resolve(null); return; }
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        try{
+          const MAX = 1280;
+          let w = img.width, h = img.height;
+          const c = document.createElement('canvas');
+          if(w > MAX || h > MAX){
+            const r = Math.min(1, MAX / w, MAX / h);
+            w = Math.round(w * r); h = Math.round(h * r);
+          }
+          c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(c.toDataURL('image/jpeg', 0.82));
+        }catch(err){ resolve(null); }
+      };
+      img.onerror = ()=>resolve(null);
+      img.src = reader.result;
+    };
+    reader.onerror = ()=>resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+function dataUrlToBlob(dataUrl){
+  try{
+    const [meta, b64] = String(dataUrl).split(',');
+    const mime = (meta && meta.match(/data:(.*?);/)||[])[1] || 'image/jpeg';
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }catch(e){ return new Blob([], {type:'image/jpeg'}); }
+}
 function icon(name,size=18){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||''}</svg>`; }
 
 /* --- estado --- */
@@ -579,8 +627,9 @@ function render(){
     root.querySelectorAll('.te-photo-hint').forEach(h=>{
       const [eid,idx] = h.dataset.ph.split('|');
       const n = fotosCount(eid, Number(idx));
-      h.textContent = n? `${n} foto${n>1?'s':''} adicionada${n>1?'s':''}` : 'Obrigatório: adicione ao menos 1 foto';
+      h.textContent = n? `${n}/10 foto${n>1?'s':''}` : 'Obrigatório: adicione ao menos 1 foto';
       h.className = 'te-photo-hint ' + (n? 'ok':'missing');
+      atualizarFotosUI(eid, Number(idx));
     });
     document.getElementById('team-submit').addEventListener('click', submitEditOcNds);
     return;
@@ -672,8 +721,9 @@ function render(){
   root.querySelectorAll('.te-photo-hint').forEach(h=>{
     const [eid,idx] = h.dataset.ph.split('|');
     const n = fotosCount(eid, Number(idx));
-    h.textContent = n? `${n} foto${n>1?'s':''} adicionada${n>1?'s':''}` : 'Obrigatório: adicione ao menos 1 foto';
+    h.textContent = n? `${n}/10 foto${n>1?'s':''}` : 'Obrigatório: adicione ao menos 1 foto';
     h.className = 'te-photo-hint ' + (n? 'ok':'missing');
+    atualizarFotosUI(eid, Number(idx));
   });
   document.getElementById('team-submit').addEventListener('click', submitEdit);
   const btnAcidente = document.getElementById('btn-informar-acidente');
@@ -891,57 +941,66 @@ function openPhotoPicker(eqId, idx, modo){
   const inp = document.createElement('input');
   inp.type = 'file';
   inp.accept = 'image/*';
-  if(modo==='camera') inp.setAttribute('capture','environment');
+  if(modo==='camera'){
+    inp.setAttribute('capture','environment');
+  }else{
+    inp.multiple = true;
+  }
   inp.style.display = 'none';
-  inp.onchange = ()=>{
-    if(inp.files && inp.files[0]) addFoto(eqId, idx, inp.files[0]);
+  inp.onchange = async ()=>{
+    if(!inp.files || !inp.files.length){ inp.remove(); return; }
+    const max = 10 - fotosCount(eqId, Number(idx));
+    const files = Array.from(inp.files).slice(0, max);
+    for(const f of files){ await addFoto(eqId, Number(idx), f); }
     inp.remove();
   };
   document.body.appendChild(inp);
   inp.click();
 }
-function addFoto(eqId, idx, file){
+async function addFoto(eqId, idx, file){
+  const dataUrl = await asyncFileToDataUrl(file);
+  if(!dataUrl) return;
   if(!_fotos[eqId]) _fotos[eqId] = [];
   if(!_fotos[eqId][idx]) _fotos[eqId][idx] = [];
-  _fotos[eqId][idx].push(file);
+  _fotos[eqId][idx].push(dataUrl);
   atualizarFotosUI(eqId, idx);
+  persistFotos();
 }
 function removerFoto(eqId, idx, fIdx){
-  const arr = (_fotos[eqId]||[])[idx];
-  if(!arr) return;
-  arr.splice(fIdx,1);
-  atualizarFotosUI(eqId, idx);
+  /* Fotos anexadas são permanentes — não podem ser desanexadas. */
+  return;
 }
-function fotoUrl(file){ return URL.createObjectURL(file); }
+function persistFotos(){
+  saveFotosPersist(_fotos);
+}
+function fotoUrl(file){ return file; }
 function atualizarFotosUI(eqId, idx){
   const thumbs = document.querySelector('.te-thumbs[data-tef="'+eqId+'|'+idx+'"]');
   if(!thumbs) return;
   const arr = (_fotos[eqId]||[])[idx]||[];
   thumbs.innerHTML = arr.map((f,i)=>`
     <div class="te-thumb">
-      <img src="${fotoUrl(f)}" alt="foto">
-      <button type="button" class="icon-btn te-del-foto" data-te-df="${eqId}|${idx}|${i}" title="Remover foto">${icon('close',13)}</button>
+      <img src="${f}" alt="foto ${i+1}">
     </div>`).join('');
-  thumbs.querySelectorAll('.te-del-foto').forEach(b=>{
-    b.addEventListener('click', ()=>{
-      const p = b.dataset.teDf.split('|');
-      removerFoto(p[0], Number(p[1]), Number(p[2]));
-    });
-  });
 }
 function resetFotos(){
+  const persisted = loadFotosPersist() || {};
   _fotos = {};
   Object.keys(editors).forEach(eqId=>{
-    const existing = _fotos[eqId] || [];
-    _fotos[eqId] = editors[eqId].map((_a, i)=> existing[i] || []);
+    const saved = persisted[eqId] || [];
+    _fotos[eqId] = editors[eqId].map((_a, i)=> (saved[i]||[]).slice());
   });
 }
 function fotosCount(eqId, idx){
   return ((_fotos[eqId]||[])[idx]||[]).length;
 }
-async function uploadToImGbb(file){
+async function uploadToImGbb(f){
   const fd = new FormData();
-  fd.append('image', file);
+  if(typeof f === 'string' && f.indexOf('data:') === 0){
+    fd.append('image', dataUrlToBlob(f), 'foto.jpg');
+  }else{
+    fd.append('image', f);
+  }
   const res = await fetch('https://api.imgbb.com/1/upload?key='+IMGGB_KEY, { method:'POST', body: fd });
   const j = await res.json();
   if(!j.success) throw new Error((j.error&&j.error.message)||'Falha no upload');
@@ -1055,6 +1114,7 @@ async function syncNowOcNds(){
       DB = db; saveCache(db); dbToEditors(DB);
     }
     saveQueue([]);
+    try{ localStorage.removeItem(fotosLocalKey()); }catch(e){}
     setStatus('Alterações enviadas ✓', 'ok');
     toast('Alterações enviadas ao escritório.');
   }catch(err){
