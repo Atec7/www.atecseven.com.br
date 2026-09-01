@@ -1037,7 +1037,7 @@ function openImportArquivoModal({title, templateName, headers, exampleRow, texto
         }
         const r = processar(linhas);
         root.innerHTML='';
-        if(r.criados>0 || consumoRegistrado){ saveData(); renderContent(); }
+        if((r.criados||0)>0 || (r.criadas||0)>0 || consumoRegistrado){ saveData(); renderContent(); }
         if(linhas.length===0){
           const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''}).slice(0,12);
           root.innerHTML = `
@@ -2744,6 +2744,7 @@ function atribDetalheHtml(programacao, atrib, comAcoes=true){
         <div class="dtl-tile"><div class="dtl-tile-lbl">Data programada</div><div class="dtl-tile-val mono">${fmtDate(atrib.dataProgramada)}</div>${late? `<div class="late-flag" style="font-size:11px;margin-top:4px;">VENCIDA</div>`:''}</div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Encarregado</div><div class="dtl-tile-val">${esc(eq?.encarregado||'—')}</div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Status</div><div class="dtl-tile-val">${statusBadge(atrib.status, late)}</div></div>
+        <div class="dtl-tile"><div class="dtl-tile-lbl">Zona</div><div class="dtl-tile-val">${zonaBadge(programacao.zona)}</div></div>
         <div class="dtl-tile" style="grid-column:1/-1;"><div class="dtl-tile-lbl">Local de execução</div><div class="dtl-tile-val">${programacao.local? esc(programacao.local) : '—'}</div>${(programacao.local||programacao.localLat!=null)? `<div style="margin-top:4px;font-size:11.5px;"><a href="${esc(localMapsHref(programacao.local,programacao.localLat,programacao.localLng))}" target="_blank" rel="noopener" style="color:var(--blue);font-weight:600;">${icon('pin',11)} Abrir no Google Maps</a></div>`:''}</div>
       </div>
 
@@ -2960,6 +2961,7 @@ function openAtribDetalhe(atribId){
       <div class="field"><label>Data início <span class="req">*</span></label><input type="date" name="dataInicio" required value="${pg?.dataProgramada||''}"></div>
       <div class="field"><label>Data fim (opcional)</label><input type="date" name="dataFim" value="${pg?.dataProgramada||''}"><div class="field-hint">💡 Se preenchido, cria uma programação para cada dia no intervalo. Deixe vazio ou igual à data início para criar apenas 1 programação.</div></div>
     </div>
+    ${zonaRadioHtml(pg?.zona)}
     <div class="field-row">
       <div class="field" style="flex:1;"><label>Ciclo recebido carteira <span class="req">*</span></label><input type="text" name="ciclo" class="ciclo-input" id="pg-ciclo" required maxlength="13" value="${esc(pg?.ciclo||'')}" placeholder="CICLO-XX/XXXX"><div class="field-hint">💡 Preenchido automaticamente do projeto; pode ser ajustado.</div></div>
     </div>
@@ -3215,6 +3217,8 @@ function openAtribDetalhe(atribId){
       const dataInicio = fd.get('dataInicio'); const dataFim = fd.get('dataFim') || dataInicio;
       if(!dataInicio){ toast('Informe a data de início.', 'error'); return false; }
       if(dataFim && dataFim < dataInicio){ toast('A data fim não pode ser anterior à data início.', 'error'); return false; }
+      const zona = fd.get('zona');
+      if(!zona){ toast('Selecione a zona (RURAL ou URBANA).', 'error'); return false; }
       const datas = gerarDatasIntervalo(dataInicio, dataFim || dataInicio);
       if(datas.length > 31){ toast('O intervalo não pode ultrapassar 31 dias.', 'error'); return false; }
       const projetoId = Number(selProjeto.id); const observacoes = fd.get('observacoes').trim();      const orientacoesPlanejamento = String(fd.get('orientacoesPlanejamento')||'').trim();
@@ -3229,7 +3233,7 @@ function openAtribDetalhe(atribId){
       const locLng = local? localLng : null;
       if(pg){
         const dataBaseAntiga = pg.dataProgramada;
-        pg.projetoId = projetoId; pg.dataProgramada = dataInicio; pg.ciclo = ciclo; pg.observacoes = observacoes; pg.orientacoesPlanejamento = orientacoesPlanejamento; pg.custom = custom; pg.anexos = anexos; pg.local = local; pg.localLat = locLat; pg.localLng = locLng; pg.numeroSI = numeroSI; pg.statusSI = statusSI;
+        pg.projetoId = projetoId; pg.dataProgramada = dataInicio; pg.ciclo = ciclo; pg.observacoes = observacoes; pg.orientacoesPlanejamento = orientacoesPlanejamento; pg.custom = custom; pg.anexos = anexos; pg.local = local; pg.localLat = locLat; pg.localLng = locLng; pg.numeroSI = numeroSI; pg.statusSI = statusSI; pg.zona = zona;
         const oldAtribs = pg.atribuicoes;
         pg.atribuicoes = atribs.map(a=>{
           const existing = oldAtribs.find(old => String(old.equipeId)===String(a.equipeId));
@@ -3243,7 +3247,7 @@ function openAtribDetalhe(atribId){
         const grupoId = 'GRP-'+Date.now()+'-'+Math.random().toString(36).slice(2,7);
         let count = 0;
         for(const dt of datas){
-          const novaProg = { id: nextId(), gid: novoGid(), grupoId, projetoId, dataProgramada: dt, ciclo, numeroSI, statusSI, observacoes, orientacoesPlanejamento, custom, anexos: anexos.map(a=>({...a})), local, localLat: locLat, localLng: locLng,
+          const novaProg = { id: nextId(), gid: novoGid(), grupoId, projetoId, dataProgramada: dt, ciclo, numeroSI, statusSI, observacoes, orientacoesPlanejamento, custom, anexos: anexos.map(a=>({...a})), local, localLat: locLat, localLng: locLng, zona,
             atribuicoes: atribs.map(a=> ({ id: nextId(), equipeId:Number(a.equipeId), dataProgramada: dt, status:'Programado',
               atividades: a.atividades.map(x=>({atividadeId:Number(x.atividadeId), quantidadePrevista:x.quantidadePrevista?parseFloat(x.quantidadePrevista):null, quantidadeExecutada:null})),
               historico:[{...currentAutor(), ts:Date.now(),tipo:'criacao',de:null,para:'Programado',motivo:'Programação criada'}] })) };
@@ -3711,7 +3715,8 @@ function buildDocProgramacao(prog){
       <tr><th>Programação</th><td><strong>${progGid(prog)}</strong></td><th>Emissão</th><td>${fmtDateTime(Date.now())}</td></tr>
       <tr><th>Projeto</th><td colspan="3"><strong>${esc(pr?.nome||'—')}</strong> (${esc(pr?.codigo||'')})</td></tr>
       <tr><th>Setor</th><td>${esc(pr?.setor||'—')}</td><th>Coordenação</th><td>${esc(pr?.coordenacao||'—')}</td></tr>
-      <tr><th>Ciclo</th><td>${esc(prog.ciclo||'—')}</td><th>Valor orçado</th><td>${fmtMoney(pr?.valorOrcado||0)}</td></tr>
+      <tr><th>Ciclo</th><td>${esc(prog.ciclo||'—')}</td><th>Zona</th><td>${esc(prog.zona||'—')}</td></tr>
+      <tr><th>Valor orçado</th><td>${fmtMoney(pr?.valorOrcado||0)}</td>
       <tr><th>Período do projeto</th><td colspan="3">${fmtDate(pr?.dataInicio)} → ${fmtDate(pr?.dataFim)}</td></tr>
       ${prog.observacoes? `<tr><th>Observações gerais</th><td colspan="3">${esc(prog.observacoes)}</td></tr>`:''}
       ${String(prog.orientacoesPlanejamento||'').trim()? `<tr><th>Orientações do Setor de Planejamento</th><td colspan="3">${esc(prog.orientacoesPlanejamento)}</td></tr>`:''}
@@ -4596,6 +4601,7 @@ function oseDetalheHtml(programacao, atrib, comAcoes=true){
         <div class="dtl-tile"><div class="dtl-tile-lbl">Data programada</div><div class="dtl-tile-val mono">${fmtDate(atrib.dataProgramada)}</div>${late? `<div class="late-flag" style="font-size:11px;margin-top:4px;">VENCIDA</div>`:''}</div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Encarregado</div><div class="dtl-tile-val">${esc(eq?.encarregado||'—')}</div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Status</div><div class="dtl-tile-val">${statusBadge(atrib.status, late)}</div></div>
+        <div class="dtl-tile"><div class="dtl-tile-lbl">Zona</div><div class="dtl-tile-val">${zonaBadge(programacao.zona)}</div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Status Doc.</div><div class="dtl-tile-val"><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${esc(programacao.statusDocumentacao||'—')}</span></div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Tipo Intervenção</div><div class="dtl-tile-val"><span class="badge" style="color:${programacao.tipoIntervencao==='Aéreo'?'var(--blue)':programacao.tipoIntervencao==='Subterrâneo'?'var(--accent)':'var(--red)'};background:${programacao.tipoIntervencao==='Aéreo'?'rgba(78,140,235,.14)':programacao.tipoIntervencao==='Subterrâneo'?'rgba(224,164,88,.14)':'rgba(180,140,224,.14)'};">${esc(programacao.tipoIntervencao||'—')}</span></div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Município</div><div class="dtl-tile-val">${esc(programacao.municipio||'—')}</div></div>
@@ -4806,7 +4812,7 @@ function buildOseDocProgramacao(prog){
     <table class="ps-info">
       <tr><th>Programação</th><td><strong>${oseProgLabel(prog)}</strong></td><th>Emissão</th><td>${fmtDateTime(Date.now())}</td></tr>
       <tr><th>Município</th><td>${esc(prog.municipio||'—')}</td><th>Subestação</th><td>${esc(prog.subestacao||'—')}</td></tr>
-      <tr><th>Tipo Intervenção</th><td>${esc(prog.tipoIntervencao||'—')}</td><th>Status Doc.</th><td>${esc(prog.statusDocumentacao||'—')}</td></tr>
+      <tr><th>Tipo Intervenção</th><td>${esc(prog.tipoIntervencao||'—')}</td><th>Zona</th><td>${esc(prog.zona||'—')}</td></tr>
       ${prog.observacoes? `<tr><th>Observações</th><td colspan="3">${esc(prog.observacoes)}</td></tr>`:''}
       ${String(prog.orientacoesPlanejamento||'').trim()? `<tr><th>Orientações do Setor de Planejamento</th><td colspan="3">${esc(prog.orientacoesPlanejamento)}</td></tr>`:''}
       ${prog.local? `<tr><th>Local de execução</th><td colspan="3"><strong>${esc(prog.local)}</strong>${(prog.localLat!=null&&prog.localLng!=null)? ` — <a href="${esc(mapsLinkByCoords(prog.localLat,prog.localLng))}">${esc(mapsLinkByCoords(prog.localLat,prog.localLng))}</a>`:(prog.local? ` — <a href="${esc(mapsLinkByAddress(prog.local))}">${esc(mapsLinkByAddress(prog.local))}</a>`:'')}</td></tr>`:''}
@@ -4992,6 +4998,7 @@ function openOseProgramacaoModal(id){
       <div class="field"><label>Data início <span class="req">*</span></label><input type="date" name="dataProgramacao" required value="${pg?.dataProgramacao||todayISO()}"></div>
       <div class="field"><label>Data fim (opcional)</label><input type="date" name="dataFim" value="${pg?.dataProgramacao||''}"><div class="field-hint">Se preenchido, cria uma programação para cada dia no intervalo. Deixe vazio para criar apenas 1.</div></div>
     </div>
+    ${zonaRadioHtml(pg?.zona)}
     <div class="field"><label>Observações</label><textarea name="observacoes" rows="2" placeholder="Observações da programação OSE">${esc(pg?.observacoes||'')}</textarea></div>
     <div class="field"><label>Local / endereço de execução</label>
       <input type="text" name="local" id="ose-local" required value="${esc(pg?.local||'')}" placeholder="Digite o endereço...">
@@ -5168,6 +5175,8 @@ function openOseProgramacaoModal(id){
       if(!municipio){ toast('Informe o município.', 'error'); return false; }
       const dataProgramacao = fd.get('dataProgramacao');
       if(!dataProgramacao){ toast('Informe a data de programação.', 'error'); return false; }
+      const zona = fd.get('zona');
+      if(!zona){ toast('Selecione a zona (RURAL ou URBANA).', 'error'); return false; }
       if(!atribs.length || atribs.some(a=>!a.equipeId)){ toast('Selecione a equipe em todos os blocos.', 'error'); return false; }
       for(const a of atribs){ if(!a.atividades.length || a.atividades.some(x=>!x.atividadeId)){ toast('Selecione a atividade em todas as linhas.', 'error'); return false; } }
       const observacoes = String(fd.get('observacoes')||'').trim();
@@ -5183,6 +5192,7 @@ function openOseProgramacaoModal(id){
         dataProgramacao, statusDocumentacao: fd.get('statusDocumentacao'),
         observacoes, orientacoesPlanejamento, custom,
         local, localLat: local? localLat : null, localLng: local? localLng : null, anexos: anexos.map(a=>({...a})),
+        zona,
         atividades: atribs.map(a=>({
           equipeId: Number(a.equipeId),
           atividades: a.atividades.map(x=>({atividadeId:Number(x.atividadeId), quantidadePrevista: x.quantidadePrevista?parseFloat(x.quantidadePrevista):null, qtdAnomalia: x.qtdAnomalia? parseFloat(x.qtdAnomalia): null, quantidadeExecutada:null}))
@@ -5415,6 +5425,20 @@ function baixarFotosRdo(atividades){
       .finally(()=>{ if(--pendentes===0){ toast(falhas? `${pendentes===0&&falhas?falhas:falhas} foto(s) com falha. Verifique a conexão.` : 'Download das fotos concluído.'); } });
   });
 }
+function zonaRadioHtml(val){
+  return `
+  <div class="field"><label>Zona <span class="req">*</span></label>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13.5px;"><input type="radio" name="zona" value="RURAL" ${val==='RURAL'?'checked':''}> ZONA RURAL</label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13.5px;"><input type="radio" name="zona" value="URBANA" ${val==='URBANA'?'checked':''}> ZONA URBANA</label>
+    </div>
+  </div>`;
+}
+function zonaBadge(zona){
+  if(!zona) return '';
+  const rural = zona==='RURAL';
+  return `<span class="badge-prefix" style="background:${rural?'rgba(76,175,109,.14)':'rgba(91,141,239,.14)'};color:${rural?'var(--green)':'var(--blue)'};">${esc(zona)}</span>`;
+}
 
 function openOseRDOModal(progId, attribId){
   const x = flatOseAtribuicoes().find(y=> y.programacao.id===progId && y.atribuicao.id===attribId);
@@ -5431,7 +5455,7 @@ function openOseRDOModal(progId, attribId){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
       <div>
         <h4 style="margin-bottom:8px;">Programação ${oseProgLabel(x.programacao)}</h4>
-        <p class="admin-field-meta" style="margin:2px 0;">Município: ${esc(x.programacao.municipio||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Município: ${esc(x.programacao.municipio||'—')} ${zonaBadge(x.programacao.zona)}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Subestação: ${esc(x.programacao.subestacao||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Tipo Intervenção: ${esc(x.programacao.tipoIntervencao||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Data: ${fmtDate(x.atribuicao.dataProgramada)}</p>
@@ -6014,6 +6038,7 @@ function podaDetalheHtml(programacao, atrib, comAcoes=true){
         <div class="dtl-tile"><div class="dtl-tile-lbl">Data programada</div><div class="dtl-tile-val mono">${fmtDate(atrib.dataProgramada)}</div>${late? `<div class="late-flag" style="font-size:11px;margin-top:4px;">VENCIDA</div>`:''}</div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Encarregado</div><div class="dtl-tile-val">${esc(eq?.encarregado||'—')}</div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Status</div><div class="dtl-tile-val">${statusBadge(atrib.status, late)}</div></div>
+        <div class="dtl-tile"><div class="dtl-tile-lbl">Zona</div><div class="dtl-tile-val">${zonaBadge(programacao.zona)}</div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Status Doc.</div><div class="dtl-tile-val"><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${esc(programacao.statusDocumentacao||'—')}</span></div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Tipo Rede</div><div class="dtl-tile-val"><span class="badge" style="color:${programacao.tipoRede==='MT'?'var(--blue)':'var(--accent)'};background:${programacao.tipoRede==='MT'?'rgba(78,140,235,.14)':'rgba(224,164,88,.14)'};">${esc(programacao.tipoRede||'—')}</span></div></div>
         <div class="dtl-tile" style="grid-column:1/-1;"><div class="dtl-tile-lbl">Local de execução</div><div class="dtl-tile-val">${programacao.local? esc(programacao.local) : '—'}</div>${(programacao.local||programacao.localLat!=null)? `<div style="margin-top:4px;font-size:11.5px;"><a href="${esc(localMapsHref(programacao.local,programacao.localLat,programacao.localLng))}" target="_blank" rel="noopener" style="color:var(--blue);font-weight:600;">${icon('pin',11)} Abrir no Google Maps</a></div>`:''}</div>
@@ -6223,7 +6248,7 @@ function buildPodaDocProgramacao(prog){
     <table class="ps-info">
       <tr><th>Programação</th><td><strong>${podaProgLabel(prog)}</strong></td><th>Emissão</th><td>${fmtDateTime(Date.now())}</td></tr>
       <tr><th>OSI</th><td>${esc(prog.osi||'—')}</td><th>Subestação</th><td>${esc(prog.subestacao||'—')}</td></tr>
-      <tr><th>Tipo Rede</th><td>${esc(prog.tipoRede||'—')}</td><th>Chave</th><td>${esc(prog.chave||'—')}</td></tr>
+      <tr><th>Tipo Rede</th><td>${esc(prog.tipoRede||'—')}</td><th>Chave</th><td>${esc(prog.chave||'—')} · Zona: ${esc(prog.zona||'—')}</td></tr>
       <tr><th>Qtd. Anomalia</th><td>${esc(String(prog.qtdAnomalia||'—'))}</td><th>OSE</th><td>${esc(String(prog.ose||'—'))}</td></tr>
       ${prog.observacoes? `<tr><th>Observações</th><td colspan="3">${esc(prog.observacoes)}</td></tr>`:''}
       ${String(prog.orientacoesPlanejamento||'').trim()? `<tr><th>Orientações do Setor de Planejamento</th><td colspan="3">${esc(prog.orientacoesPlanejamento)}</td></tr>`:''}
@@ -6345,6 +6370,7 @@ function openPodaProgramacaoModal(id){
       <div class="field"><label>Data fim (opcional)</label><input type="date" name="dataFim" value="${pg?.dataProgramacao||''}"><div class="field-hint">Se preenchido, cria uma programação para cada dia no intervalo. Deixe vazio para criar apenas 1.</div></div>
       <div class="field"><label>Status Documentação</label><select name="statusDocumentacao"><option value="">Selecione…</option>${STATUS_DOC_OPCOES.map(v=>`<option ${pg?.statusDocumentacao===v?'selected':''}>${v}</option>`).join('')}</select></div>
     </div>
+    ${zonaRadioHtml(pg?.zona)}
     <div class="field"><label>Observações</label><textarea name="observacoes" rows="2" placeholder="Observações da programação de poda">${esc(pg?.observacoes||'')}</textarea></div>
     <div class="field"><label>Local / endereço de execução</label>
       <input type="text" name="local" id="poda-local" required value="${esc(pg?.local||'')}" placeholder="Digite o endereço...">
@@ -6520,6 +6546,8 @@ function openPodaProgramacaoModal(id){
       if(!osi){ toast('Informe a OSI (Referência).', 'error'); return false; }
       const dataProgramacao = fd.get('dataProgramacao');
       if(!dataProgramacao){ toast('Informe a data de programação.', 'error'); return false; }
+      const zona = fd.get('zona');
+      if(!zona){ toast('Selecione a zona (RURAL ou URBANA).', 'error'); return false; }
       if(!atribs.length || atribs.some(a=>!a.equipeId)){ toast('Selecione a equipe em todos os blocos.', 'error'); return false; }
       for(const a of atribs){ if(!a.atividades.length || a.atividades.some(x=>!x.atividadeId)){ toast('Selecione a atividade em todas as linhas.', 'error'); return false; } }
       const observacoes = String(fd.get('observacoes')||'').trim();
@@ -6535,6 +6563,7 @@ function openPodaProgramacaoModal(id){
         idSiprog: Number(fd.get('idSiprog'))||0, ose: Number(fd.get('ose'))||0,
         observacoes, orientacoesPlanejamento, custom,
         local, localLat: local? localLat : null, localLng: local? localLng : null, anexos: anexos.map(a=>({...a})),
+        zona,
         atividades: atribs.map(a=>({
           equipeId: Number(a.equipeId),
           atividades: a.atividades.map(x=>({atividadeId:Number(x.atividadeId), quantidadePrevista: x.quantidadePrevista?parseFloat(x.quantidadePrevista):null, quantidadeExecutada:null}))
@@ -6747,7 +6776,7 @@ function openPodaRDOModal(progId, attribId){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
       <div>
         <h4 style="margin-bottom:8px;">Programação ${podaProgLabel(x.programacao)}</h4>
-        <p class="admin-field-meta" style="margin:2px 0;">OSI: ${esc(x.programacao.osi||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">OSI: ${esc(x.programacao.osi||'—')} ${zonaBadge(x.programacao.zona)}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Subestação: ${esc(x.programacao.subestacao||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Tipo Rede: ${esc(x.programacao.tipoRede||'—')} · Chave: ${esc(x.programacao.chave||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Data: ${fmtDate(x.atribuicao.dataProgramada)}</p>
@@ -6883,8 +6912,8 @@ function renderOcNds(){
             ${list.map((x,i)=>{
               const eq = findEquipe(x.equipeId);
               const detalhes = x.tipo==='OC'
-                ? [x.ptp&&'PTP: '+x.ptp, x.si&&'SI: '+x.si, x.ose&&'OSE: '+x.ose].filter(Boolean).join(' · ')||'—'
-                : [x.ocorrencia&&'Ocorrência: '+x.ocorrencia].filter(Boolean).join('')||'—';
+                ? [x.ptp&&'PTP: '+x.ptp, x.si&&'SI: '+x.si, x.ose&&'OSE: '+x.ose, x.zona&&'Zona: '+x.zona].filter(Boolean).join(' · ')||'—'
+                : [x.ocorrencia&&'Ocorrência: '+x.ocorrencia, x.zona&&'Zona: '+x.zona].filter(Boolean).join(' · ')||'—';
               const badge = x.tipo==='OC'
                 ? `<span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">OC</span>`
                 : `<span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);">NDS</span>`;
@@ -6988,6 +7017,8 @@ function openOcNdsModal(id){
     </div>
 
     <div class="field"><label>Data <span class="req">*</span></label><input type="date" name="data" required value="${item?.data||todayISO()}"></div>
+
+    ${zonaRadioHtml(item?.zona)}
 
     <div class="field"><label>Equipe(s) <span class="req">*</span></label>
       <div id="ocnds-equipe-container">
@@ -7100,6 +7131,8 @@ function openOcNdsModal(id){
 
       if(!setor || !coordenacao){ toast('Informe o setor e a coordenação.', 'error'); return false; }
       if(!data){ toast('Informe a data.', 'error'); return false; }
+      const zona = fd.get('zona');
+      if(!zona){ toast('Selecione a zona (RURAL ou URBANA).', 'error'); return false; }
 
       if(tipo==='OC'){
         const ocorr = fd.get('ocorrencia');
@@ -7125,6 +7158,7 @@ function openOcNdsModal(id){
         item.ocorrencia = fd.get('ocorrencia')?.trim()||'';
         item.data = data;
         item.observacoes = observacoes;
+        item.zona = zona;
         item.equipeId = equipeIds[0];
         item.equipeIds = equipeIds;
         item.anexos = (window._ocndsAnexos||[]).slice();
@@ -7145,6 +7179,7 @@ function openOcNdsModal(id){
             ose: fd.get('ose').trim(),
             ocorrencia: fd.get('ocorrencia')?.trim()||'',
             data,
+            zona,
             equipeId: eqId,
             observacoes,
             anexos: (window._ocndsAnexos||[]).slice(),
@@ -7192,6 +7227,7 @@ function openOcNdsDetalhe(id){
     <div class="dtl-grid">
       <div class="dtl-tile"><div class="dtl-tile-lbl">Setor</div><div class="dtl-tile-val">${esc(x.setor||'—')}</div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">Coordenação</div><div class="dtl-tile-val">${esc(x.coordenacao||'—')}</div></div>
+      <div class="dtl-tile"><div class="dtl-tile-lbl">Zona</div><div class="dtl-tile-val">${zonaBadge(x.zona)}</div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">Tipo</div><div class="dtl-tile-val"><span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">OC</span></div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">PTP</div><div class="dtl-tile-val mono">${esc(x.ptp||'—')}</div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">SI</div><div class="dtl-tile-val mono">${esc(x.si||'—')}</div></div>
@@ -7201,6 +7237,7 @@ function openOcNdsDetalhe(id){
     <div class="dtl-grid">
       <div class="dtl-tile"><div class="dtl-tile-lbl">Setor</div><div class="dtl-tile-val">${esc(x.setor||'—')}</div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">Coordenação</div><div class="dtl-tile-val">${esc(x.coordenacao||'—')}</div></div>
+      <div class="dtl-tile"><div class="dtl-tile-lbl">Zona</div><div class="dtl-tile-val">${zonaBadge(x.zona)}</div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">Tipo</div><div class="dtl-tile-val"><span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);">NDS</span></div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">Ocorrência</div><div class="dtl-tile-val mono">${esc(x.ocorrencia||'—')}</div></div>
     </div>`;
@@ -7341,7 +7378,7 @@ function encaminharWhatsOcNds(id){
   const detalhes = x.tipo==='OC'
     ? `PTP: ${x.ptp||'—'} | SI: ${x.si||'—'} | OSE: ${x.ose||'—'}`
     : `Ocorrência: ${x.ocorrencia||'—'}`;
-  const texto = `🔔 *OC/NDS ${x.tipo} — ${x.gid||'G26-'+String(x.id).padStart(7,'0')}*\n\nSetor: ${x.setor||'—'}\nCoordenação: ${x.coordenacao||'—'}\nStatus: ${x.status}\nData: ${fmtDate(x.data)}\n${detalhes}\n\nAcesse os detalhes e preencha as informações:\n${link}`;
+  const texto = `🔔 *OC/NDS ${x.tipo} — ${x.gid||'G26-'+String(x.id).padStart(7,'0')}*\n\nSetor: ${x.setor||'—'}\nCoordenação: ${x.coordenacao||'—'}\nZona: ${x.zona||'—'}\nStatus: ${x.status}\nData: ${fmtDate(x.data)}\n${detalhes}\n\nAcesse os detalhes e preencha as informações:\n${link}`;
   window.open(waLink(eq.whatsapp, texto), '_blank');
 }
 
@@ -8341,8 +8378,8 @@ function renderRdoOcNds(){
                   ? `<span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">OC</span>`
                   : `<span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);">NDS</span>`;
                 const detalhes = x.tipo==='OC'
-                  ? [x.ptp&&'PTP: '+x.ptp, x.si&&'SI: '+x.si, x.ose&&'OSE: '+x.ose, x.numeroOC&&'OC: '+x.numeroOC].filter(Boolean).join(' · ')||'—'
-                  : [x.ocorrencia&&'Ocorrência: '+x.ocorrencia].filter(Boolean).join('')||'—';
+                  ? [x.ptp&&'PTP: '+x.ptp, x.si&&'SI: '+x.si, x.ose&&'OSE: '+x.ose, x.numeroOC&&'OC: '+x.numeroOC, x.zona&&'Zona: '+x.zona].filter(Boolean).join(' · ')||'—'
+                  : [x.ocorrencia&&'Ocorrência: '+x.ocorrencia, x.zona&&'Zona: '+x.zona].filter(Boolean).join(' · ')||'—';
                 return `
                   <tr data-ocnds-rdo="${x.id}" style="cursor:pointer;" title="Ver detalhes">
                     <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
@@ -8386,7 +8423,7 @@ function openRDOModal(progId, attribId){
         <h4 style="margin-bottom:8px;">Programação ${progGid(x.programacao)}</h4>
         <p class="admin-field-meta" style="margin:2px 0;">${esc(pr?.nome||'—')} <strong>(${esc(pr?.codigo||'—')})</strong></p>
         <p class="admin-field-meta" style="margin:2px 0;">Setor ${esc(pr?.setor||'—')} · Coordenação ${esc(pr?.coordenacao||'—')}</p>
-        <p class="admin-field-meta" style="margin:2px 0;">Ciclo ${esc(x.programacao.ciclo||'—')} · Data ${fmtDate(x.atribuicao.dataProgramada)}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Ciclo ${esc(x.programacao.ciclo||'—')} · Data ${fmtDate(x.atribuicao.dataProgramada)} ${zonaBadge(x.programacao.zona)}</p>
         <div style="margin-top:8px;">${rdoStatusBadge(x.atribuicao.status)}</div>
       </div>
       <div>
@@ -8591,7 +8628,7 @@ function printRDOCompleto(x){
     .badge-print{display:inline-block;border:1px solid #999;border-radius:4px;padding:2px 8px;font-size:11px;}
   </style></head><body>
     <h1>Relatório de RDO — Detalhes da Execução</h1>
-    <p class="meta">Programação ${progGid(x.programacao)} · Ciclo ${esc(x.programacao.ciclo||'—')} · Data programada ${fmtDate(x.atribuicao.dataProgramada)}</p>
+    <p class="meta">Programação ${progGid(x.programacao)} · Ciclo ${esc(x.programacao.ciclo||'—')} · Data programada ${fmtDate(x.atribuicao.dataProgramada)} · Zona: ${esc(x.programacao.zona||'—')}</p>
     <p class="meta">Gerado por: <strong>${esc(geradoPor)}</strong> em ${fmtDateTime(Date.now())} · Status: ${esc(x.atribuicao.status||'Programado')}</p>
 
     <h2>Dados gerais do projeto</h2>
@@ -8718,7 +8755,7 @@ function printRDOTipoCompleto(x, tipo){
     <div class="grid">
       <div>
         <p class="meta"><strong>${esc(gidLabel)}</strong></p>
-        <p class="meta">OSI: ${esc(p.osi||'—')} · Subestação: ${esc(p.subestacao||'—')}</p>
+        <p class="meta">OSI: ${esc(p.osi||'—')} · Subestação: ${esc(p.subestacao||'—')} · Zona: ${esc(p.zona||'—')}</p>
         <p class="meta">Tipo Rede: ${esc(p.tipoRede||'—')} · Chave: ${esc(p.chave||'—')}</p>
         <p class="meta">ID-SIPROG: ${esc(p.idSiprog||'—')} · OSE: ${esc(p.ose||'—')}</p>
       </div>
@@ -8732,7 +8769,7 @@ function printRDOTipoCompleto(x, tipo){
     <div class="grid">
       <div>
         <p class="meta"><strong>${esc(gidLabel)}</strong></p>
-        <p class="meta">Município: ${esc(p.municipio||'—')} · Subestação: ${esc(p.subestacao||'—')}</p>
+        <p class="meta">Município: ${esc(p.municipio||'—')} · Subestação: ${esc(p.subestacao||'—')} · Zona: ${esc(p.zona||'—')}</p>
         <p class="meta">Tipo Intervenção: ${esc(p.tipoIntervencao||'—')}</p>
         <p class="meta">Observações: ${esc(p.observacoes||'—')}</p>
       </div>
