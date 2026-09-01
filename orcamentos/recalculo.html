@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora Fiscal e Pró-Labore</title>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --accent-blue: #2563eb;
+            --accent-light: #eff6ff;
+            --accent-green: #16a34a;
+            --green-light: #f0fdf4;
+            --danger-color: #dc2626;
+            --danger-light: #fef2f2;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+            --radius: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background-color: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+            padding: 32px;
+        }
+
+        header {
+            margin-bottom: 28px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 16px;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        header p {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .grid-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 6px;
+        }
+
+        .form-group input {
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            color: var(--text-main);
+            outline: none;
+            transition: all 0.2s;
+            background-color: #fff;
+        }
+
+        .form-group input:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 28px 0 16px 0;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cards-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .card {
+            padding: 20px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            background-color: #fff;
+        }
+
+        .card.highlight-blue {
+            background-color: var(--accent-light);
+            border-color: #bfdbfe;
+        }
+
+        .card.highlight-green {
+            background-color: var(--green-light);
+            border-color: #bbf7d0;
+        }
+
+        .card-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .card.highlight-blue .card-label { color: #1d4ed8; }
+        .card.highlight-green .card-label { color: #15803d; }
+
+        .card-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .card.highlight-blue .card-value { color: var(--accent-blue); }
+        .card.highlight-green .card-value { color: var(--accent-green); }
+
+        .card-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: #f8fafc;
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .text-right { text-align: right; }
+        .font-bold { font-weight: 600; }
+        .text-danger { color: var(--danger-color); }
+        
+        .badge-late {
+            background-color: var(--danger-light);
+            color: var(--danger-color);
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+            display: inline-block;
+            margin-left: 6px;
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 16px; }
+            .cards-summary { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Apurador Fiscal & Fechamento Mensal</h1>
+        <p>Cálculo automatizado de DAS, INSS, Pró-Labore Líquido e Distribuição de Lucros</p>
+    </header>
+
+    <div class="grid-inputs">
+        <div class="form-group">
+            <label for="faturamento">Faturamento / NFs (R$)</label>
+            <input type="number" id="faturamento" value="6500" step="0.01" oninput="calcular()">
+        </div>
+        <div class="form-group">
+            <label for="aliquotaDas">Alíquota DAS (%)</label>
+            <input type="number" id="aliquotaDas" value="6" step="0.1" oninput="calcular()">
+        </div>
+        <div class="form-group">
+            <label for="proLabore">Pró-Labore Bruto (R$)</label>
+            <input type="number" id="proLabore" value="1630" step="0.01" oninput="calcular()">
+        </div>
+        <div class="form-group">
+            <label for="aliquotaInss">Alíquota INSS (%)</label>
+            <input type="number" id="aliquotaInss" value="11" step="0.1" oninput="calcular()">
+        </div>
+    </div>
+
+    <div class="grid-inputs">
+        <div class="form-group">
+            <label for="dataVencimento">Data Vencimento</label>
+            <input type="date" id="dataVencimento" onchange="calcular()">
+        </div>
+        <div class="form-group">
+            <label for="dataPagamento">Data do Pagamento</label>
+            <input type="date" id="dataPagamento" onchange="calcular()">
+        </div>
+    </div>
+
+    <div class="section-title">Valores para Transferência/Saída</div>
+    <div class="cards-summary">
+        <div class="card highlight-blue">
+            <div class="card-label">Pró-Labore Líquido</div>
+            <div class="card-value" id="resProLaboreLiquido">R$ 0,00</div>
+            <div class="card-desc">Transferir da PJ para a Conta PF</div>
+        </div>
+        <div class="card highlight-green">
+            <div class="card-label">Lucro Distribuído (Isento)</div>
+            <div class="card-value" id="resLucroLiquido">R$ 0,00</div>
+            <div class="card-desc">Transferir da PJ para a Conta PF</div>
+        </div>
+    </div>
+
+    <div class="section-title">
+        Detalhamento de Guias e Encargos
+        <span id="statusAtraso"></span>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Imposto / Guia</th>
+                <th class="text-right">Valor Original</th>
+                <th class="text-right">Multa</th>
+                <th class="text-right">Juros</th>
+                <th class="text-right">Total a Pagar</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="font-bold">DAS (Simples)</td>
+                <td class="text-right" id="dasOrig">R$ 0,00</td>
+                <td class="text-right" id="dasMulta">R$ 0,00</td>
+                <td class="text-right" id="dasJuros">R$ 0,00</td>
+                <td class="text-right font-bold" id="dasTotal">R$ 0,00</td>
+            </tr>
+            <tr>
+                <td class="font-bold">GPS / INSS</td>
+                <td class="text-right" id="inssOrig">R$ 0,00</td>
+                <td class="text-right" id="inssMulta">R$ 0,00</td>
+                <td class="text-right" id="inssJuros">R$ 0,00</td>
+                <td class="text-right font-bold" id="inssTotal">R$ 0,00</td>
+            </tr>
+        </tbody>
+        <tfoot>
+            <tr style="background-color: #f8fafc;">
+                <td class="font-bold">Total Impostos PJ</td>
+                <td class="text-right font-bold" id="totOrig">R$ 0,00</td>
+                <td class="text-right font-bold" id="totMulta">R$ 0,00</td>
+                <td class="text-right font-bold" id="totJuros">R$ 0,00</td>
+                <td class="text-right font-bold text-danger" id="totGeral">R$ 0,00</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+<script>
+    // Inicializar datas (Padrão: Vencimento 20 do mês corrente, Pagamento Hoje)
+    const hoje = new Date();
+    const anoAtual = hoje.getFullYear();
+    const mesAtual = String(hoje.getMonth() + 1).padStart(2, '0');
+    
+    document.getElementById('dataVencimento').value = `${anoAtual}-${mesAtual}-20`;
+    document.getElementById('dataPagamento').value = hoje.toISOString().split('T')[0];
+
+    function formatarBRL(valor) {
+        return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function calcular() {
+        const faturamento = parseFloat(document.getElementById('faturamento').value) || 0;
+        const aliquotaDas = (parseFloat(document.getElementById('aliquotaDas').value) || 0) / 100;
+        const proLaboreBruto = parseFloat(document.getElementById('proLabore').value) || 0;
+        const aliquotaInss = (parseFloat(document.getElementById('aliquotaInss').value) || 0) / 100;
+
+        const dtVenc = new Date(document.getElementById('dataVencimento').value + 'T00:00:00');
+        const dtPag = new Date(document.getElementById('dataPagamento').value + 'T00:00:00');
+
+        // Valores Base
+        const dasOriginal = faturamento * aliquotaDas;
+        const inssOriginal = proLaboreBruto * aliquotaInss;
+        const proLaboreLiquido = proLaboreBruto - inssOriginal;
+
+        // Cálculo de Atraso (Multa 0.33% ao dia max 20%, Juros 1% se houver atraso)
+        let diasAtraso = 0;
+        let pctMulta = 0;
+        let pctJuros = 0;
+
+        if (dtPag > dtVenc) {
+            const diffTime = Math.abs(dtPag - dtVenc);
+            diasAtraso = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            pctMulta = Math.min(diasAtraso * 0.0033, 0.20); // 0.33% ao dia, cap 20%
+            pctJuros = 0.01; // 1% de juros no mês
+            
+            document.getElementById('statusAtraso').innerHTML = `<span class="badge-late">${diasAtraso} dias em atraso</span>`;
+        } else {
+            document.getElementById('statusAtraso').innerHTML = '';
+        }
+
+        // Encargos DAS
+        const dasMulta = dasOriginal * pctMulta;
+        const dasJuros = dasOriginal * pctJuros;
+        const dasTotal = dasOriginal + dasMulta + dasJuros;
+
+        // Encargos INSS
+        const inssMulta = inssOriginal * pctMulta;
+        const inssJuros = inssOriginal * pctJuros;
+        const inssTotal = inssOriginal + inssMulta + inssJuros;
+
+        // Totais de Impostos
+        const totalOriginal = dasOriginal + inssOriginal;
+        const totalMulta = dasMulta + inssMulta;
+        const totalJuros = dasJuros + inssJuros;
+        const totalImpostosComEncargos = dasTotal + inssTotal;
+
+        // Lucro Distribuído = Faturamento - ImpostosTotais - ProLaboreBruto
+        const lucroDistribuido = Math.max(0, faturamento - totalImpostosComEncargos - proLaboreBruto);
+
+        // Atualizando Tela
+        document.getElementById('resProLaboreLiquido').innerText = formatarBRL(proLaboreLiquido);
+        document.getElementById('resLucroLiquido').innerText = formatarBRL(lucroDistribuido);
+
+        document.getElementById('dasOrig').innerText = formatarBRL(dasOriginal);
+        document.getElementById('dasMulta').innerText = formatarBRL(dasMulta);
+        document.getElementById('dasJuros').innerText = formatarBRL(dasJuros);
+        document.getElementById('dasTotal').innerText = formatarBRL(dasTotal);
+
+        document.getElementById('inssOrig').innerText = formatarBRL(inssOriginal);
+        document.getElementById('inssMulta').innerText = formatarBRL(inssMulta);
+        document.getElementById('inssJuros').innerText = formatarBRL(inssJuros);
+        document.getElementById('inssTotal').innerText = formatarBRL(inssTotal);
+
+        document.getElementById('totOrig').innerText = formatarBRL(totalOriginal);
+        document.getElementById('totMulta').innerText = formatarBRL(totalMulta);
+        document.getElementById('totJuros').innerText = formatarBRL(totalJuros);
+        document.getElementById('totGeral').innerText = formatarBRL(totalImpostosComEncargos);
+    }
+
+    // Executar cálculo inicial ao carregar a página
+    window.onload = calcular;
+</script>
+
+</body>
+</html>
