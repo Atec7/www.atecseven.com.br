@@ -309,7 +309,7 @@ function renderRDOForm(){
     ${anexosDoProgramadorHtml()}
     ${orientacoesPlanejamentoHtml()}
     <div class="panel section-gap" style="max-width:600px;margin:0 auto;">
-      <div class="panel-head"><h3>Questionário RDO - Saída da Base</h3><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${teamGidLabel(prog)}${prog.zona? ' · Zona '+prog.zona:''}</span></div>
+      <div class="panel-head"><h3>Questionário RDO - Saída da Base</h3><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${teamGidLabel(prog)}${prog.zona? ' · Zona '+prog.zona:''}${prog.numeroReserva? ' · Nº Reserva/PEP '+prog.numeroReserva:''}</span></div>
       <div style="padding:24px;">
         <p style="font-size:14px;color:var(--muted);margin-bottom:20px;">Responda às questões abaixo e informe os horários de saída da base. Os dados ficam salvos neste aparelho e são enviados quando você concluir as atividades.</p>
         ${RDO_PERGUNTAS.map((p,i)=>`
@@ -365,7 +365,7 @@ function renderOcNdsRDOForm(){
   return `
     ${anexosHtml}
     <div class="panel section-gap" style="max-width:600px;margin:0 auto;">
-      <div class="panel-head"><h3>Questionário RDO - Saída da Base</h3><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${esc(gid)}${ocndsItem.zona? ' · Zona '+ocndsItem.zona:''}</span></div>
+      <div class="panel-head"><h3>Questionário RDO - Saída da Base</h3><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${esc(gid)}${ocndsItem.zona? ' · Zona '+ocndsItem.zona:''}${ocndsItem.numeroReserva? ' · Nº Reserva/PEP '+ocndsItem.numeroReserva:''}</span></div>
       <div style="padding:24px;">
         <p style="font-size:14px;color:var(--muted);margin-bottom:20px;">Responda às questões abaixo e informe os horários de saída da base. Os dados ficam salvos neste aparelho e são enviados quando você concluir as atividades.</p>
         ${RDO_PERGUNTAS.map((p,i)=>`
@@ -602,7 +602,7 @@ function render(){
         <div class="panel-head">
           <div>
             <h3>Ocorrência ${esc(ocndsItem.tipo)} — ${ocndsItem.gid||'G26-'+String(ocndsItem.id).padStart(7,'0')}</h3>
-            <div class="admin-field-meta">Atividade de livre escolha · ${fmtDate(ocndsItem.data)}${ocndsItem.zona? ' · Zona '+ocndsItem.zona:''}</div>
+            <div class="admin-field-meta">Atividade de livre escolha · ${fmtDate(ocndsItem.data)}${ocndsItem.zona? ' · Zona '+ocndsItem.zona:''}${ocndsItem.numeroReserva? ' · Nº Reserva/PEP '+ocndsItem.numeroReserva:''}</div>
           </div>
           <span class="badge" style="color:var(--blue);background:rgba(78,140,235,.12);">${esc(ocndsItem.status)}</span>
         </div>
@@ -686,6 +686,7 @@ function render(){
   const headTitulo = m==='poda'? 'PODA — OSI '+(prog.osi||'—') : m==='ose'? 'OSE — '+(prog.municipio||'Município') : (pr?.nome||'Projeto');
   const headSub = [teamGidLabel(prog),
     prog.zona? 'Zona '+prog.zona : '',
+    prog.numeroReserva? 'Reserva/PEP '+prog.numeroReserva : '',
     m==='poda'? [prog.subestacao? 'SE '+prog.subestacao:'', prog.tipoRede, prog.chave? 'Chave '+prog.chave:''].filter(Boolean).join(' · ')
     : m==='ose'? [prog.subestacao? 'SE '+prog.subestacao:'', prog.tipoIntervencao].filter(Boolean).join(' · ')
     : [(pr?.codigo||''), prog.ciclo? 'Ciclo '+prog.ciclo : ''].filter(Boolean).join(' · ')
