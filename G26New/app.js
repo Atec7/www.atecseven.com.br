@@ -140,7 +140,7 @@ function nextId(){ DB.seq = (DB.seq||1)+1; return DB.seq; }
 
 let DB = structuredClone(DEFAULT_DATA);
 let currentView = 'dashboard';
-let progFilters = (()=>{ const r=monthRangeISO(); return { projeto:'', equipe:'', status:'Programado', ciclo:'', dataDe:r.de, dataAte:r.ate, modo:'lista', calView:'mes', calDay:todayISO() }; })();
+let progFilters = (()=>{ const r=monthRangeISO(); return { projeto:'', projQ:'', equipe:'', status:'Programado', ciclo:'', dataDe:r.de, dataAte:r.ate, modo:'lista', calView:'mes', calDay:todayISO() }; })();
 let ativFilters = { q:'', fav:'' };
 let equipeFilters = { q:'', status:'' };
 let projFilters = { q:'', status:'', ciclo:'', recebido:'', cidade:'', periodoDe:'', periodoAte:'' };
@@ -1651,7 +1651,7 @@ function renderEquipes(){
       <span style="font-size:12px;color:var(--muted);">${list.length} de ${visiveis.length} equipes</span>
     </div>
     ${list.length? `<div class="grid-crews">${list.map(crewCard).join('')}</div>` : `<div class="panel"><div class="empty-state">${icon('empty',34)}<p>Nenhuma equipe encontrada com os filtros.</p></div></div>`}`;
-  document.getElementById('f-eq-q').addEventListener('input', e=>{ equipeFilters.q=e.target.value; renderContent(); });
+  document.getElementById('f-eq-q').addEventListener('input', e=>{ equipeFilters.q=e.target.value; renderSearchKeepFocus(); });
   document.getElementById('f-eq-status').addEventListener('change', e=>{ equipeFilters.status=e.target.value; renderContent(); });
   el.querySelectorAll('[data-edit-equipe]').forEach(b=>b.addEventListener('click', ()=>openEquipeModal(b.dataset.editEquipe)));
   el.querySelectorAll('[data-del-equipe]').forEach(b=>b.addEventListener('click', ()=>deleteEquipe(b.dataset.delEquipe)));
@@ -1771,7 +1771,7 @@ function renderAtividades(){
         <td><div class="row-actions"><button class="icon-btn" data-edit-at="${a.id}">${icon('edit',14)}</button><button class="icon-btn" data-del-at="${a.id}">${icon('trash',14)}</button></div></td>
       </tr>`).join('') || `<tr class="empty-row"><td colspan="${6+customFields.length}">Nenhuma atividade encontrada para "${esc(ativFilters.q)}".</td></tr>`}
       </tbody></table></div></div>`;
-  document.getElementById('f-at-q').addEventListener('input', e=>{ ativFilters.q=e.target.value; renderContent(); });
+  document.getElementById('f-at-q').addEventListener('input', e=>{ ativFilters.q=e.target.value; renderSearchKeepFocus(); });
   document.getElementById('f-at-q').addEventListener('keydown', e=>{ if(e.key==='Escape'){ ativFilters.q=''; renderContent(); } });
   document.getElementById('f-at-q-clear').addEventListener('click', ()=>{ ativFilters.q=''; renderContent(); });
   document.getElementById('f-at-fav').addEventListener('change', e=>{ ativFilters.fav=e.target.value; renderContent(); });
@@ -1901,7 +1901,7 @@ function renderProjetos(){
         <td><div class="row-actions"><button class="icon-btn" title="Imprimir projeto" data-print-pj="${p.id}">${icon('printer',14)}</button><button class="icon-btn" title="Ver avanço" data-avanco-detalhe="${p.id}">${icon('trend',14)}</button><button class="icon-btn" data-edit-pj="${p.id}">${icon('edit',14)}</button><button class="icon-btn" data-del-pj="${p.id}">${icon('trash',14)}</button></div></td>
       </tr>${alerta}`;
     }).join('') || `<tr class="empty-row"><td colspan="${(ehMestre()?14:13)+customFields.length}">Nenhum projeto encontrado com os filtros.</td></tr>`}</tbody></table></div></div>`;
-  document.getElementById('f-pj-q').addEventListener('input', e=>{ projFilters.q=e.target.value; renderContent(); });
+  document.getElementById('f-pj-q').addEventListener('input', e=>{ projFilters.q=e.target.value; renderSearchKeepFocus(); });
   document.getElementById('f-pj-status').addEventListener('change', e=>{ projFilters.status=e.target.value; renderContent(); });
   document.getElementById('f-pj-ciclo').addEventListener('change', e=>{ projFilters.ciclo=e.target.value; renderContent(); });
   document.getElementById('f-pj-recebido').addEventListener('change', e=>{ projFilters.recebido=e.target.value; renderContent(); });
@@ -2164,7 +2164,7 @@ function renderAvanco(){
       <span style="font-size:12px;color:var(--muted);">${list.length} de ${visiveis.length} projetos</span>
     </div>
     <div style="display:flex;flex-direction:column;gap:18px;">${list.length? list.map(avancoCard).join('') : `<div class="panel"><div class="empty-state">${icon('empty',34)}<p>Nenhum projeto encontrado com os filtros.</p></div></div>`}</div>`;
-  document.getElementById('f-av-q').addEventListener('input', e=>{ avancoFilters.q=e.target.value; renderContent(); });
+  document.getElementById('f-av-q').addEventListener('input', e=>{ avancoFilters.q=e.target.value; renderSearchKeepFocus(); });
   document.getElementById('f-av-status').addEventListener('change', e=>{ avancoFilters.status=e.target.value; renderContent(); });
   el.querySelectorAll('[data-avanco-detalhe]').forEach(b=>b.addEventListener('click', ()=>openAvancoDetalhe(b.dataset.avancoDetalhe)));
   el.querySelectorAll('[data-plano-pj]').forEach(b=>b.addEventListener('click', ()=>openPlanoFisicoModal(b.dataset.planoPj)));
@@ -2267,6 +2267,11 @@ function openAvancoDetalhe(pjId){
 function programacoesFiltradas(){
   return flatAtribuicoes().filter(x=>{
     if(progFilters.projeto && String(x.programacao.projetoId)!==progFilters.projeto) return false;
+    if(progFilters.projQ){
+      const pr = findProjeto(x.programacao.projetoId);
+      const t = ((pr?.codigo||'')+' '+(pr?.nome||'')+' '+(pr?.setor||'')+' '+(pr?.coordenacao||'')+' '+(pr?.cidade||'')+' '+(pr?.ciclo||'')).toLowerCase();
+      if(!t.includes(progFilters.projQ.toLowerCase())) return false;
+    }
     if(progFilters.equipe && String(x.atribuicao.equipeId)!==progFilters.equipe) return false;
     if(progFilters.status && x.atribuicao.status!==progFilters.status) return false;
     if(progFilters.ciclo && (x.programacao.ciclo||'')!==progFilters.ciclo) return false;
@@ -2299,7 +2304,7 @@ function renderProgramacoes(){
   el.innerHTML = `
     <div class="panel-head" style="padding:0;margin-bottom:16px;border:none;">
       <div class="filters">
-        <select id="f-projeto"><option value="">Todos os projetos</option>${projetosVisiveis().map(p=>`<option value="${p.id}" ${progFilters.projeto==String(p.id)?'selected':''}>${esc(p.codigo)} · ${esc(p.nome)}</option>`).join('')}</select>
+        <div class="search-wrap"><span class="search-ic">${icon('search',14)}</span><input id="f-proj-q" type="search" placeholder="Buscar projeto…" value="${esc(progFilters.projQ)}"><button type="button" class="search-clear" id="f-proj-q-clear" title="Limpar busca">${icon('close',12)}</button></div>
         <select id="f-equipe"><option value="">Todas as equipes</option>${equipesVisiveis().map(e=>`<option value="${e.id}" ${progFilters.equipe==String(e.id)?'selected':''}>${equipeLabel(e)}${e.encarregado? ' — '+esc(e.encarregado):''}</option>`).join('')}</select>
         <select id="f-status"><option value="">Todos os status</option>${STATUS_PROG.map(s=>`<option ${progFilters.status===s?'selected':''}>${s}</option>`).join('')}</select>
         <select id="f-ciclo"><option value="">Todos os ciclos</option>${ciclosUnicos().map(c=>`<option ${progFilters.ciclo===c?'selected':''}>${c}</option>`).join('')}</select>
@@ -2309,6 +2314,7 @@ function renderProgramacoes(){
         <button class="btn btn-sm" id="f-mes-atual" title="Filtrar pelo mês vigente">${icon('calendar',12)} Mês atual</button>
         <button class="btn btn-sm btn-ghost" id="f-limpar-datas" title="Remover o filtro de datas">Limpar</button>
       </div>
+      <span style="font-size:12px;color:var(--muted);">${progFilters.projQ? 'Encontradas ':'Total '}<strong style="color:var(--accent);">${list.length}</strong> de ${flatAtribuicoes().length} programações</span>
       <div class="tabs">
         <button class="tab ${progFilters.modo==='lista'?'active':''}" data-modo="lista">Lista</button>
         <button class="tab ${progFilters.modo==='fluxo'?'active':''}" data-modo="fluxo">Fluxo</button>
@@ -2316,7 +2322,9 @@ function renderProgramacoes(){
       </div>
     </div>
     <div id="prog-area"></div>`;
-  document.getElementById('f-projeto').addEventListener('change', e=>{progFilters.projeto=e.target.value; renderContent();});
+  document.getElementById('f-proj-q').addEventListener('input', e=>{progFilters.projQ=e.target.value; renderSearchKeepFocus();});
+  document.getElementById('f-proj-q').addEventListener('keydown', e=>{ if(e.key==='Escape'){ progFilters.projQ=''; renderContent(); } });
+  document.getElementById('f-proj-q-clear').addEventListener('click', ()=>{ progFilters.projQ=''; renderContent(); });
   document.getElementById('f-equipe').addEventListener('change', e=>{progFilters.equipe=e.target.value; renderContent();});
   document.getElementById('f-status').addEventListener('change', e=>{progFilters.status=e.target.value; renderContent();});
   document.getElementById('f-ciclo').addEventListener('change', e=>{progFilters.ciclo=e.target.value; renderContent();});
@@ -2835,6 +2843,72 @@ function openAtribDetalhe(atribId){
   let localLat = pg?.localLat??null;
   let localLng = pg?.localLng??null;
 
+  function bindProjetoAutocomplete(root, onSelect){
+    const input = root.querySelector('#pg-projeto');
+    const hid = root.querySelector('#pg-projeto-id');
+    const listEl = root.querySelector('.pg-proj-ac-list');
+    if(!input||!hid||!listEl) return;
+    const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const projList = projetosVisiveis().filter(p=>!['Encerrado','Aguardando Viabilidade'].includes(p.status));
+    let arrow = -1;
+    function syncInput(){
+      input.value = selProjeto ? (selProjeto.codigo+' · '+selProjeto.nome) : '';
+      hid.value = selProjeto? selProjeto.id : '';
+      listEl.style.display='none';
+    }
+    function openList(){
+      const normQ = norm(input.value);
+      const currentLabel = selProjeto ? (selProjeto.codigo+' · '+selProjeto.nome) : '';
+      let items = projList;
+      if(normQ && input.value !== currentLabel){
+        items = items.filter(p=> norm(p.codigo).includes(normQ) || norm(p.nome).includes(normQ) || norm(p.cidade||'').includes(normQ) || norm(p.ciclo||'').includes(normQ));
+      }
+      items = items.slice(0, 60);
+      listEl.scrollTop = 0;
+      if(!items.length){
+        listEl.innerHTML = `<div class="act-ac-empty">Nenhum projeto encontrado</div>`;
+        listEl.style.display='block'; arrow=-1; return;
+      }
+      listEl.innerHTML = items.map(p=>{
+        const sel = selProjeto && String(selProjeto.id)===String(p.id);
+        return `<div class="act-ac-item${sel?' ac-selected':''}" data-id="${p.id}">
+          <span class="ac-cc">${esc(p.codigo)}</span><span class="ac-desc">${esc(p.nome)}${p.cidade? ' · '+esc(p.cidade):''}${p.ciclo? ' · '+esc(p.ciclo):''}</span>
+        </div>`;
+      }).join('');
+      listEl.style.display='block'; arrow=-1;
+      listEl.querySelectorAll('.act-ac-item').forEach(it=>{
+        it.addEventListener('mousedown', e=>{ e.preventDefault(); selectProject(it.dataset.id); });
+      });
+    }
+    function selectProject(id){
+      const pr = findProjeto(Number(id));
+      if(!pr) return;
+      selProjeto = pr;
+      syncInput();
+      listEl.style.display='none';
+      onSelect && onSelect();
+    }
+    function highlight(items){
+      items.forEach((it,i)=> it.classList.toggle('active', i===arrow));
+    }
+    input.addEventListener('focus', ()=>{ input.select(); openList(); });
+    input.addEventListener('input', openList);
+    input.addEventListener('keydown', e=>{
+      const items = listEl.querySelectorAll('.act-ac-item');
+      if(e.key==='ArrowDown'){ e.preventDefault(); if(items.length){ arrow = Math.min(arrow+1, items.length-1); highlight(items); } }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); if(items.length){ arrow = Math.max(arrow-1, 0); highlight(items); } }
+      else if(e.key==='Enter'){
+        e.preventDefault();
+        if(arrow>=0 && items[arrow]) selectProject(items[arrow].dataset.id);
+        else if(items.length===1) selectProject(items[0].dataset.id);
+        else { syncInput(); input.blur(); }
+      }
+      else if(e.key==='Escape'){ syncInput(); input.blur(); }
+    });
+    input.addEventListener('blur', ()=>{ setTimeout(syncInput, 130); });
+    syncInput();
+  }
+
   function atribBlockHtml(a,i){
     const eqList = equipesDoProjeto(selProjeto);
     // Garante que a equipe atual (se houver) apareça no dropdown mesmo se não passar no filtro
@@ -2868,7 +2942,13 @@ function openAtribDetalhe(atribId){
   function renderAtribsHtml(){ return atribs.map((a,i)=> atribBlockHtml(a,i)).join(''); }
 
   const baseFieldsHtml = `
-    <div class="field"><label>Projeto <span class="req">*</span></label><select name="projetoId" id="pg-projeto" required>${projetosVisiveis().filter(p=>!['Encerrado','Aguardando Viabilidade'].includes(p.status)).map(pr=>`<option value="${pr.id}" ${pg?.projetoId===pr.id?'selected':''}>${esc(pr.codigo)} · ${esc(pr.nome)}</option>`).join('')}</select></div>
+    <div class="field"><label>Projeto <span class="req">*</span></label>
+      <input type="hidden" name="projetoId" id="pg-projeto-id" value="${pg?.projetoId||''}">
+      <div class="pg-proj-ac">
+        <input type="text" id="pg-projeto" autocomplete="off" placeholder="Buscar projeto por código ou nome…" value="${selProjeto? esc(selProjeto.codigo+' · '+selProjeto.nome):''}">
+        <div class="pg-proj-ac-list" style="display:none;"></div>
+      </div>
+    </div>
     <div class="field-row">
       <div class="field"><label>Setor</label><input type="text" id="pg-setor" disabled value=""><div class="field-hint">💡 Preenchido automaticamente do projeto.</div></div>
       <div class="field"><label>Coordenação</label><input type="text" id="pg-coord" disabled value=""><div class="field-hint">💡 Preenchido automaticamente do projeto.</div></div>
@@ -2920,16 +3000,14 @@ function openAtribDetalhe(atribId){
     title: pg? 'Editar programação' : 'Nova programação', bodyHtml: baseFieldsHtml, extraWide: true, submitLabel: pg? 'Salvar alterações':'Programar',
     onMount:(root)=>{
       bindCicloMasks(root);
-      const projSel = root.querySelector('#pg-projeto');
       function applyProjetoData(){
-        const pr = projSel.value? findProjeto(Number(projSel.value)) : null;
-        selProjeto = pr;
+        const pr = selProjeto;
         root.querySelector('#pg-setor').value = pr?.setor||'';
         root.querySelector('#pg-coord').value = pr?.coordenacao||'';
         root.querySelector('#pg-ciclo').value = pr?.ciclo? cicloMask(pr.ciclo) : '';
         refreshContainer();
       }
-      projSel.addEventListener('change', applyProjetoData);
+      bindProjetoAutocomplete(root, applyProjetoData);
       applyProjetoData();
       function refreshContainer(){
         const ok = equipesDoProjeto(selProjeto);
@@ -3126,6 +3204,7 @@ function openAtribDetalhe(atribId){
     },
     onSubmit:(fd)=>{
       if(anexosEnviando){ toast('Aguarde o envio das imagens dos anexos antes de salvar.', 'error'); return false; }
+      if(!selProjeto){ toast('Selecione o projeto da programação.', 'error'); return false; }
       const ciclo = cicloMask(fd.get('ciclo'));
       if(!isCicloValido(ciclo)){ toast('Informe o ciclo recebido no formato CICLO-XX/XXXX (ex.: CICLO-01/2026).', 'error'); return false; }
       if(!atribs.length || atribs.some(a=>!a.equipeId)){ toast('Selecione a equipe em todos os blocos.', 'error'); return false; }
@@ -3135,8 +3214,7 @@ function openAtribDetalhe(atribId){
       if(dataFim && dataFim < dataInicio){ toast('A data fim não pode ser anterior à data início.', 'error'); return false; }
       const datas = gerarDatasIntervalo(dataInicio, dataFim || dataInicio);
       if(datas.length > 31){ toast('O intervalo não pode ultrapassar 31 dias.', 'error'); return false; }
-      const projetoId = Number(fd.get('projetoId')); const observacoes = fd.get('observacoes').trim();
-      const orientacoesPlanejamento = String(fd.get('orientacoesPlanejamento')||'').trim();
+      const projetoId = Number(selProjeto.id); const observacoes = fd.get('observacoes').trim();      const orientacoesPlanejamento = String(fd.get('orientacoesPlanejamento')||'').trim();
       const numeroSI = String(fd.get('numeroSI')||'').trim();
       let statusSI = String(fd.get('statusSI')||'');
       if(numeroSI && !statusSI){ toast('Informe o Status SI — obrigatório quando o Nº SI é preenchido.', 'error'); return false; }
@@ -4085,6 +4163,25 @@ document.getElementById('import-file').addEventListener('change', (e)=>{
 /* =========================================================
    ROUTER
 ========================================================= */
+let _searchRefreshTimer = null;
+function renderSearchKeepFocus(){
+  const el = document.activeElement;
+  const keep = (el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA'))
+    ? { id: el.id, selStart: el.selectionStart, selEnd: el.selectionEnd }
+    : null;
+  clearTimeout(_searchRefreshTimer);
+  _searchRefreshTimer = setTimeout(()=>{
+    renderContent();
+    if(keep){
+      const t = document.getElementById(keep.id);
+      if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA')){
+        t.focus();
+        try{ t.setSelectionRange(keep.selStart, keep.selEnd); }catch(e){}
+      }
+    }
+    _searchRefreshTimer = null;
+  }, 200);
+}
 function renderContent(){
   if(!telaPodeVer(currentView)){
     currentView = 'dashboard';
@@ -4230,7 +4327,7 @@ function renderOseProgramacoes(){
       </div>
     </div>
     <div id="ose-area"></div>`;
-  document.getElementById('ose-f-busca').addEventListener('input', e=>{ oseFilters.busca=e.target.value; renderContent(); });
+  document.getElementById('ose-f-busca').addEventListener('input', e=>{ oseFilters.busca=e.target.value; renderSearchKeepFocus(); });
   document.getElementById('ose-f-equipe').addEventListener('change', e=>{ oseFilters.equipe=e.target.value; renderContent(); });
   document.getElementById('ose-f-status').addEventListener('change', e=>{ oseFilters.status=e.target.value; renderContent(); });
   document.getElementById('ose-f-de').addEventListener('change', e=>{ oseFilters.dataDe=e.target.value; renderContent(); });
@@ -5613,7 +5710,7 @@ function renderPodaProgramacoes(){
       </div>
     </div>
     <div id="poda-area"></div>`;
-  document.getElementById('poda-f-busca').addEventListener('input', e=>{ podaFilters.busca=e.target.value; renderContent(); });
+  document.getElementById('poda-f-busca').addEventListener('input', e=>{ podaFilters.busca=e.target.value; renderSearchKeepFocus(); });
   document.getElementById('poda-f-equipe').addEventListener('change', e=>{ podaFilters.equipe=e.target.value; renderContent(); });
   document.getElementById('poda-f-status').addEventListener('change', e=>{ podaFilters.status=e.target.value; renderContent(); });
   document.getElementById('poda-f-de').addEventListener('change', e=>{ podaFilters.dataDe=e.target.value; renderContent(); });

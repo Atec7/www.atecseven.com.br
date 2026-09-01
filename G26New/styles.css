@@ -285,6 +285,8 @@ a.anexo-thumb{text-decoration:none;}
   .act-ac-row .act-ac{flex:1 1 100%;}
   .act-ac-row .act-qty,.act-ac-row .act-anom{flex:1 1 40%;width:auto;}
 }
+.pg-proj-ac{position:relative;}
+.pg-proj-ac-list{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:60;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);max-height:260px;overflow:auto;}
 .qty-field{display:flex;flex-direction:column;gap:3px;}
 .qty-field label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-2);}
 .qty-field input{width:100%;min-width:0;text-align:right;}
