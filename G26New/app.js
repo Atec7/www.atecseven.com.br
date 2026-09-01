@@ -50,6 +50,7 @@ let warnSaveFail = false;
 let servidorSincronizado = false;
 let lastServerJson = null;
 let salvando = false;
+let forceSave = false;
 const ADMIN_CACHE_KEY = 'g26_admin_cache';
 function loadAdminCache(){ try{ const c = JSON.parse(localStorage.getItem(ADMIN_CACHE_KEY)||'null'); return (c && c.synced && c.data)? c.data : null; }catch(e){ return null; } }
 function saveAdminCache(db, synced){ try{ localStorage.setItem(ADMIN_CACHE_KEY, JSON.stringify({ synced: !!synced, data: db })); }catch(e){} }
@@ -93,7 +94,7 @@ function guardarPendente(snapshot){
   try{ localStorage.setItem('g26_admin_pending', JSON.stringify({ snapshot, server: lastServerJson })); }catch(e){}
 }
 function flushSave(){
-  if(lastServerJson){
+  if(lastServerJson && !forceSave){
     try{
       const srv = JSON.parse(lastServerJson);
       const srvRev = Number(srv && srv.rev)||0;
@@ -113,7 +114,8 @@ function flushSave(){
   }
   const snapshot = JSON.stringify(DB);
   if(servidorSincronizado && lastWrittenJson===snapshot) return; // nada mudou de fato: evita regravar o banco inteiro
-  DB.rev = (DB.rev||0)+1;
+  DB.rev = Math.max((DB.rev||0)+1, Number(lastServerJson? (JSON.parse(lastServerJson).rev||0) : 0)+1);
+  forceSave = false;
   lastWrittenJson = snapshot;
   saveAdminCache(DB, true);
   if(!servidorSincronizado){
@@ -907,6 +909,7 @@ function importarAtividadesLinhas(linhas){
     if(codigoExiste(codigo)){ ignorados++; return; }
     DB.atividades.push({ id:nextId(), codigo, descricao, unidade: String(partes[2]||'').trim(), valorUnitario: parseValor(partes[3]), custom:{} });
     criadas++;
+    forceSave = true;
   });
   return { criadas, ignoradas, erros, msgErro, renumerados };
 }
@@ -1149,7 +1152,7 @@ function openModal({title, bodyHtml, onMount, onSubmit, submitLabel='Salvar', wi
         <div class="modal-head"><h3>${title}</h3><button class="icon-btn" id="modal-close">${icon('close')}</button></div>
         <form id="modal-form">
           <div class="modal-body">${bodyHtml}</div>
-          <div class="modal-foot">${footerBtns.map((b,i)=>`<button type="button" class="${b.cls||'btn btn-ghost'}" id="modal-btn-${i}">${b.label}</button>`).join('')}<button type="button" class="btn btn-ghost" id="modal-cancel">Cancelar</button><button type="submit" class="btn btn-primary">${submitLabel}</button></div>
+          <div class="modal-foot">${footerBtns.map((b,i)=>`<button type="button" class="${b.cls||'btn btn-ghost'}" id="modal-btn-${i}" ${b.style? `style="${b.style}"`:''}>${b.label}</button>`).join('')}<button type="button" class="btn btn-ghost" id="modal-cancel">Cancelar</button><button type="submit" class="btn btn-primary">${submitLabel}</button></div>
         </form>
       </div>
     </div>`;
@@ -5378,6 +5381,41 @@ function renderOseRdo(){
   document.getElementById('ose-rdo-print').addEventListener('click', ()=> printRDOReportTipo(registros,'ose'));
 }
 
+function rdoFotoExtensao(url){
+  try{ const m = new URL(url).pathname.match(/\.(\w{2,5})$/); return m? '.'+m[1].toLowerCase() : '.jpg'; }catch(e){ return '.jpg'; }
+}
+function baixarBlobArquivo(url, nome){
+  try{ const a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); }catch(e){ console.error('Falha ao baixar arquivo', e); }
+}
+function baixarFotosRdo(atividades){
+  const itens = [];
+  (atividades||[]).forEach(a=>{
+    const at = findAtividade(a.atividadeId);
+    const codigo = String(at?.codigo || 'atividade');
+    const fotos = String(a.fotos||'').split(';;').filter(Boolean);
+    fotos.forEach((url,n)=>{ itens.push({ url, base: codigo+'_'+String(n+1).padStart(2,'0') }); });
+  });
+  if(!itens.length){ toast('Não há fotos para baixar neste RDO.', 'error'); return; }
+  let pendentes = itens.length;
+  let falhas = 0;
+  toast(`Baixando ${pendentes} foto(s)…`);
+  itens.forEach(({url, base})=>{
+    if(url.startsWith('data:') || url.startsWith('blob:')){
+      baixarBlobArquivo(url, base+rdoFotoExtensao(url));
+      if(--pendentes===0) toast(falhas? `${falhas} foto(s) com falha.` : 'Download das fotos concluído.');
+      return;
+    }
+    fetch(url, {mode:'cors', credentials:'omit'})
+      .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.blob(); })
+      .then(blob=>{
+        const ext = blob.type? '.'+(blob.type.split('/')[1]||'jpg') : rdoFotoExtensao(url);
+        baixarBlobArquivo(URL.createObjectURL(blob), base+ext);
+      })
+      .catch(err=>{ console.error('Falha ao baixar foto', url, err); falhas++; })
+      .finally(()=>{ if(--pendentes===0){ toast(falhas? `${pendentes===0&&falhas?falhas:falhas} foto(s) com falha. Verifique a conexão.` : 'Download das fotos concluído.'); } });
+  });
+}
+
 function openOseRDOModal(progId, attribId){
   const x = flatOseAtribuicoes().find(y=> y.programacao.id===progId && y.atribuicao.id===attribId);
   if(!x) return;
@@ -5434,6 +5472,7 @@ function openOseRDOModal(progId, attribId){
     </div>
     <div style="margin-bottom:20px;">
       <h4 style="margin-bottom:8px;">Atividades e quantidades executadas</h4>
+      <button type="button" class="btn btn-sm" data-baixar-fotos-rdo style="margin-bottom:10px;">${icon('download',13)} Baixar fotos</button>
       <div style="display:flex;gap:14px;margin-bottom:12px;">
         <span class="badge-prefix">Prev. ${fmtNum(res.prev)}</span>
         <span class="badge-prefix alt">Exec. ${fmtNum(res.exec)}</span>
@@ -5472,7 +5511,7 @@ function openOseRDOModal(progId, attribId){
   openModal({ title:'RDO OSE — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, footerBtns:[
     { label: icon('edit',14)+' Editar registro', cls:'btn', onClick: ()=> editRdoModal(x, oseProgLabel) },
     { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'ose') }
-  ] });
+  ], onMount: (root)=>{ root.querySelector('[data-baixar-fotos-rdo]')?.addEventListener('click', ()=> baixarFotosRdo(x.atribuicao.atividades)); } });
 }
 
 /* --- OSE Confirmação de Execução (bloqueante) --- */
@@ -6749,6 +6788,7 @@ function openPodaRDOModal(progId, attribId){
     </div>
     <div style="margin-bottom:20px;">
       <h4 style="margin-bottom:8px;">Atividades e quantidades executadas</h4>
+      <button type="button" class="btn btn-sm" data-baixar-fotos-rdo style="margin-bottom:10px;">${icon('download',13)} Baixar fotos</button>
       <div style="display:flex;gap:14px;margin-bottom:12px;">
         <span class="badge-prefix">Prev. ${fmtNum(res.prev)}</span>
         <span class="badge-prefix alt">Exec. ${fmtNum(res.exec)}</span>
@@ -6786,7 +6826,7 @@ function openPodaRDOModal(progId, attribId){
   openModal({ title:'RDO Poda — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, footerBtns:[
     { label: icon('edit',14)+' Editar registro', cls:'btn', onClick: ()=> editRdoModal(x, podaProgLabel) },
     { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'poda') }
-  ] });
+  ], onMount: (root)=>{ root.querySelector('[data-baixar-fotos-rdo]')?.addEventListener('click', ()=> baixarFotosRdo(x.atribuicao.atividades)); } });
 }
 function renderOcNds(){
   const el = document.getElementById('content');
@@ -7977,7 +8017,7 @@ DB_REF.on('value', snap=>{
   try{ serverData = exists? JSON.parse(snap.val()) : null; }catch(err){ console.error('Falha ao ler dados do Firebase', err); }
   const serverRev = serverData? (serverData.rev||0) : 0;
   const localRev = DB.rev||0;
-  if(serverData && serverRev > localRev){
+  if(serverData && serverRev > localRev && !forceSave){
     try{ localStorage.removeItem('g26_admin_pending'); }catch(e){}
     try{
       DB = mergeData(serverData);
@@ -8420,6 +8460,7 @@ function openRDOModal(progId, attribId){
     <div class="admin-field-meta">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
 
   openModal({ title:'RDO — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, footerBtns:[
+    { label: icon('download',14)+' Baixar fotos', cls:'btn', style:'background:var(--green);border-color:var(--green);color:#fff;', onClick: ()=> baixarFotosRdo(x.atribuicao.atividades) },
     { label: icon('edit',14)+' Editar registro', cls:'btn', onClick: ()=> editRdoModal(x) },
     { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOCompleto(x) }
   ] });
