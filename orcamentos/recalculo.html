@@ -290,7 +290,7 @@
         </tbody>
         <tfoot>
             <tr style="background-color: #f8fafc;">
-                <td class="font-bold">Total Impostos PJ</td>
+                <td class="font-bold">Total Boletos PJ</td>
                 <td class="text-right font-bold" id="totOrig">R$ 0,00</td>
                 <td class="text-right font-bold" id="totMulta">R$ 0,00</td>
                 <td class="text-right font-bold" id="totJuros">R$ 0,00</td>
@@ -301,7 +301,7 @@
 </div>
 
 <script>
-    // Inicializar datas (Padrão: Vencimento 20 do mês corrente, Pagamento Hoje)
+    // Configura a data atual como default para pagamento e o dia 20 do mês corrente/anterior como vencimento
     const hoje = new Date();
     const anoAtual = hoje.getFullYear();
     const mesAtual = String(hoje.getMonth() + 1).padStart(2, '0');
@@ -336,7 +336,7 @@
             const diffTime = Math.abs(dtPag - dtVenc);
             diasAtraso = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             
-            pctMulta = Math.min(diasAtraso * 0.0033, 0.20); // 0.33% ao dia, cap 20%
+            pctMulta = Math.min(diasAtraso * 0.0033, 0.20); // 0.33% ao dia, cap em 20%
             pctJuros = 0.01; // 1% de juros no mês
             
             document.getElementById('statusAtraso').innerHTML = `<span class="badge-late">${diasAtraso} dias em atraso</span>`;
@@ -354,14 +354,17 @@
         const inssJuros = inssOriginal * pctJuros;
         const inssTotal = inssOriginal + inssMulta + inssJuros;
 
-        // Totais de Impostos
+        // Totais de Boletos a Pagar na PJ
         const totalOriginal = dasOriginal + inssOriginal;
         const totalMulta = dasMulta + inssMulta;
         const totalJuros = dasJuros + inssJuros;
         const totalImpostosComEncargos = dasTotal + inssTotal;
 
-        // Lucro Distribuído = Faturamento - ImpostosTotais - ProLaboreBruto
-        const lucroDistribuido = Math.max(0, faturamento - totalImpostosComEncargos - proLaboreBruto);
+        // Custo Efetivo da PJ (DAS Total + Apenas Encargos/Multa da GPS por atraso da empresa)
+        const custosEfetivosPJ = dasTotal + inssMulta + inssJuros;
+
+        // Lucro Distribuído = Faturamento - Pró-Labore Bruto - Custos Efetivos da PJ
+        const lucroDistribuido = Math.max(0, faturamento - proLaboreBruto - custosEfetivosPJ);
 
         // Atualizando Tela
         document.getElementById('resProLaboreLiquido').innerText = formatarBRL(proLaboreLiquido);
