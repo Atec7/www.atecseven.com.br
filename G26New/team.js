@@ -79,6 +79,12 @@ function fmtDateTime(ts){ const d=new Date(ts); return d.toLocaleDateString('pt-
 function findProjeto(db,id){ return db.projetos.find(p=>p.id===Number(id)); }
 function findEquipe(db,id){ return db.equipes.find(e=>e.id===Number(id)); }
 function findAtividade(db,id){ return db.atividades.find(a=>a.id===Number(id)); }
+function tiposEstruturaList(db){ return (db&&db.tiposEstrutura)||[]; }
+function tipoEstruturaOptionsHtml(db, atual){
+  const opts = tiposEstruturaList(db);
+  const selAtual = String(atual||'');
+  return `<option value="">Nenhum</option>` + opts.map(t=>`<option value="${esc(t.nome)}" ${selAtual===String(t.nome)?'selected':''}>${esc(t.nome)}</option>`).join('');
+}
 function equipeLabel(eq){ if(!eq) return '—'; const parts=[]; if(eq.eqtl) parts.push(eq.eqtl); if(eq.prtn) parts.push(eq.prtn); return parts.length? parts.join(' / ') : ('Equipe #'+eq.id); }
 function eqtlLabel(eq){ return (eq && eq.eqtl)? eq.eqtl : '—'; }
 function prtnLabel(eq){ return (eq && eq.prtn)? eq.prtn : '—'; }
@@ -267,9 +273,9 @@ function dbToEditors(db){
     if(!item) return null;
     ocndsItem = item;
     editors = {};
-    editors[item.equipeId] = (item.atividades||[]).map(a=>({atividadeId:String(a.atividadeId||''), quantidadePrevista: a.quantidadePrevista??'', quantidadeExecutada: a.quantidadeExecutada??''}));
+    editors[item.equipeId] = (item.atividades||[]).map(a=>({atividadeId:String(a.atividadeId||''), quantidadePrevista: a.quantidadePrevista??'', quantidadeExecutada: a.quantidadeExecutada??'', tipoEstrutura: a.tipoEstrutura||''}));
     if(!editors[item.equipeId] || !editors[item.equipeId].length){
-      editors[item.equipeId] = [{atividadeId:'',quantidadePrevista:'',quantidadeExecutada:''}];
+      editors[item.equipeId] = [{atividadeId:'',quantidadePrevista:'',quantidadeExecutada:'',tipoEstrutura:''}];
     }
     return item;
   }
@@ -281,7 +287,7 @@ function dbToEditors(db){
   editors = {};
   const atrs = filterEquipeId? (pg.atribuicoes||[]).filter(at=>at.equipeId===filterEquipeId) : (pg.atribuicoes||[]);
   atrs.forEach(at=>{
-    editors[at.equipeId] = (at.atividades||[]).map(a=>({ atividadeId:String(a.atividadeId), quantidadePrevista: a.quantidadePrevista??'', quantidadeExecutada: a.quantidadeExecutada??'', qtdAnomalia: a.qtdAnomalia??'', qtdAnomaliaExecutada: a.qtdAnomaliaExecutada??'' }));
+    editors[at.equipeId] = (at.atividades||[]).map(a=>({ atividadeId:String(a.atividadeId), quantidadePrevista: a.quantidadePrevista??'', quantidadeExecutada: a.quantidadeExecutada??'', qtdAnomalia: a.qtdAnomalia??'', qtdAnomaliaExecutada: a.qtdAnomaliaExecutada??'', tipoEstrutura: a.tipoEstrutura||'' }));
   });
   return pg;
 }
@@ -620,8 +626,9 @@ function render(){
     bindTeamActAutocomplete(root);
     root.querySelectorAll('.te-qty').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.teq.split('|'); editors[eid][Number(idx)].quantidadePrevista = e.target.value; }));
     root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; }));
+    root.querySelectorAll('.te-tipo-estrutura').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tte.split('|'); editors[eid][Number(idx)].tipoEstrutura = e.target.value; }));
     root.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', e=>{ const [eid,idx]=e.currentTarget.dataset.eqRm.split('|'); editors[eid].splice(Number(idx),1); resetFotos(); render(); }));
-    root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',quantidadeExecutada:''}); resetFotos(); render(); }));
+    root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',quantidadeExecutada:'',tipoEstrutura:''}); resetFotos(); render(); }));
     root.querySelectorAll('.te-camera').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.tec.split('|'); openPhotoPicker(eid, Number(idx), 'camera'); }));
     root.querySelectorAll('.te-gallery').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.teg.split('|'); openPhotoPicker(eid, Number(idx), 'gallery'); }));
     root.querySelectorAll('.te-photo-hint').forEach(h=>{
@@ -715,9 +722,10 @@ function render(){
   bindTeamActAutocomplete(root);
   root.querySelectorAll('.te-qty').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.teq.split('|'); editors[eid][Number(idx)].quantidadePrevista = e.target.value; }));
   root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; }));
+  root.querySelectorAll('.te-tipo-estrutura').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tte.split('|'); editors[eid][Number(idx)].tipoEstrutura = e.target.value; }));
   root.querySelectorAll('.te-anom').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tea.split('|'); editors[eid][Number(idx)].qtdAnomaliaExecutada = e.target.value; }));
   root.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', e=>{ const [eid,idx]=e.currentTarget.dataset.eqRm.split('|'); editors[eid].splice(Number(idx),1); resetFotos(); render(); }));
-  root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',qtdAnomaliaExecutada:''}); resetFotos(); render(); }));
+  root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',qtdAnomaliaExecutada:'',tipoEstrutura:''}); resetFotos(); render(); }));
   root.querySelectorAll('.te-camera').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.tec.split('|'); openPhotoPicker(eid, Number(idx), 'camera'); }));
   root.querySelectorAll('.te-gallery').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.teg.split('|'); openPhotoPicker(eid, Number(idx), 'gallery'); }));
   root.querySelectorAll('.te-photo-hint').forEach(h=>{
@@ -848,6 +856,10 @@ function renderTeamBlock(eqId){
             <div class="qty-field" style="${qtyStyle}"><label>Executada</label><input type="number" step="0.01" min="0" class="te-exec" data-tee="${eqId}|${i}" placeholder="Qtd." value="${r.quantidadeExecutada??''}"></div>
             ${teamMode()==='ose'? `<div class="qty-field" style="${qtyStyle}"><label title="Quantidade de anomalias executadas">Anomalias</label><input type="number" step="1" min="0" class="te-anom" data-tea="${eqId}|${i}" placeholder="Qtd." value="${r.qtdAnomaliaExecutada??''}"></div>`:''}
             <button type="button" class="icon-btn act-remove te-remove" data-eq-rm="${eqId}|${i}" title="Remover atividade" ${r.atividadeId?'disabled':''}>${icon('close',13)}</button>
+          </div>
+          <div class="te-estrutura">
+            <label>Tipo de estruturas</label>
+            <select class="te-tipo-estrutura" data-tte="${eqId}|${i}">${tipoEstruturaOptionsHtml(DB, r.tipoEstrutura)}</select>
           </div>
           <div class="activity-fotos">
             <div class="te-thumbs" data-tef="${eqId}|${i}"></div>
@@ -1057,6 +1069,7 @@ async function submitEditOcNds(){
             atividadeId: Number(r.atividadeId),
             quantidadePrevista: r.quantidadePrevista? parseFloat(r.quantidadePrevista): null,
             quantidadeExecutada: (r.quantidadeExecutada===''||r.quantidadeExecutada==null)? null : parseFloat(r.quantidadeExecutada),
+            tipoEstrutura: r.tipoEstrutura||'',
             fotos: fotosUrls[eqId][i]||''
           }))
         }))
@@ -1094,7 +1107,7 @@ async function syncNowOcNds(){
       const v = snap.val();
       db = (typeof v==='string')? JSON.parse(v) : v;
     }else{
-      db = { equipes:[], atividades:[], projetos:[], programacoes:[], ocnds:[], usuarios:[], customFields:{equipes:[],atividades:[],projetos:[],programacoes:[]}, seq:1 };
+      db = { equipes:[], atividades:[], projetos:[], programacoes:[], ocnds:[], usuarios:[], customFields:{equipes:[],atividades:[],projetos:[],programacoes:[]}, tiposEstrutura:[], seq:1 };
     }
     let changed = false;
     q.forEach(patch=>{
@@ -1171,6 +1184,7 @@ async function submitEdit(){
             quantidadePrevista: r.quantidadePrevista? parseFloat(r.quantidadePrevista): null,
             quantidadeExecutada: (r.quantidadeExecutada===''||r.quantidadeExecutada==null)? null : parseFloat(r.quantidadeExecutada),
             qtdAnomaliaExecutada: (teamMode()==='ose' && r.qtdAnomaliaExecutada!=='' && r.qtdAnomaliaExecutada!=null)? parseFloat(r.qtdAnomaliaExecutada) : null,
+            tipoEstrutura: r.tipoEstrutura||'',
             fotos: fotosUrls[eqId][i]||''
           }))
         }))
@@ -1249,7 +1263,7 @@ async function syncNow(){
       const v = snap.val();
       db = (typeof v==='string')? JSON.parse(v) : v;
     }else{
-      db = { equipes:[], atividades:[], projetos:[], programacoes:[], ocnds:[], podaProgramacoes:[], oseProgramacoes:[], usuarios:[], customFields:{equipes:[],atividades:[],projetos:[],programacoes:[]}, seq:1 };
+      db = { equipes:[], atividades:[], projetos:[], programacoes:[], ocnds:[], podaProgramacoes:[], oseProgramacoes:[], usuarios:[], customFields:{equipes:[],atividades:[],projetos:[],programacoes:[]}, tiposEstrutura:[], seq:1 };
     }
     let changed = false;
     q.forEach(patch=>{
@@ -1266,6 +1280,7 @@ async function syncNow(){
           quantidadeExecutada: x.quantidadeExecutada != null ? x.quantidadeExecutada : (existing.find(y=>String(y.atividadeId)===String(x.atividadeId))?.quantidadeExecutada ?? null),
           qtdAnomalia: x.qtdAnomalia ?? existing.find(y=>String(y.atividadeId)===String(x.atividadeId))?.qtdAnomalia ?? null,
           qtdAnomaliaExecutada: x.qtdAnomaliaExecutada != null ? x.qtdAnomaliaExecutada : (existing.find(y=>String(y.atividadeId)===String(x.atividadeId))?.qtdAnomaliaExecutada ?? null),
+          tipoEstrutura: x.tipoEstrutura != null ? x.tipoEstrutura : (existing.find(y=>String(y.atividadeId)===String(x.atividadeId))?.tipoEstrutura ?? ''),
           fotos: x.fotos || existing.find(y=>String(y.atividadeId)===String(x.atividadeId))?.fotos || ''
         }));
         at.historico = at.historico||[];

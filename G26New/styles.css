@@ -379,6 +379,9 @@ a.anexo-thumb{text-decoration:none;}
 .team-atividade .activity-row{margin-bottom:8px;}
 .activity-fotos{display:flex;flex-direction:column;gap:8px;}
 .te-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.te-estrutura{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.te-estrutura label{font-size:11.5px;font-weight:600;color:var(--muted);white-space:nowrap;margin:0;}
+.te-estrutura select{flex:1;padding:7px 9px;font-size:13px;color:var(--dark);background:var(--panel);border:1px solid var(--border);border-radius:6px;}
 .te-photo-hint{font-size:11.5px;flex:1;}
 .te-photo-hint.missing{color:var(--red);}
 .te-photo-hint.ok{color:var(--green);}

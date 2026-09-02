@@ -23,6 +23,7 @@ if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js').ca
 
 const DEFAULT_DATA = {
   equipes: [], atividades: [], projetos: [], programacoes: [], ocnds: [], podaProgramacoes: [], oseProgramacoes: [], usuarios: [],
+  tiposEstrutura: [],
   customFields: { equipes: [], atividades: [], projetos: [], programacoes: [], podaProgramacoes: [], oseProgramacoes: [] },
   cidades: [], cidadeDistancias: [], cidadeMaxDist: 50,
   seq: 1, rev: 0
@@ -1764,6 +1765,10 @@ function renderAtividades(){
       </div>
       <span style="font-size:12px;color:var(--muted);">${ativFilters.q? 'Encontradas ':'Total '}<strong style="color:var(--accent);">${list.length}</strong> de ${DB.atividades.length} atividades</span>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <button type="button" class="btn" id="btn-tipos-estrutura">${icon('layers',14)} <span>Tipos de Estrutura</span></button>
+      <span style="font-size:12px;color:var(--muted-2);">${(DB.tiposEstrutura||[]).length? `${(DB.tiposEstrutura||[]).length} tipo(s) de estrutura cadastrado(s) — opcionais em cada atividade na página da equipe.` : 'Nenhum tipo de estrutura cadastrado ainda.'}</span>
+    </div>
     <div class="panel"><div class="table-scroll"><table>
       <thead><tr><th>Fav.</th><th>Código</th><th>Descrição</th><th>Unidade</th><th>Valor unitário</th>${customFields.map(f=>`<th>${esc(f.label)}</th>`).join('')}<th></th></tr></thead>
       <tbody>${list.map(a=>`<tr>
@@ -1781,6 +1786,8 @@ function renderAtividades(){
   el.querySelectorAll('[data-fav-at]').forEach(b=>b.addEventListener('click', ()=>toggleFavAtividade(b.dataset.favAt)));
   el.querySelectorAll('[data-edit-at]').forEach(b=>b.addEventListener('click', ()=>openAtividadeModal(b.dataset.editAt)));
   el.querySelectorAll('[data-del-at]').forEach(b=>b.addEventListener('click', ()=>deleteAtividade(b.dataset.delAt)));
+  const btnTipos = document.getElementById('btn-tipos-estrutura');
+  if(btnTipos) btnTipos.addEventListener('click', openTiposEstruturaModal);
 }
     function openAtividadeModal(id){
       if(!requerEscrita()) return;
@@ -1824,6 +1831,78 @@ function renderAtividades(){
   registrarEvento('exclusao','atividade',id,findAtividade(id)? findAtividade(id).codigo+' · '+findAtividade(id).descricao : String(id),'Atividade excluída'+(inUse? ' e removida das programações':''));
   saveData(); renderContent(); toast('Atividade excluída.');
 }
+
+/* =========================================================
+   TIPOS DE ESTRUTURA
+   Lista opcional por atividade na página da equipe. Se usada,
+   acompanha todos os dados da execução (RDO/banco).
+========================================================= */
+function findTipoEstrutura(id){ return (DB.tiposEstrutura||[]).find(t=>String(t.id)===String(id)); }
+function tipoEstruturaNome(id){ return findTipoEstrutura(id)?.nome || id || ''; }
+function openTiposEstruturaModal(){
+  if(!requerEscrita()) return;
+  const tipos = DB.tiposEstrutura||[];
+  const body = `
+    <div class="field"><label>Novo tipo de estrutura</label>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="te-novo" placeholder="Ex: Poste concreto, Torre treliçada, Estrutura de madeira…" style="flex:1;">
+        <button type="button" class="btn btn-primary" id="te-add">${icon('plus',14)} Adicionar</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Tipos cadastrados (${tipos.length})</label>
+      <div id="te-lista" style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;">
+        ${tipos.length? tipos.map(t=>`
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border-soft);">
+            <span style="flex:1;">${esc(t.nome)}</span>
+            <button type="button" class="icon-btn te-remove" data-id="${t.id}" title="Excluir">${icon('trash',14)}</button>
+          </div>`).join('') : '<div style="padding:14px;color:var(--muted-2);font-size:12.5px;text-align:center;">Nenhum tipo de estrutura cadastrado.</div>'}
+      </div>
+    </div>`;
+  openModal({
+    title:'Tipos de Estrutura', bodyHtml: body, submitLabel:'Fechar',
+    onMount:(modal)=>{
+      const listaEl = modal.querySelector('#te-lista');
+      const addBtn = modal.querySelector('#te-add');
+      const novo = modal.querySelector('#te-novo');
+      function adicionar(){
+        const nome = novo.value.trim();
+        if(!nome){ toast('Informe o nome do tipo de estrutura.', 'error'); return; }
+        if((DB.tiposEstrutura||[]).some(t=>t.nome.toLowerCase()===nome.toLowerCase())){ toast('Já existe um tipo de estrutura com esse nome.', 'error'); return; }
+        DB.tiposEstrutura = DB.tiposEstrutura||[];
+        const t = { id: nextId(), nome };
+        DB.tiposEstrutura.push(t);
+        registrarEvento('criacao','tiposEstrutura',t.id,t.nome,'Tipo de estrutura criado');
+        saveData();
+        novo.value='';
+        renderTiposLista();
+      }
+      function renderTiposLista(){
+        const tipos = DB.tiposEstrutura||[];
+        listaEl.innerHTML = tipos.length? tipos.map(t=>`
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border-soft);">
+            <span style="flex:1;">${esc(t.nome)}</span>
+            <button type="button" class="icon-btn te-remove" data-id="${t.id}" title="Excluir">${icon('trash',14)}</button>
+          </div>`).join('') : '<div style="padding:14px;color:var(--muted-2);font-size:12.5px;text-align:center;">Nenhum tipo de estrutura cadastrado.</div>';
+        listaEl.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', ()=>{
+          const id = Number(b.dataset.id);
+          const t = findTipoEstrutura(id);
+          if(!t) return;
+          if(!confirm('Excluir o tipo de estrutura "'+t.nome+'"?')) return;
+          DB.tiposEstrutura = DB.tiposEstrutura.filter(x=>x.id!==id);
+          registrarEvento('exclusao','tiposEstrutura',id,t.nome,'Tipo de estrutura excluído');
+          saveData();
+          renderTiposLista();
+        }));
+      }
+      renderTiposLista();
+      addBtn.addEventListener('click', adicionar);
+      novo.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); adicionar(); } });
+    },
+    onSubmit:()=>{ return true; }
+  });
+}
+
 function limparTodasAtividades(){
   if(!requerEscrita()) return;
   const total = DB.atividades.length;
@@ -5521,7 +5600,7 @@ function openOseRDOModal(progId, attribId){
         <span class="badge-prefix" style="color:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};">${res.pct}%</span>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;" title="Anomalias programadas → executadas">Anom.</th><th style="text-align:center;">Fotos</th></tr></thead>
+        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:left;">Estrutura</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;" title="Anomalias programadas → executadas">Anom.</th><th style="text-align:center;">Fotos</th></tr></thead>
         <tbody>
           ${(x.atribuicao.atividades||[]).map((a,idx)=>{
             const at = findAtividade(a.atividadeId);
@@ -5534,6 +5613,7 @@ function openOseRDOModal(progId, attribId){
               <td class="mono" style="padding:4px 6px;">${esc(at?.codigo||'?')}</td>
               <td style="padding:4px 6px;">${esc(at?.descricao||'')}</td>
               <td style="text-align:center;">${esc(at?.unidade||'')}</td>
+              <td style="padding:4px 6px;">${esc(a.tipoEstrutura||'—')}</td>
               <td style="text-align:center;" class="mono">${p? fmtNum(p):'—'}</td>
               <td style="text-align:center;" class="mono"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
               <td style="text-align:center;color:${pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--red)'};font-weight:700;">${p? pct+'%':'—'}</td>
@@ -6847,7 +6927,7 @@ function openPodaRDOModal(progId, attribId){
         <span class="badge-prefix" style="color:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};">${res.pct}%</span>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;">Fotos</th></tr></thead>
+        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:left;">Estrutura</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;">Fotos</th></tr></thead>
         <tbody>
           ${(x.atribuicao.atividades||[]).map((a,idx)=>{
             const at = findAtividade(a.atividadeId);
@@ -6860,6 +6940,7 @@ function openPodaRDOModal(progId, attribId){
               <td class="mono" style="padding:4px 6px;">${esc(at?.codigo||'?')}</td>
               <td style="padding:4px 6px;">${esc(at?.descricao||'')}</td>
               <td style="text-align:center;">${esc(at?.unidade||'')}</td>
+              <td style="padding:4px 6px;">${esc(a.tipoEstrutura||'—')}</td>
               <td style="text-align:center;" class="mono">${p? fmtNum(p):'—'}</td>
               <td style="text-align:center;" class="mono"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
               <td style="text-align:center;color:${pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--red)'};font-weight:700;">${p? pct+'%':'—'}</td>
@@ -8499,7 +8580,7 @@ function openRDOModal(progId, attribId){
         <span class="badge-prefix" style="color:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};">${res.pct}%</span>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;">Fotos</th></tr></thead>
+        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:left;">Estrutura</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;">Fotos</th></tr></thead>
         <tbody>
           ${(x.atribuicao.atividades||[]).map((a,idx)=>{
             const at = findAtividade(a.atividadeId);
@@ -8512,6 +8593,7 @@ function openRDOModal(progId, attribId){
               <td class="mono" style="padding:4px 6px;">${esc(at?.codigo||'?')}</td>
               <td style="padding:4px 6px;">${esc(at?.descricao||'')}</td>
               <td style="text-align:center;">${esc(at?.unidade||'')}</td>
+              <td style="padding:4px 6px;">${esc(a.tipoEstrutura||'—')}</td>
               <td style="text-align:center;" class="mono">${p? fmtNum(p):'—'}</td>
               <td style="text-align:center;" class="mono"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
               <td style="text-align:center;color:${pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--red)'};font-weight:700;">${p? pct+'%':'—'}</td>
@@ -8619,12 +8701,13 @@ function printRDOCompleto(x){
       <td style="border:1px solid #999;padding:4px 8px;" class="mono">${esc(at?.codigo||'?')}</td>
       <td style="border:1px solid #999;padding:4px 8px;">${esc(at?.descricao||'')}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;">${esc(at?.unidade||'')}</td>
+      <td style="border:1px solid #999;padding:4px 8px;">${esc(a.tipoEstrutura||'—')}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;">${p? fmtNum(p):'—'}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;font-weight:700;color:${pct>=100?'#1c7d1c':pct>=50?'#b8860b':'#b33'};">${p? pct+'%':'—'}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:right;">${fmtMoney(execVal)}</td>
-    </tr><tr><td colspan="8" style="border:1px solid #999;padding:8px;background:#fafafa;">${fotosHtml}</td></tr>`;
-  }).join('') || '<tr><td colspan="8" style="border:1px solid #999;padding:4px 8px;">Sem atividades registradas.</td></tr>';
+    </tr><tr><td colspan="9" style="border:1px solid #999;padding:8px;background:#fafafa;">${fotosHtml}</td></tr>`;
+  }).join('') || '<tr><td colspan="9" style="border:1px solid #999;padding:4px 8px;">Sem atividades registradas.</td></tr>';
   const hist = x.atribuicao.historico||[];
   const histRows = hist.length? hist.slice().reverse().map(h=>`<tr>
       <td style="border:1px solid #999;padding:4px 8px;">${fmtDateTime(h.ts)}</td>
@@ -8708,7 +8791,7 @@ function printRDOCompleto(x){
     <h2>Atividades executadas</h2>
     <p class="meta">Previsto: ${fmtNum(res.prev)} · Executado: <strong>${fmtNum(res.exec)}</strong> · Percentual: <strong>${res.pct}%</strong></p>
     <table>
-      <thead><tr><th style="text-align:center;">#</th><th>Código</th><th>Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:right;">Valor exec.</th></tr></thead>
+      <thead><tr><th style="text-align:center;">#</th><th>Código</th><th>Descrição</th><th style="text-align:center;">Un.</th><th>Estrutura</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:right;">Valor exec.</th></tr></thead>
       <tbody>${ativRows}</tbody>
     </table>
 
@@ -8758,19 +8841,20 @@ function printRDOTipoCompleto(x, tipo){
     const fotos = String(a.fotos||'').split(';;').filter(Boolean);
     const fotosHtml = fotos.length? `<div class="fotos">${fotos.map(u=>`<figure><img src="${esc(u)}" alt="Foto da execução da atividade ${idx+1}"><figcaption>Atividade ${at?.codigo||idx+1} — foto ${idx+1}</figcaption></figure>`).join('')}</div>` : '<div style="color:#999;">Sem fotos registradas.</div>';
     const anomCell = tipo==='ose'? `<td style="border:1px solid #999;padding:4px 8px;text-align:center;">${esc(String(a.qtdAnomalia??'—')+' → '+String(a.qtdAnomaliaExecutada??'—'))}</td>` : '';
-    const nCols = tipo==='ose'? 9 : 8;
+    const nCols = tipo==='ose'? 10 : 9;
     return `<tr>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;">${idx+1}</td>
       <td style="border:1px solid #999;padding:4px 8px;" class="mono">${esc(at?.codigo||'?')}</td>
       <td style="border:1px solid #999;padding:4px 8px;">${esc(at?.descricao||'')}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;">${esc(at?.unidade||'')}</td>
+      <td style="border:1px solid #999;padding:4px 8px;">${esc(a.tipoEstrutura||'—')}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;">${pv? fmtNum(pv):'—'}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;font-weight:700;color:${pct>=100?'#1c7d1c':pct>=50?'#b8860b':'#b33'};">${pv? pct+'%':'—'}</td>
       ${anomCell}
       <td style="border:1px solid #999;padding:4px 8px;text-align:right;">${fmtMoney(execVal)}</td>
     </tr><tr><td colspan="${nCols}" style="border:1px solid #999;padding:8px;background:#fafafa;">${fotosHtml}</td></tr>`;
-  }).join('') || `<tr><td colspan="${tipo==='ose'? 9:8}" style="border:1px solid #999;padding:4px 8px;">Sem atividades registradas.</td></tr>`;
+  }).join('') || `<tr><td colspan="${tipo==='ose'? 10:9}" style="border:1px solid #999;padding:4px 8px;">Sem atividades registradas.</td></tr>`;
   const hist = x.atribuicao.historico||[];
   const histRows = hist.length? hist.slice().reverse().map(h=>`<tr>
       <td style="border:1px solid #999;padding:4px 8px;">${fmtDateTime(h.ts)}</td>
@@ -8866,7 +8950,7 @@ function printRDOTipoCompleto(x, tipo){
     <h2>Atividades executadas</h2>
     <p class="meta">Previsto: ${fmtNum(res.prev)} · Executado: <strong>${fmtNum(res.exec)}</strong> · Percentual: <strong>${res.pct}%</strong></p>
     <table>
-      <thead><tr><th style="text-align:center;">#</th><th>Código</th><th>Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th>${tipo==='ose'? '<th style="text-align:center;" title="Anomalias programadas → executadas">Anom.</th>':''}<th style="text-align:right;">Valor exec.</th></tr></thead>
+      <thead><tr><th style="text-align:center;">#</th><th>Código</th><th>Descrição</th><th style="text-align:center;">Un.</th><th>Estrutura</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th>${tipo==='ose'? '<th style="text-align:center;" title="Anomalias programadas → executadas">Anom.</th>':''}<th style="text-align:right;">Valor exec.</th></tr></thead>
       <tbody>${ativRows}</tbody>
     </table>
 
@@ -8937,6 +9021,7 @@ function exportRDOTipo(registros, tipo){
         'Código Atividade': at?.codigo||'—',
         'Descrição Atividade': at?.descricao||'',
         'Unidade': at?.unidade||'',
+        'Tipo Estrutura Atividade': a.tipoEstrutura||'',
         'Qtd Prevista Atividade': a.quantidadePrevista||'',
         'Qtd Executada Atividade': e!=null? e:'',
         'Percentual Atividade': pv? Math.round((e||0)/pv*100)+'%':'',
@@ -9052,6 +9137,7 @@ function exportRDOExcel(registros){
         'Código Atividade': at?.codigo||'—',
         'Descrição Atividade': at?.descricao||'',
         'Unidade': at?.unidade||'',
+        'Tipo Estrutura Atividade': a.tipoEstrutura||'',
         'Qtd Prevista Atividade': a.quantidadePrevista||'',
         'Qtd Executada Atividade': e!=null? e:'',
         'Percentual Atividade': p? Math.round((e||0)/p*100)+'%':'',
