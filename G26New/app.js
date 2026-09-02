@@ -1682,6 +1682,7 @@ function crewCard(eq){
       <div class="crew-role"><span class="r-lbl">Supervisor</span><span class="r-val">${esc(eq.supervisor||'—')}</span></div>
       <div class="crew-role"><span class="r-lbl">Encarregado</span><span class="r-val">${esc(eq.encarregado||'—')}</span></div>
       <div class="crew-role"><span class="r-lbl">Motorista</span><span class="r-val">${esc(eq.motorista||'—')}</span></div>
+      <div class="crew-role"><span class="r-lbl">Placa veículo</span><span class="r-val">${esc(eq.placaVeiculo||'—')}</span></div>
       <div class="crew-role"><span class="r-lbl">WhatsApp</span><span class="r-val">${eq.whatsapp? `<a href="${esc(waLink(eq.whatsapp, 'Olá!'))}" target="_blank" rel="noopener" style="color:var(--green);font-weight:600;">${esc(eq.whatsapp)}</a>` : '—'}</span></div>
       <div class="crew-role"><span class="r-lbl">Meta diária</span><span class="r-val mono">${metaDiaria(eq)? fmtMoney(metaDiaria(eq)) : '—'}</span></div>
       <div class="crew-role"><span class="r-lbl">Eletricistas</span><span class="r-val">${eletricistas.length? esc(eletricistas.join(', ')) : '—'}</span></div>
@@ -1701,6 +1702,7 @@ function crewCard(eq){
     <div class="field"><label>Supervisor</label><input type="text" name="supervisor" value="${esc(eq?.supervisor||'')}" placeholder="Nome do supervisor"></div>
     <div class="field"><label>Encarregado</label><input type="text" name="encarregado" value="${esc(eq?.encarregado||'')}" placeholder="Nome do encarregado"></div>
     <div class="field"><label>Motorista</label><input type="text" name="motorista" value="${esc(eq?.motorista||'')}" placeholder="Nome do motorista"></div>
+    <div class="field"><label>Placa do veículo</label><input type="text" name="placaVeiculo" value="${esc(eq?.placaVeiculo||'')}" placeholder="Ex: ABC1D23" style="text-transform:uppercase;"></div>
     <div class="field"><label>WhatsApp</label><input type="text" name="whatsapp" value="${esc(eq?.whatsapp||'')}" placeholder="Ex: (11) 98765-4321" inputmode="tel"><div class="field-hint">💡 Usado no botão "Encaminhar para equipe" das programações. Informe com DDD.</div></div>
     <div class="field"><label>Meta diária (R$)</label><input type="number" step="0.01" min="0" name="metaDiaria" value="${eq?.metaDiaria??''}" placeholder="0,00"><div class="field-hint">💡 Se a programação do dia ficar abaixo deste valor, o sistema alerta na programação.</div></div>
     <div class="field"><label>Eletricistas</label><input type="text" name="eletricistas" value="${esc((eq?.eletricistas||[]).join(', '))}" placeholder="Separe por vírgula: Fulano, Ciclano"><div class="field-hint">💡 Separe os nomes por vírgula.</div></div>
@@ -1719,7 +1721,7 @@ function crewCard(eq){
       if(!fd.get('setor') || !fd.get('coordenacao')){ toast('Selecione o setor e a coordenação da equipe.', 'error'); return false; }
       const setor = usuarioRestrito()? CURRENT_USER.setor : fd.get('setor');
       const coordenacao = usuarioRestrito()? CURRENT_USER.coordenacao : fd.get('coordenacao');
-      const data = { eqtl, prtn, setor, coordenacao, supervisor: fd.get('supervisor').trim(), encarregado: fd.get('encarregado').trim(), motorista: fd.get('motorista').trim(), whatsapp: fd.get('whatsapp').trim(), metaDiaria: parseFloat(fd.get('metaDiaria'))||0,
+      const data = { eqtl, prtn, setor, coordenacao, supervisor: fd.get('supervisor').trim(), encarregado: fd.get('encarregado').trim(), motorista: fd.get('motorista').trim(), placaVeiculo: fd.get('placaVeiculo').trim().toUpperCase(), whatsapp: fd.get('whatsapp').trim(), metaDiaria: parseFloat(fd.get('metaDiaria'))||0,
         eletricistas: fd.get('eletricistas').split(',').map(s=>s.trim()).filter(Boolean), ativo: fd.get('ativo')==='on', custom: parseCustomFieldsFromForm('equipes', fd) };
       if(eq){ Object.assign(eq, data); toast('Equipe atualizada.'); registrarEvento('edicao','equipe',eq.id,eq.eqtl||eq.prtn,'Equipe atualizada'); }
       else { data.id = nextId(); DB.equipes.push(data); toast('Equipe cadastrada.'); registrarEvento('criacao','equipe',data.id,data.eqtl||data.prtn,'Equipe criada · '+data.setor); }
@@ -3143,7 +3145,7 @@ function openAtribDetalhe(atribId){
         root.querySelectorAll('.atrib-equipe').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].equipeId = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.atrib-remove').forEach(b=>b.addEventListener('click', e=>{ atribs.splice(Number(e.currentTarget.dataset.idx),1); refreshContainer(); }));
         root.querySelectorAll('.atrib-add-activity').forEach(b=>b.addEventListener('click', e=>{ atribs[Number(e.currentTarget.dataset.idx)].atividades.push({atividadeId:'',quantidadePrevista:''}); refreshContainer(); }));
-        bindActAutocomplete(root, atribs, atualizarMetaIndicadores);
+        bindActAutocomplete(root, atribs, atualizarMetaIndicadores, (typeof selProjeto!=='undefined' && selProjeto)? (selProjeto.planoFisico||[]).map(x=>x.atividadeId) : null);
         root.querySelectorAll('.act-qty').forEach(s=>s.addEventListener('input', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].quantidadePrevista = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.act-remove').forEach(b=>b.addEventListener('click', e=>{ const i=Number(e.currentTarget.dataset.idx), j=Number(e.currentTarget.dataset.jdx); atribs[i].atividades.splice(j,1); refreshContainer(); }));
         atualizarMetaIndicadores();
@@ -4973,9 +4975,13 @@ function openOseHistoricoModal(atribId){
 }
 
 /* --- Autocomplete de atividades (OSE / PODA) --- */
-function bindActAutocomplete(root, atribs, onChange){
+function bindActAutocomplete(root, atribs, onChange, prioIds){
   const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const acList = atividadesOrdenadas();
+  const prioSet = new Set((prioIds||[]).map(String));
+  let acList = atividadesOrdenadas();
+  if(prioSet.size){
+    acList = [...acList].sort((a,b)=> (prioSet.has(String(b.id))?1:0)-(prioSet.has(String(a.id))?1:0));
+  }
   root.querySelectorAll('.act-ac').forEach(ac=>{
     const idx = Number(ac.dataset.idx), jdx = Number(ac.dataset.jdx);
     const input = ac.querySelector('.act-ac-input');
@@ -5006,7 +5012,8 @@ function bindActAutocomplete(root, atribs, onChange){
       listEl.innerHTML = items.map(a=>{
         const sel = d && String(d.id)===String(a.id);
         const fav = isFavorita(a.id) ? `<span class="ac-fav">${icon('star',12)}</span>` : '';
-        return `<div class="act-ac-item${sel?' ac-selected':''}" data-id="${a.id}">${fav}<span class="ac-cc">${esc(a.codigo)}</span><span class="ac-desc">${esc(a.descricao)}</span></div>`;
+        const isPrio = prioSet.has(String(a.id));
+        return `<div class="act-ac-item${sel?' ac-selected':''}${isPrio?' ac-prio-item':''}" data-id="${a.id}">${fav}<span class="ac-cc">${esc(a.codigo)}</span><span class="ac-desc">${esc(a.descricao)}</span>${isPrio?`<span class="ac-prio-tag">do projeto</span>`:''}</div>`;
       }).join('');
       listEl.style.display='block'; arrow=-1;
       listEl.querySelectorAll('.act-ac-item').forEach(it=>{
@@ -5135,7 +5142,7 @@ function openOseProgramacaoModal(id){
         root.querySelectorAll('.atrib-equipe').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].equipeId = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.atrib-remove').forEach(b=>b.addEventListener('click', e=>{ atribs.splice(Number(e.currentTarget.dataset.idx),1); refreshContainer(); }));
         root.querySelectorAll('.atrib-add-activity').forEach(b=>b.addEventListener('click', e=>{ atribs[Number(e.currentTarget.dataset.idx)].atividades.push({atividadeId:'',quantidadePrevista:'',qtdAnomalia:''}); refreshContainer(); }));
-        bindActAutocomplete(root, atribs, atualizarMetaIndicadores);
+        bindActAutocomplete(root, atribs, atualizarMetaIndicadores, (typeof selProjeto!=='undefined' && selProjeto)? (selProjeto.planoFisico||[]).map(x=>x.atividadeId) : null);
         root.querySelectorAll('.act-qty').forEach(s=>s.addEventListener('input', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].quantidadePrevista = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.act-anom').forEach(s=>s.addEventListener('input', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].qtdAnomalia = e.target.value; }));
         root.querySelectorAll('.act-remove').forEach(b=>b.addEventListener('click', e=>{ const i=Number(e.currentTarget.dataset.idx), j=Number(e.currentTarget.dataset.jdx); atribs[i].atividades.splice(j,1); refreshContainer(); }));
@@ -5564,6 +5571,7 @@ function openOseRDOModal(progId, attribId){
         <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
       </div>
     </div>
     ${(x.programacao.anexos&&x.programacao.anexos.length)? `<div style="margin-bottom:20px;">
@@ -6513,7 +6521,7 @@ function openPodaProgramacaoModal(id){
         root.querySelectorAll('.atrib-equipe').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].equipeId = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.atrib-remove').forEach(b=>b.addEventListener('click', e=>{ atribs.splice(Number(e.currentTarget.dataset.idx),1); refreshContainer(); }));
         root.querySelectorAll('.atrib-add-activity').forEach(b=>b.addEventListener('click', e=>{ atribs[Number(e.currentTarget.dataset.idx)].atividades.push({atividadeId:'',quantidadePrevista:''}); refreshContainer(); }));
-        bindActAutocomplete(root, atribs, atualizarMetaIndicadores);
+        bindActAutocomplete(root, atribs, atualizarMetaIndicadores, (typeof selProjeto!=='undefined' && selProjeto)? (selProjeto.planoFisico||[]).map(x=>x.atividadeId) : null);
         root.querySelectorAll('.act-qty').forEach(s=>s.addEventListener('input', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].quantidadePrevista = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.act-remove').forEach(b=>b.addEventListener('click', e=>{ const i=Number(e.currentTarget.dataset.idx), j=Number(e.currentTarget.dataset.jdx); atribs[i].atividades.splice(j,1); refreshContainer(); }));
         atualizarMetaIndicadores();
@@ -6891,6 +6899,7 @@ function openPodaRDOModal(progId, attribId){
         <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
       </div>
     </div>
     ${(x.programacao.anexos&&x.programacao.anexos.length)? `<div style="margin-bottom:20px;">
@@ -7383,7 +7392,7 @@ function openOcNdsDetalhe(id){
         <div><span class="badge" style="color:${stColor};background:${bgFromVar(stColor)};font-size:13px;padding:6px 14px;"><span class="badge-dot"></span>${esc(x.status)}</span></div>
       </div>
 
-      <div class="dtl-tile" style="grid-column:1/-1;"><div class="dtl-tile-lbl">Equipe</div><div class="dtl-tile-val"><span class="badge-prefix">${esc(equipeLabel(eq))}</span><div class="admin-field-meta" style="margin-top:4px;">Supervisor: ${esc(eq?.supervisor||'—')} · Encarregado: ${esc(eq?.encarregado||'—')}</div></div></div>
+      <div class="dtl-tile" style="grid-column:1/-1;"><div class="dtl-tile-lbl">Equipe</div><div class="dtl-tile-val"><span class="badge-prefix">${esc(equipeLabel(eq))}</span><div class="admin-field-meta" style="margin-top:4px;">Supervisor: ${esc(eq?.supervisor||'—')} · Encarregado: ${esc(eq?.encarregado||'—')}</div><div class="admin-field-meta" style="margin-top:4px;">Motorista: ${esc(eq?.motorista||'—')} · Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</div></div></div>
 
       ${detalhesHtml}
 
@@ -8544,6 +8553,7 @@ function openRDOModal(progId, attribId){
         <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Eletricistas: ${esc((eq?.eletricistas||[]).filter(Boolean).join(', ')||'—')}</p>
       </div>
     </div>
@@ -8773,6 +8783,7 @@ function printRDOCompleto(x){
       </div>
       <div>
         <p class="meta">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="meta">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
         <p class="meta">Eletricistas: ${esc((eq?.eletricistas||[]).filter(Boolean).join(', ')||'—')}</p>
         <p class="meta">WhatsApp: ${esc(eq?.whatsapp||'—')}</p>
       </div>
@@ -8932,6 +8943,7 @@ function printRDOTipoCompleto(x, tipo){
       </div>
       <div>
         <p class="meta">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="meta">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
         <p class="meta">Eletricistas: ${esc((eq?.eletricistas||[]).filter(Boolean).join(', ')||'—')}</p>
         <p class="meta">WhatsApp: ${esc(eq?.whatsapp||'—')}</p>
       </div>

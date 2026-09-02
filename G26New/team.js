@@ -311,6 +311,8 @@ function renderRDOForm(){
     ['rdo_horario_chegada','Horário Chegada'],
     ['rdo_horario_inicio','Horário Início das atividades']
   ];
+  const rdoEq = prog && (prog.equipeId!=null? findEquipe(DB, prog.equipeId) : (prog.atribuicoes||[])[0]? findEquipe(DB, (prog.atribuicoes||[])[0].equipeId) : null);
+  const rdoPlaca = rdoEq && rdoEq.placaVeiculo ? `<div style="font-size:12px;color:var(--muted-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">Placa do veículo: <strong>${esc(rdoEq.placaVeiculo)}</strong></div>` : '';
   return `
     ${anexosDoProgramadorHtml()}
     ${orientacoesPlanejamentoHtml()}
@@ -336,6 +338,7 @@ function renderRDOForm(){
             <label style="display:block;margin-bottom:4px;">KM Final</label>
             <input type="number" class="rdo-input" data-rdo="rdo_km_final" inputmode="numeric" autocomplete="off" placeholder="0" style="width:100%;padding:8px;font-size:16px;font-family:'JetBrains Mono',monospace;letter-spacing:.06em;">
           </div>
+          ${rdoPlaca}
         </div>
         <div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--border);">
           <h4 style="margin:0 0 12px 0;font-size:13px;color:var(--dark);">Horários de saída da base</h4>
@@ -359,6 +362,8 @@ function renderOcNdsRDOForm(){
     ['rdo_horario_chegada','Horário Chegada'],
     ['rdo_horario_inicio','Horário Início das atividades']
   ];
+  const ocRdoEq = ocndsItem && findEquipe(DB, ocndsItem.equipeId);
+  const rdoPlaca = ocRdoEq && ocRdoEq.placaVeiculo ? `<div style="font-size:12px;color:var(--muted-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">Placa do veículo: <strong>${esc(ocRdoEq.placaVeiculo)}</strong></div>` : '';
   const gid = ocndsItem.gid||'G26-'+String(ocndsItem.id).padStart(7,'0');
   const anexos = (ocndsItem&&ocndsItem.anexos)||[];
   const anexosHtml = anexos.length ? `
@@ -392,6 +397,7 @@ function renderOcNdsRDOForm(){
             <label style="display:block;margin-bottom:4px;">KM Final</label>
             <input type="number" class="rdo-input" data-rdo="rdo_km_final" inputmode="numeric" autocomplete="off" placeholder="0" style="width:100%;padding:8px;font-size:16px;font-family:'JetBrains Mono',monospace;letter-spacing:.06em;">
           </div>
+          ${rdoPlaca}
         </div>
         <div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--border);">
           <h4 style="margin:0 0 12px 0;font-size:13px;color:var(--dark);">Horários de saída da base</h4>
