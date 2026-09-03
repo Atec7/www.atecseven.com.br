@@ -328,6 +328,7 @@ const ICONS = {
   ruler:'<path d="M21.7 7.3l-5-5a1 1 0 0 0-1.4 0l-13 13a1 1 0 0 0 0 1.4l5 5a1 1 0 0 0 1.4 0l13-13a1 1 0 0 0 0-1.4zM8 11l2 2M11 8l2 2M14 11l2 2"/>',
   check:'<path d="M20 6 9 17l-5-5"/>',
   x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  photo:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
 };
 function icon(name,size=16){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||''}</svg>`; }
 
@@ -5814,6 +5815,20 @@ function medicaoPodaCountTag(total){
   const n = Number(total)||0;
   return `<span class="med-poda-reprov-count">${n} reprovação${n===1?'':'ões'}</span>`;
 }
+function modalComMotivo({title, texto, submitLabel='Confirmar', onConfirm}){
+  openModal({
+    title: title||'Confirmar',
+    submitLabel,
+    bodyHtml: `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">${texto||''}</div>
+      <div class="field"><label>Motivo <span class="req">*</span></label><textarea name="motivo" required rows="3" maxlength="300" placeholder="Descreva o motivo. Ele fica registrado nos fluxos e nos dados do RDO."></textarea></div>`,
+    onSubmit:(fd)=>{
+      const motivo = String(fd.get('motivo')||'').trim();
+      if(!motivo){ toast('Informe o motivo.', 'error'); return false; }
+      onConfirm(motivo);
+      return true;
+    }
+  });
+}
 function aprovarRdoParaMedicao(x){
   if(!requerEscrita()) return;
   if(!appvMedicaoPoda()){ toast('Apenas administradores podem aprovar a medição.', 'error'); return; }
@@ -5821,35 +5836,43 @@ function aprovarRdoParaMedicao(x){
   const atribId = x.atribuicao.id;
   let m = findMedicaoPoda(atribId);
   if(m && m.aprovado===true){ toast('Este RDO já está aprovado para medição.'); return; }
-  if(!m){
-    m = {
-      id: nextId(),
-      programacaoId: x.programacao.id,
-      atribuicaoId: atribId,
-      rdoData: structuredClone(x.atribuicao),
-      statusValidacao: '',
-      enviadoEqtl: '',
-      recolha: '',
-      valorFaturado: '',
-      aprovado: null,
-      motivoReprovacao: '',
-      totalReprovacoes: 0,
-      historicoReprovacoes: [],
-      enviadoPor: currentAutor(),
-      enviadoEm: Date.now(),
-      custom: {}
-    };
-    DB.medicaoPoda.push(m);
-  }
-  m.aprovado = true;
-  m.motivoReprovacao = '';
-  m.aprovadoPor = currentAutor();
-  m.aprovadoEm = Date.now();
-  x.atribuicao.historico = x.atribuicao.historico||[];
-  x.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo:'RDO aprovado para medição de poda'});
-  registrarEvento('medicao','atribuicao',atribId,podaProgLabel(x.programacao),'RDO aprovado para medição de poda');
-  saveData();
-  toast('RDO aprovado para medição de poda.');
+  modalComMotivo({
+    title:'Aprovar RDO para medição',
+    texto:'Confirma a aprovação deste RDO de <strong>'+esc(podaProgLabel(x.programacao))+'</strong> para a medição de poda? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Aprovar',
+    onConfirm:(motivo)=>{
+      if(!m){
+        m = {
+          id: nextId(),
+          programacaoId: x.programacao.id,
+          atribuicaoId: atribId,
+          rdoData: structuredClone(x.atribuicao),
+          statusValidacao: '',
+          enviadoEqtl: '',
+          recolha: '',
+          valorFaturado: '',
+          aprovado: null,
+          motivoReprovacao: '',
+          totalReprovacoes: 0,
+          historicoReprovacoes: [],
+          enviadoPor: currentAutor(),
+          enviadoEm: Date.now(),
+          custom: {}
+        };
+        DB.medicaoPoda.push(m);
+      }
+      m.aprovado = true;
+      m.motivoReprovacao = '';
+      m.motivoAprovacao = motivo;
+      m.aprovadoPor = currentAutor();
+      m.aprovadoEm = Date.now();
+      x.atribuicao.historico = x.atribuicao.historico||[];
+      x.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+      registrarEvento('medicao','atribuicao',atribId,podaProgLabel(x.programacao),'RDO aprovado para medição de poda · '+motivo);
+      saveData();
+      toast('RDO aprovado para medição de poda.');
+    }
+  });
 }
 function podaProgramacoesFiltradas(){
   const norm = s=> String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
@@ -7797,29 +7820,37 @@ function aprovarMedicaoPoda(atribId){
   const r = podaAtribGlobal(atribId);
   if(!r) return;
   if(findMedicaoPoda(atribId)){ toast('Este RDO já possui registro de medição.', 'error'); return; }
-  DB.medicaoPoda.push({
-    id: nextId(),
-    programacaoId: r.programacao.id,
-    atribuicaoId: r.atribuicao.id,
-    rdoData: structuredClone(r.atribuicao),
-    statusValidacao: '',
-    enviadoEqtl: '',
-    recolha: '',
-    valorFaturado: '',
-    aprovado: true,
-    motivoReprovacao: '',
-    totalReprovacoes: 0,
-    historicoReprovacoes: [],
-    aprovadoPor: currentAutor(),
-    aprovadoEm: Date.now(),
-    custom: {}
+  modalComMotivo({
+    title:'Aprovar RDO para medição',
+    texto:'Confirma a aprovação deste RDO de <strong>'+esc(podaProgLabel(r.programacao))+'</strong> para a medição de poda? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Aprovar',
+    onConfirm:(motivo)=>{
+      DB.medicaoPoda.push({
+        id: nextId(),
+        programacaoId: r.programacao.id,
+        atribuicaoId: r.atribuicao.id,
+        rdoData: structuredClone(r.atribuicao),
+        statusValidacao: '',
+        enviadoEqtl: '',
+        recolha: '',
+        valorFaturado: '',
+        aprovado: true,
+        motivoReprovacao: '',
+        motivoAprovacao: motivo,
+        totalReprovacoes: 0,
+        historicoReprovacoes: [],
+        aprovadoPor: currentAutor(),
+        aprovadoEm: Date.now(),
+        custom: {}
+      });
+      r.atribuicao.historico = r.atribuicao.historico||[];
+      r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+      registrarEvento('medicao','atribuicao',r.atribuicao.id,podaProgLabel(r.programacao),'RDO aprovado para medição de poda · '+motivo);
+      saveData();
+      toast('RDO aprovado para medição.');
+      renderMediçãoPoda();
+    }
   });
-  r.atribuicao.historico = r.atribuicao.historico||[];
-  r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo:'RDO enviado para medição de poda'});
-  registrarEvento('medicao','atribuicao',r.atribuicao.id,podaProgLabel(r.programacao),'RDO aprovado para medição de poda');
-  saveData();
-  toast('RDO aprovado para medição.');
-  renderMediçãoPoda();
 }
 
 function reaprovarMedicaoPoda(atribId){
@@ -7828,16 +7859,24 @@ function reaprovarMedicaoPoda(atribId){
   const m = findMedicaoPoda(atribId);
   if(!m){ toast('Registro não encontrado na medição.', 'error'); return; }
   const r = podaAtribGlobal(atribId);
-  m.aprovado = true;
-  m.motivoReprovacao = '';
-  m.aprovadoPor = currentAutor();
-  m.aprovadoEm = Date.now();
-  r.atribuicao.historico = r.atribuicao.historico||[];
-  r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo:'RDO reaprovado na medição após revisão'});
-  registrarEvento('medicao','atribuicao',atribId,podaProgLabel(r.programacao),'RDO reaprovado na medição');
-  saveData();
-  toast('Medição reaprovada.');
-  renderMediçãoPoda();
+  modalComMotivo({
+    title:'Reaprovar RDO na medição',
+    texto:'Confirma a REAPROVAÇÃO deste RDO de <strong>'+esc(podaProgLabel(r.programacao))+'</strong> na medição, após revisão? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Reaprovar',
+    onConfirm:(motivo)=>{
+      m.aprovado = true;
+      m.motivoReprovacao = '';
+      m.motivoAprovacao = motivo;
+      m.aprovadoPor = currentAutor();
+      m.aprovadoEm = Date.now();
+      r.atribuicao.historico = r.atribuicao.historico||[];
+      r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+      registrarEvento('medicao','atribuicao',atribId,podaProgLabel(r.programacao),'RDO reaprovado na medição · '+motivo);
+      saveData();
+      toast('Medição reaprovada.');
+      renderMediçãoPoda();
+    }
+  });
 }
 
 function reprovarMedicaoPodaModal(atribId){
@@ -7943,7 +7982,7 @@ function openMedicaoPodaModal(atribId){
     : estaAprovada
       ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(34,139,34,.35);background:rgba(34,139,34,.07);border-radius:10px;margin-bottom:16px;">
           <span style="color:var(--green);flex-shrink:0;margin-top:2px;">${icon('check',18)}</span>
-          <div><strong style="color:var(--green);">Medição APROVADA</strong><div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Aprovado por <strong>${esc(m?.aprovadoPor?.usuarioNome||'—')}</strong> em <span class="mono">${fmtDateTime(m?.aprovadoEm)}</span>. Preencha os campos de medição abaixo.</div></div>
+          <div><strong style="color:var(--green);">Medição APROVADA</strong><div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Aprovado por <strong>${esc(m?.aprovadoPor?.usuarioNome||'—')}</strong> em <span class="mono">${fmtDateTime(m?.aprovadoEm)}</span>${m?.motivoAprovacao? ' — Motivo: <strong style="color:#1c7d1c;">'+esc(m.motivoAprovacao)+'</strong>':''}. Preencha os campos de medição abaixo.</div></div>
         </div>`
       : (m? '' : `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Este RDO ainda não foi enviado para medição. Utilize o botão "Aprovar" no RDO de PODA.</div>`);
 
@@ -9169,6 +9208,17 @@ function rdoOptionsHtml(q, atual){
   const opts = q.id==='rdo_condicoes'? ['Bom','Nublado','Chuvoso','Impraticável'] : ['Não','Sim'];
   return `<option value="">—</option>${opts.map(o=>`<option ${String(atual||'').trim()===o? 'selected':''}>${o}</option>`).join('')}`;
 }
+async function rdoFotoUpload(files){
+  const urls = [];
+  for(const f of files){
+    try{
+      const blob = await comprimirImagem(f);
+      const u = await uploadToImgbb(blob);
+      if(u) urls.push(u);
+    }catch(e){ /* ignora foto com falha */ }
+  }
+  return urls;
+}
 function editRdoModal(x, gidOf){
   if(!requerEscrita()) return;
   const gidLabel = gidOf || (p=>progGid(p));
@@ -9176,10 +9226,68 @@ function editRdoModal(x, gidOf){
   const horarios = RDO_HORARIOS.map(h=>`<div class="field" style="flex:1;"><label>${h.label}</label><input type="time" name="${h.k}" value="${at[h.k]||''}"></div>`).join('');
   const kmFields = RDO_KM.map(h=>`<div class="field" style="flex:1;"><label>${h.label}</label><input type="number" name="${h.k}" value="${at[h.k]||''}" placeholder="0"></div>`).join('');
   const condicoes = RDO_QUESTIONS.map(q=>`<div class="field"><label>${q.label}</label><select name="${q.id}">${rdoOptionsHtml(q, at.rdoRespostas?.[q.id])}</select></div>`).join('');
-  const ativs = (at.atividades||[]).map((a,idx)=>{
+
+  const novasAtivs = [];
+  const novaAtrib = [{ atividades: novasAtivs }];
+  const fotosExtras = {};
+
+  const fotosThumbsHtml = (urls)=> (urls&&urls.length)? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${urls.map(u=>`<img src="${esc(u)}" alt="foto" style="width:34px;height:34px;object-fit:cover;border-radius:5px;border:1px solid var(--border);">`).join('')}</div>` : '';
+
+  const ativsRows = (at.atividades||[]).map((a,idx)=>{
     const atDef = findAtividade(a.atividadeId);
-    return `<div class="field" style="display:flex;gap:8px;align-items:center;"><span style="flex:1;font-size:12px;"><strong>${esc(atDef?.codigo||'?')}</strong> · ${esc(atDef?.descricao||'')}</span><input type="number" step="0.01" min="0" name="exec_${idx}" value="${a.quantidadeExecutada!=null? a.quantidadeExecutada:''}" style="max-width:110px;" placeholder="Exec."></div>`;
+    const existentes = String(a.fotos||'').split(';;').filter(Boolean);
+    return `
+      <div class="field" data-rdo-exist-row="${idx}" style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--border-soft);">
+        <div style="flex:1;min-width:180px;font-size:12px;"><strong>${esc(atDef?.codigo||'?')}</strong> · ${esc(atDef?.descricao||'')}
+          ${existentes.length? `<div class="admin-field-meta" style="margin-top:2px;">${existentes.length} foto(s) existente(s)</div>`:''}
+          <div class="rdo-edit-fotos-nov" data-fotos-nov="${idx}"></div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="number" step="0.01" min="0" name="exec_${idx}" value="${a.quantidadeExecutada!=null? a.quantidadeExecutada:''}" style="max-width:110px;" placeholder="Exec.">
+          <button type="button" class="btn btn-sm" data-rdo-add-foto="${idx}">${icon('photo',13)} Fotos</button>
+        </div>
+      </div>`;
   }).join('') || '<p class="admin-field-meta">Sem atividades neste registro.</p>';
+
+  function novasRowsHtml(){
+    if(!novasAtivs.length) return '<p class="admin-field-meta" style="margin:8px 0 0;">Nenhuma atividade adicionada ainda.</p>';
+    return novasAtivs.map((n,jdx)=>{
+      const atDef = n.atividadeId? findAtividade(n.atividadeId) : null;
+      return `<div class="activity-row act-ac-row" data-rdo-nova-row="${jdx}" style="padding:8px 0;border-bottom:1px solid var(--border-soft);">
+        <div class="act-ac" data-idx="0" data-jdx="${jdx}">
+          <input type="text" class="act-ac-input" data-idx="0" data-jdx="${jdx}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+          <div class="act-ac-list" data-idx="0" data-jdx="${jdx}" style="display:none;"></div>
+        </div>
+        <input type="number" step="0.01" min="0" class="nov-qty-prev" data-jdx="${jdx}" placeholder="Prev." style="max-width:90px;" value="${n.quantidadePrevista??''}">
+        <input type="number" step="0.01" min="0" class="nov-qty-exec" data-jdx="${jdx}" placeholder="Exec." style="max-width:90px;" value="${n.quantidadeExecutada??''}">
+        <button type="button" class="btn btn-sm" data-nova-add-foto="${jdx}">${icon('photo',13)} Fotos</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-nova-rm="${jdx}" title="Remover">${icon('x',13)}</button>
+        <div class="rdo-edit-fotos-nov" data-nova-fotos="${jdx}" style="flex-basis:100%;">${fotosThumbsHtml(n.fotos)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function paintNovas(root){
+    const el = document.getElementById('rdo-novas-list');
+    if(!el) return;
+    el.innerHTML = novasRowsHtml();
+    bindActAutocomplete(root, novaAtrib, ()=>{}, null);
+  }
+
+  async function pickFotos(onUrls, max){
+    const inp = document.createElement('input');
+    inp.type='file'; inp.accept='image/*'; inp.multiple=true; inp.style.display='none';
+    inp.onchange = async ()=>{
+      if(!inp.files || !inp.files.length){ inp.remove(); return; }
+      const files = Array.from(inp.files).slice(0, max||10);
+      const urls = await rdoFotoUpload(files);
+      if(urls.length){ onUrls(urls); }
+      inp.remove();
+    };
+    document.body.appendChild(inp);
+    inp.click();
+  }
+
   const body = `
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Editando o registro RDO de <strong>${esc(equipeLabel(findEquipe(at.equipeId)))}</strong> — ${esc(gidLabel(x.programacao))}</div>
     <div class="field"><label>Motivo da edição <span class="req">*</span></label><input type="text" name="motivo" required maxlength="200" placeholder="Por que você está editando este registro RDO?"></div>
@@ -9196,12 +9304,57 @@ function editRdoModal(x, gidOf){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px;">${condicoes}</div>
     </div>
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);">
-      <h4 style="font-size:12.5px;margin:0 0 10px;">Quantidades executadas</h4>
-      ${ativs}
+      <h4 style="font-size:12.5px;margin:0 0 10px;">Quantidades executadas (existentes)</h4>
+      ${ativsRows}
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);">
+      <h4 style="font-size:12.5px;margin:0 0 10px;">Adicionar novas atividades</h4>
+      <div id="rdo-novas-list">${novasRowsHtml()}</div>
+      <button type="button" class="btn btn-sm" id="rdo-nova-add" style="margin-top:8px;">${icon('plus',13)} Adicionar atividade</button>
     </div>
     <div class="field" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);"><label>Observação da execução</label><textarea name="obs" rows="3" placeholder="Observação registrada pela equipe">${esc(at.observacao||'')}</textarea></div>`;
   openModal({
-    title:'Editar registro RDO', bodyHtml: body, wide:true, maxW:760, submitLabel:'Salvar alterações',
+    title:'Editar registro RDO', bodyHtml: body, wide:true, maxW:780, submitLabel:'Salvar alterações',
+    onMount:(root)=>{
+      paintNovas(root);
+      root.addEventListener('click', (e)=>{
+        const addF = e.target.closest('[data-rdo-add-foto]');
+        if(addF){
+          const idx = Number(addF.dataset.rdoAddFoto);
+          pickFotos(async urls=>{
+            fotosExtras[idx] = (fotosExtras[idx]||[]).concat(urls);
+            const el = root.querySelector(`[data-fotos-nov="${idx}"]`);
+            if(el) el.innerHTML = fotosThumbsHtml(fotosExtras[idx]);
+          });
+          return;
+        }
+        const nFoto = e.target.closest('[data-nova-add-foto]');
+        if(nFoto){
+          const jdx = Number(nFoto.dataset.novaAddFoto);
+          pickFotos(async urls=>{
+            const n = novasAtivs[jdx];
+            if(n){ n.fotos = (n.fotos||[]).concat(urls); const el = root.querySelector(`[data-nova-fotos="${jdx}"]`); if(el) el.innerHTML = fotosThumbsHtml(n.fotos); }
+          });
+          return;
+        }
+        const rm = e.target.closest('[data-nova-rm]');
+        if(rm){
+          const jdx = Number(rm.dataset.novaRm);
+          if(jdx>-1 && jdx<novasAtivs.length){ novasAtivs.splice(jdx,1); paintNovas(root); }
+          return;
+        }
+        if(e.target.closest('#rdo-nova-add')){
+          novasAtivs.push({ atividadeId:'', quantidadePrevista:'', quantidadeExecutada:'', fotos:[] });
+          paintNovas(root);
+        }
+      });
+      root.addEventListener('input', (e)=>{
+        const prev = e.target.closest('.nov-qty-prev');
+        if(prev){ const n = novasAtivs[Number(prev.dataset.jdx)]; if(n) n.quantidadePrevista = prev.value; return; }
+        const exec = e.target.closest('.nov-qty-exec');
+        if(exec){ const n = novasAtivs[Number(exec.dataset.jdx)]; if(n) n.quantidadeExecutada = exec.value; }
+      });
+    },
     onSubmit:(fd)=>{
       const motivo = String(fd.get('motivo')||'').trim();
       if(!motivo){ toast('Informe o motivo da edição do registro.', 'error'); return false; }
@@ -9214,11 +9367,31 @@ function editRdoModal(x, gidOf){
       (at.atividades||[]).forEach((a,idx)=>{
         const v = fd.get('exec_'+idx);
         a.quantidadeExecutada = (v!==null && String(v).trim()!=='')? parseFloat(v) : null;
+        if(fotosExtras[idx] && fotosExtras[idx].length){
+          const atuais = String(a.fotos||'').split(';;').filter(Boolean);
+          a.fotos = atuais.concat(fotosExtras[idx]).join(';;');
+        }
+      });
+      let addDesc = '';
+      novasAtivs.forEach(n=>{
+        if(!n.atividadeId) return;
+        const atDef = findAtividade(n.atividadeId);
+        const qtdPrev = (n.quantidadePrevista!=='' && n.quantidadePrevista!=null)? parseFloat(n.quantidadePrevista) : null;
+        const qtdExec = (n.quantidadeExecutada!=='' && n.quantidadeExecutada!=null)? parseFloat(n.quantidadeExecutada) : null;
+        at.atividades = at.atividades||[];
+        at.atividades.push({
+          atividadeId: Number(n.atividadeId),
+          quantidadePrevista: qtdPrev,
+          quantidadeExecutada: qtdExec,
+          tipoEstrutura: '',
+          fotos: (n.fotos||[]).join(';;')
+        });
+        addDesc += (addDesc? ', ':'') + (atDef? atDef.codigo+' · '+atDef.descricao : 'atividade');
       });
       at.observacao = obs;
       at.historico = at.historico||[];
-      at.historico.push({...currentAutor(), ts:Date.now(), tipo:'rdo_edicao', de:null, para:'RDO', motivo, obs});
-      registrarEvento('rdo','atribuicao',at.id, gidLabel(x.programacao)+' · '+equipeLabel(findEquipe(at.equipeId)), 'Registro RDO editado · '+motivo+(obs? ' · '+obs:''));
+      at.historico.push({...currentAutor(), ts:Date.now(), tipo:'rdo_edicao', de:null, para:'RDO', motivo, obs, adicionadas: addDesc||undefined});
+      registrarEvento('rdo','atribuicao',at.id, gidLabel(x.programacao)+' · '+equipeLabel(findEquipe(at.equipeId)), 'Registro RDO editado · '+motivo+(addDesc? ' · +'+addDesc:'')+(obs? ' · '+obs:''));
       saveData(); renderContent(); toast('Registro RDO atualizado.');
     }
   });
