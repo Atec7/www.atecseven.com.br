@@ -5800,6 +5800,20 @@ function appvMedicaoPoda(){
   if(!CURRENT_USER) return true;
   return ehMestre() || (CURRENT_USER.role==='administrador' && CURRENT_USER.nivel==='total');
 }
+function medicaoPodaReprovacaoInfo(m){
+  if(!m || m.aprovado!==false) return null;
+  const total = m.totalReprovacoes||0;
+  return {
+    motivo: m.motivoReprovacao||'RDO reprovado na medição.',
+    total,
+    por: m.reprovadoPor?.usuarioNome||'Medição',
+    em: m.reprovadoEm
+  };
+}
+function medicaoPodaCountTag(total){
+  const n = Number(total)||0;
+  return `<span class="med-poda-reprov-count">${n} reprovação${n===1?'':'ões'}</span>`;
+}
 function aprovarRdoParaMedicao(x){
   if(!requerEscrita()) return;
   if(!appvMedicaoPoda()){ toast('Apenas administradores podem aprovar a medição.', 'error'); return; }
@@ -5816,8 +5830,11 @@ function aprovarRdoParaMedicao(x){
       statusValidacao: '',
       enviadoEqtl: '',
       recolha: '',
+      valorFaturado: '',
       aprovado: null,
       motivoReprovacao: '',
+      totalReprovacoes: 0,
+      historicoReprovacoes: [],
       enviadoPor: currentAutor(),
       enviadoEm: Date.now(),
       custom: {}
@@ -6853,10 +6870,12 @@ function renderPodaRdo(){
               const res = rdoResumo(x);
               const imped = rdoImpedimentos(x.atribuicao);
               const horarios = [x.atribuicao.rdoHorarioChegada, x.atribuicao.rdoHorarioSaidaObra].filter(Boolean).join(' → ')||'—';
+              const med = findMedicaoPoda(x.atribuicao.id);
+              const repInfo = medicaoPodaReprovacaoInfo(med);
               return `
-                <tr data-poda-prog="${x.programacao.id}" data-poda-atrib="${x.atribuicao.id}" style="cursor:pointer;" title="Ver detalhes">
+                <tr data-poda-prog="${x.programacao.id}" data-poda-atrib="${x.atribuicao.id}" style="cursor:pointer;" class="${repInfo?'poda-rdo-reprovado':''}" title="Ver detalhes">
                   <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
-                  <td><strong>${podaProgLabel(x.programacao)}</strong><div class="admin-field-meta">OSI ${esc(x.programacao.osi||'—')} · ${esc(x.programacao.subestacao||'—')}</div></td>
+                  <td><strong>${podaProgLabel(x.programacao)}</strong><div class="admin-field-meta">OSI ${esc(x.programacao.osi||'—')} · ${esc(x.programacao.subestacao||'—')}</div>${repInfo? `<div class="med-poda-reprov-msg">${icon('alert',12)} Reprovado na medição${repInfo.total>0? ' · '+medicaoPodaCountTag(repInfo.total):''}<div class="med-poda-reprov-motivo">${esc(repInfo.motivo)}</div></div>`:''}</td>
                   <td>${esc(equipeLabel(eq))}<div class="admin-field-meta">${esc(eq?.supervisor||'')}</div></td>
                   <td style="text-align:center;" class="mono">${fmtDate(x.atribuicao.dataProgramada)}</td>
                   <td style="text-align:center;">${rdoStatusBadge(x.atribuicao.status)}</td>
@@ -6940,6 +6959,14 @@ function openPodaRDOModal(progId, attribId){
     <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${x.atribuicao[h.k]||'—'}</td></tr>`).join('');
 
   const body = `
+    ${(()=>{ const ri = medicaoPodaReprovacaoInfo(findMedicaoPoda(x.atribuicao.id));
+      return ri? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(224,97,91,.45);background:rgba(224,97,91,.10);border-radius:10px;margin-bottom:16px;">
+        <span style="color:var(--red);flex-shrink:0;margin-top:2px;">${icon('alert',18)}</span>
+        <div style="font-size:12.5px;">
+          <strong style="color:var(--red);">RDO REPROVADO NA MEDIÇÃO</strong> <span class="med-poda-reprov-count" style="margin-left:4px;">${ri.total} reprovação${ri.total===1?'':'ões'}</span>
+          <div style="color:var(--muted);margin-top:2px;">Motivo: <strong style="color:#7a2b26;">${esc(ri.motivo)}</strong><br>Reprovado por <strong>${esc(ri.por)}</strong> em <span class="mono">${fmtDateTime(ri.em)}</span>. Anexe evidências ou edite o registro para reenvio à medição.</div>
+        </div>
+      </div>`:''; })()}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
       <div>
         <h4 style="margin-bottom:8px;">Programação ${podaProgLabel(x.programacao)}</h4>
@@ -7661,6 +7688,7 @@ function renderMediçãoPoda(){
               <th style="text-align:center;">Status Validação</th>
               <th style="text-align:center;">EQTL</th>
               <th style="text-align:center;">Recolha</th>
+              <th style="text-align:center;">Valor Faturado</th>
               <th style="text-align:center;width:120px;">Ação</th>
             </tr>
           </thead>
@@ -7697,6 +7725,7 @@ function renderMediçãoPoda(){
                   <td style="text-align:center;">${medicaoPodaValidacaoBadge(m?.statusValidacao)}</td>
                   <td style="text-align:center;">${simNaoBadge(m?.enviadoEqtl)}</td>
                   <td style="text-align:center;">${simNaoBadge(m?.recolha)}</td>
+                  <td style="text-align:center;" class="mono">${m?.valorFaturado!=null && m?.valorFaturado!==''? '<strong>'+fmtMoney(m.valorFaturado)+'</strong>' : '—'}</td>
                   <td style="text-align:center;white-space:nowrap;">${acao}</td>
                 </tr>`;
             }).join('')}
@@ -7776,8 +7805,11 @@ function aprovarMedicaoPoda(atribId){
     statusValidacao: '',
     enviadoEqtl: '',
     recolha: '',
+    valorFaturado: '',
     aprovado: true,
     motivoReprovacao: '',
+    totalReprovacoes: 0,
+    historicoReprovacoes: [],
     aprovadoPor: currentAutor(),
     aprovadoEm: Date.now(),
     custom: {}
@@ -7827,6 +7859,9 @@ function reprovarMedicaoPodaModal(atribId){
       m.motivoReprovacao = motivo;
       m.reprovadoPor = currentAutor();
       m.reprovadoEm = Date.now();
+      m.totalReprovacoes = (m.totalReprovacoes||0)+1;
+      m.historicoReprovacoes = m.historicoReprovacoes||[];
+      m.historicoReprovacoes.push({ motivo, por: currentAutor(), em: Date.now() });
       r.atribuicao.historico = r.atribuicao.historico||[];
       r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Reprovado', motivo});
       registrarEvento('medicao','atribuicao',r.atribuicao.id,podaProgLabel(r.programacao),'RDO reprovado na medição: '+motivo);
@@ -7840,11 +7875,12 @@ function reprovarMedicaoPodaModal(atribId){
 
 function medicaoPodaFormHtml(m){
   const isReprovada = m?.aprovado===false;
+  const mostrarValor = m?.statusValidacao==='FATURADA';
   return `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px;">
       <div class="field" style="margin:0;">
         <label>STATUS DA VALIDAÇÃO</label>
-        <select name="statusValidacao" ${isReprovada?'disabled':''}>
+        <select name="statusValidacao" id="med-val-status" ${isReprovada?'disabled':''}>
           <option value="">Selecione...</option>
           ${STATUS_VALIDACAO_OPCOES.map(o=>`<option value="${o}" ${m?.statusValidacao===o?'selected':''}>${o}</option>`).join('')}
         </select>
@@ -7864,6 +7900,11 @@ function medicaoPodaFormHtml(m){
           ${SIM_NAO_OPCOES.map(o=>`<option value="${o}" ${m?.recolha===o?'selected':''}>${o}</option>`).join('')}
         </select>
       </div>
+      <div class="field" id="med-val-valor-wrap" style="margin:0;${mostrarValor?'':'display:none;'}" data-valor-faturado>
+        <label>VALOR FATURADO (R$)</label>
+        <input type="number" step="0.01" min="0" name="valorFaturado" id="med-val-valor" placeholder="0,00" value="${m?.valorFaturado!=null && m?.valorFaturado!==''? m.valorFaturado:''}" ${isReprovada?'disabled':''}>
+        <div class="field-hint">Campo liberado quando o status de validação for FATURADA.</div>
+      </div>
     </div>`;
 }
 
@@ -7878,6 +7919,17 @@ function openMedicaoPodaModal(atribId){
   const pode = appvMedicaoPoda();
   const estaAprovada = m?.aprovado===true;
   const estaReprovada = m?.aprovado===false;
+  const atRdo = m?.rdoData || x.atribuicao;
+  const horarios = RDO_HORARIOS.map(h=> `
+    <tr><td style="font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;">${h.label}</td>
+    <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${atRdo[h.k]||'—'}</td></tr>`).join('');
+  const kms = RDO_KM.map(h=> `
+    <tr><td style="font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;">${h.label}</td>
+    <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${atRdo[h.k]||'—'}</td></tr>`).join('');
+  const condicoes = RDO_QUESTIONS.map(q=> `
+    <tr><td style="font-weight:600;padding:3px 12px 3px 0;">${q.label}</td>
+    <td style="padding:3px 10px;">${String((atRdo.rdoRespostas||{})[q.id]||'')||'—'}</td></tr>`).join('');
+  const observacao = atRdo.observacao||'';
 
   const banner = estaReprovada
     ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(224,97,91,.35);background:rgba(224,97,91,.08);border-radius:10px;margin-bottom:16px;">
@@ -7912,7 +7964,42 @@ function openMedicaoPodaModal(atribId){
         <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
       </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div>
+        <h4 style="margin-bottom:8px;">Dados complementares</h4>
+        <p class="admin-field-meta" style="margin:2px 0;">Nº da Reserva/PEP: ${esc(x.programacao.numeroReserva||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">ASI: ${esc(x.programacao.asi||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">qtdAnomalia: ${esc(x.programacao.qtdAnomalia||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">idSiprog: ${esc(x.programacao.idSiprog||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">OSE: ${esc(x.programacao.ose||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Status Doc.: ${esc(x.programacao.statusDocumentacao||'—')}</p>
+      </div>
+      <div>
+        <h4 style="margin-bottom:8px;">Local de execução</h4>
+        <p class="admin-field-meta" style="margin:2px 0;">${esc(x.programacao.local||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Zona: ${zonaBadge(x.programacao.zona)}</p>
+        ${(x.programacao.local||x.programacao.localLat!=null)? `<a href="${esc(localMapsHref(x.programacao.local,x.programacao.localLat,x.programacao.localLng))}" target="_blank" rel="noopener" style="font-size:12px;color:var(--blue);font-weight:600;">${icon('pin',11)} Abrir no Google Maps</a>`:''}
+      </div>
+    </div>
+    ${String(x.programacao.observacoes||'').trim()? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:6px;">Observações</h4><p style="font-size:12.5px;white-space:pre-wrap;line-height:1.55;">${esc(x.programacao.observacoes)}</p></div>`:''}
+    ${(x.programacao.anexos&&x.programacao.anexos.length)? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:8px;">Anexos do programador</h4>${anexosDisplayHtml(x.programacao.anexos)}</div>`:''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div>
+        <h4 style="margin-bottom:8px;">Horários do RDO</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${horarios}</table>
+      </div>
+      <div>
+        <h4 style="margin-bottom:8px;">KM do Veículo</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${kms}</table>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:8px;">Condições do RDO</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${condicoes}</table>
+      ${imped.length? `<div style="margin-top:10px;">${imped.map(i=>`<span class="badge" style="color:var(--red);background:rgba(224,97,91,.12);margin-right:4px;">${esc(i)}</span>`).join('')}</div>`:''}
     </div>
     <div style="margin-bottom:16px;">
       <h4 style="margin-bottom:6px;">Quantidades executadas</h4>
@@ -7944,7 +8031,7 @@ function openMedicaoPodaModal(atribId){
         </tbody>
       </table>
     </div>
-    ${imped.length? `<div style="margin-bottom:16px;">${imped.map(i=>`<span class="badge" style="color:var(--red);background:rgba(224,97,91,.12);margin-right:4px;">${esc(i)}</span>`).join('')}</div>`:''}
+    ${String(observacao||'').trim()? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:6px;">Observação da execução</h4><p style="font-size:12.5px;white-space:pre-wrap;line-height:1.55;">${esc(observacao)}</p></div>`:''}
     ${(m && !estaReprovada)? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);">
       <h4 style="margin-bottom:4px;">Campos de medição</h4>
       ${medicaoPodaFormHtml(m)}
@@ -7965,6 +8052,7 @@ function openMedicaoPodaModal(atribId){
       m.statusValidacao = fd.get('statusValidacao');
       m.enviadoEqtl = fd.get('enviadoEqtl');
       m.recolha = fd.get('recolha');
+      m.valorFaturado = String(fd.get('valorFaturado')||'').trim();
       saveData();
       toast('Medição salva.');
       return true;
@@ -7975,6 +8063,15 @@ function openMedicaoPodaModal(atribId){
         editRdoModal(x, podaProgLabel);
         renderMediçãoPoda();
       });
+      const stSel = root.querySelector('#med-val-status');
+      if(stSel){
+        const toggleValor = ()=>{
+          const wrap = root.querySelector('[data-valor-faturado]');
+          if(!wrap) return;
+          wrap.style.display = (stSel.value==='FATURADA')? '' : 'none';
+        };
+        stSel.addEventListener('change', toggleValor);
+      }
     }
   });
 }
