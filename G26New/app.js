@@ -22,7 +22,7 @@ const AUD_REF = rtdb.ref('g26_planner/auditoria');
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js').catch(()=>{}); }
 
 const DEFAULT_DATA = {
-  equipes: [], atividades: [], projetos: [], programacoes: [], ocnds: [], podaProgramacoes: [], oseProgramacoes: [], usuarios: [],
+  equipes: [], atividades: [], projetos: [], programacoes: [], ocnds: [], podaProgramacoes: [], oseProgramacoes: [], usuarios: [], medicaoPoda: [],
   tiposEstrutura: [],
   customFields: { equipes: [], atividades: [], projetos: [], programacoes: [], podaProgramacoes: [], oseProgramacoes: [] },
   cidades: [], cidadeDistancias: [], cidadeMaxDist: 50,
@@ -326,6 +326,8 @@ const ICONS = {
   tree:'<path d="M12 21V12"/><path d="M12 3c-2 0-3 2-3 4 0-2-2-3-4-3 0 3 2 4 3 6-2 0-4 1-4 3 0 1.5 1 3 3 3h10c2 0 3-1.5 3-3 0-2-2-3-4-3 1-2 3-3 3-6-2 0-4 1-4 3 0-2-1-4-3-4Z"/><path d="M12 21v-4"/>',
   siren:'<path d="M7 18v-6a5 5 0 0 1 10 0v6"/><path d="M7 21h10"/><path d="M6.5 9.5 4 10M17.5 9.5 20 10M12 3v2M5 6l2 2M19 6l-2 2M8 12h.01M16 12h.01"/><path d="M12 18v3"/>',
   ruler:'<path d="M21.7 7.3l-5-5a1 1 0 0 0-1.4 0l-13 13a1 1 0 0 0 0 1.4l5 5a1 1 0 0 0 1.4 0l13-13a1 1 0 0 0 0-1.4zM8 11l2 2M11 8l2 2M14 11l2 2"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>',
 };
 function icon(name,size=16){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||''}</svg>`; }
 
@@ -1145,11 +1147,12 @@ function parseCustomFieldsFromForm(moduleKey, fd){
 /* =========================================================
    MODAL GENÉRICO
 ========================================================= */
-function openModal({title, bodyHtml, onMount, onSubmit, submitLabel='Salvar', wide=false, extraWide=false, footerBtns=[]}){
+function openModal({title, bodyHtml, onMount, onSubmit, submitLabel='Salvar', wide=false, extraWide=false, maxW=0, footerBtns=[]}){
   const root = document.getElementById('modal-root');
+  const modalW = maxW? `max-width:${maxW}px` : (extraWide?'max-width:900px':wide?'max-width:660px':'');
   root.innerHTML = `
     <div class="modal-overlay" id="modal-overlay">
-      <div class="modal" style="${extraWide?'max-width:900px':wide?'max-width:660px':''}">
+      <div class="modal" style="${modalW}">
         <div class="modal-head"><h3>${title}</h3><button class="icon-btn" id="modal-close">${icon('close')}</button></div>
         <form id="modal-form">
           <div class="modal-body">${bodyHtml}</div>
@@ -5601,7 +5604,6 @@ function openOseRDOModal(progId, attribId){
     </div>
     <div style="margin-bottom:20px;">
       <h4 style="margin-bottom:8px;">Atividades e quantidades executadas</h4>
-      <button type="button" class="btn btn-sm" data-baixar-fotos-rdo style="margin-bottom:10px;">${icon('download',13)} Baixar fotos</button>
       <div style="display:flex;gap:14px;margin-bottom:12px;">
         <span class="badge-prefix">Prev. ${fmtNum(res.prev)}</span>
         <span class="badge-prefix alt">Exec. ${fmtNum(res.exec)}</span>
@@ -5638,7 +5640,8 @@ function openOseRDOModal(progId, attribId){
     </div>
     <div class="admin-field-meta">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
 
-  openModal({ title:'RDO OSE — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, footerBtns:[
+  openModal({ title:'RDO OSE — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, maxW:760, footerBtns:[
+    { label: icon('download',14)+' Baixar fotos', cls:'btn', onClick: ()=> baixarFotosRdo(x.atribuicao.atividades) },
     { label: icon('edit',14)+' Editar registro', cls:'btn', onClick: ()=> editRdoModal(x, oseProgLabel) },
     { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'ose') }
   ], onMount: (root)=>{ root.querySelector('[data-baixar-fotos-rdo]')?.addEventListener('click', ()=> baixarFotosRdo(x.atribuicao.atividades)); } });
@@ -5755,6 +5758,8 @@ function renderPoda(){ setView('poda-programacoes'); }
 const STATUS_DOC_OPCOES = ['Confirmado','Em elaboração','Elaborado','Validado'];
 const TIPO_REDE_OPCOES = ['MT','BT'];
 const STATUS_PODA = ['Programado','Em Execução','Concluído','Reprogramado','Cancelado'];
+const STATUS_VALIDACAO_OPCOES = ['ENVIADA','REJEITADA','FATURADA','ERP SISTÊMICO'];
+const SIM_NAO_OPCOES = ['SIM','NÃO'];
 let podaFilters = (()=>{ const r=monthRangeISO(); return { busca:'', equipe:'', status:'', dataDe:r.de, dataAte:r.ate, modo:'lista', calView:'mes', calDay:todayISO() }; })();
 let podaCalRef = new Date();
 function podaProgLabel(p){ return p.gid || ('PODA-'+String(p.id).padStart(7,'0')); }
@@ -5776,6 +5781,58 @@ function podaAtribGlobal(atribId){
 }
 function podaProgDaAtrib(atribId){
   return (DB.podaProgramacoes||[]).find(pg=> (pg.atribuicoes||[]).some(a=>a.id===Number(atribId)));
+}
+function findMedicaoPoda(atribId){
+  return (DB.medicaoPoda||[]).find(m=> m.atribuicaoId===Number(atribId));
+}
+function medicaoPodaValidacaoBadge(status){
+  const s = status||'';
+  const cor = { 'ENVIADA':'var(--blue)','REJEITADA':'var(--red)','FATURADA':'var(--green)','ERP SISTÊMICO':'var(--accent)' }[s]||'var(--muted)';
+  const bg = { 'ENVIADA':'rgba(78,140,235,.14)','REJEITADA':'rgba(224,97,91,.14)','FATURADA':'rgba(34,139,34,.14)','ERP SISTÊMICO':'rgba(224,164,88,.14)' }[s]||'rgba(128,128,128,.14)';
+  return s? `<span class="badge" style="color:${cor};background:${bg};">${esc(s)}</span>` : '<span style="color:var(--muted-2);">—</span>';
+}
+function simNaoBadge(v){
+  if(v==='SIM') return '<span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);">SIM</span>';
+  if(v==='NÃO') return '<span class="badge" style="color:var(--red);background:rgba(224,97,91,.14);">NÃO</span>';
+  return '<span style="color:var(--muted-2);">—</span>';
+}
+function appvMedicaoPoda(){
+  if(!CURRENT_USER) return true;
+  return ehMestre() || (CURRENT_USER.role==='administrador' && CURRENT_USER.nivel==='total');
+}
+function aprovarRdoParaMedicao(x){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoPoda()){ toast('Apenas administradores podem aprovar a medição.', 'error'); return; }
+  if(!x) return;
+  const atribId = x.atribuicao.id;
+  let m = findMedicaoPoda(atribId);
+  if(m && m.aprovado===true){ toast('Este RDO já está aprovado para medição.'); return; }
+  if(!m){
+    m = {
+      id: nextId(),
+      programacaoId: x.programacao.id,
+      atribuicaoId: atribId,
+      rdoData: structuredClone(x.atribuicao),
+      statusValidacao: '',
+      enviadoEqtl: '',
+      recolha: '',
+      aprovado: null,
+      motivoReprovacao: '',
+      enviadoPor: currentAutor(),
+      enviadoEm: Date.now(),
+      custom: {}
+    };
+    DB.medicaoPoda.push(m);
+  }
+  m.aprovado = true;
+  m.motivoReprovacao = '';
+  m.aprovadoPor = currentAutor();
+  m.aprovadoEm = Date.now();
+  x.atribuicao.historico = x.atribuicao.historico||[];
+  x.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo:'RDO aprovado para medição de poda'});
+  registrarEvento('medicao','atribuicao',atribId,podaProgLabel(x.programacao),'RDO aprovado para medição de poda');
+  saveData();
+  toast('RDO aprovado para medição de poda.');
 }
 function podaProgramacoesFiltradas(){
   const norm = s=> String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
@@ -6929,7 +6986,6 @@ function openPodaRDOModal(progId, attribId){
     </div>
     <div style="margin-bottom:20px;">
       <h4 style="margin-bottom:8px;">Atividades e quantidades executadas</h4>
-      <button type="button" class="btn btn-sm" data-baixar-fotos-rdo style="margin-bottom:10px;">${icon('download',13)} Baixar fotos</button>
       <div style="display:flex;gap:14px;margin-bottom:12px;">
         <span class="badge-prefix">Prev. ${fmtNum(res.prev)}</span>
         <span class="badge-prefix alt">Exec. ${fmtNum(res.exec)}</span>
@@ -6965,10 +7021,15 @@ function openPodaRDOModal(progId, attribId){
     </div>
     <div class="admin-field-meta">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
 
-  openModal({ title:'RDO Poda — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, footerBtns:[
+  const podeAprovar = appvMedicaoPoda();
+  const aprovarBtn = podeAprovar? { label: icon('check',14)+' Aprovar', cls:'btn btn-primary', onClick: ()=> aprovarRdoParaMedicao(x) } : null;
+  const footerBtns = [
+    aprovarBtn,
     { label: icon('edit',14)+' Editar registro', cls:'btn', onClick: ()=> editRdoModal(x, podaProgLabel) },
-    { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'poda') }
-  ], onMount: (root)=>{ root.querySelector('[data-baixar-fotos-rdo]')?.addEventListener('click', ()=> baixarFotosRdo(x.atribuicao.atividades)); } });
+    { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'poda') },
+    { label: icon('download',14)+' Baixar imagens', cls:'btn', onClick: ()=> baixarFotosRdo(x.atribuicao.atividades) }
+  ].filter(Boolean);
+  openModal({ title:'RDO Poda — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, maxW:760, footerBtns, onMount: (root)=>{ root.querySelector('[data-baixar-fotos-rdo]')?.addEventListener('click', ()=> baixarFotosRdo(x.atribuicao.atividades)); } });
 }
 function renderOcNds(){
   const el = document.getElementById('content');
@@ -7533,8 +7594,389 @@ function renderMediçãoOC(){
 function renderMediçãoNDSOSE(){
   renderModuloEmDesenvolvimento('Medição – NDS/OSE');
 }
+function medicaoPodaRegistros(){
+  return flatPodaAtribuicoes().filter(rdoTemExecucao);
+}
 function renderMediçãoPoda(){
-  renderModuloEmDesenvolvimento('Medição – PODA');
+  const el = document.getElementById('content');
+  let registros = medicaoPodaRegistros();
+  registros.sort((a,b)=> String(b.atribuicao.dataProgramada||'').localeCompare(String(a.atribuicao.dataProgramada||'')));
+
+  const pode = appvMedicaoPoda();
+  const aprovadas = registros.filter(x=> findMedicaoPoda(x.atribuicao.id)?.aprovado===true);
+  const reprovadas = registros.filter(x=> findMedicaoPoda(x.atribuicao.id)?.aprovado===false);
+  const pendentes = registros.filter(x=> !findMedicaoPoda(x.atribuicao.id));
+
+  const stats = `
+    <div class="grid-stats">
+      <div class="stat-card"><div class="lbl">RDOs de PODA</div><div class="val">${registros.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--accent);"><div class="lbl">Pendentes de aprovação</div><div class="val">${pendentes.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--green);"><div class="lbl">Aprovadas</div><div class="val">${aprovadas.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--red);"><div class="lbl">Reprovadas</div><div class="val">${reprovadas.length}</div></div>
+    </div>`;
+
+  const equipes = [...new Set(registros.map(x=>x.atribuicao.equipeId))].map(id=>findEquipe(id)).filter(Boolean);
+
+  const filters = `
+    <div class="panel" style="padding:14px 16px;margin-bottom:16px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+        <input type="search" id="med-poda-f-busca" placeholder="Buscar por OSI, equipe, data, status..." style="flex:1;">
+        <button class="btn btn-sm" id="med-poda-f-busca-aplicar">${icon('search',13)} Buscar</button>
+      </div>
+      <div class="filters">
+        <label style="font-weight:600;">Equipe</label>
+        <select id="med-poda-f-equipe"><option value="">Todas</option>${equipes.map(e=>`<option value="${e.id}">${esc(equipeLabel(e))}</option>`).join('')}</select>
+        <label style="font-weight:600;">Situação</label>
+        <select id="med-poda-f-situacao"><option value="">Todas</option><option value="pendente">Pendente</option><option value="aprovada">Aprovada</option><option value="reprovada">Reprovada</option></select>
+        <label style="font-weight:600;">De</label>
+        <input type="date" id="med-poda-f-de">
+        <label style="font-weight:600;">Até</label>
+        <input type="date" id="med-poda-f-ate">
+        <button class="btn btn-sm" id="med-poda-f-aplicar">${icon('grid',13)} Filtrar</button>
+        <button class="btn btn-sm btn-ghost" id="med-poda-f-limpar">Limpar</button>
+      </div>
+    </div>`;
+
+  const isAprovada = x=> findMedicaoPoda(x.atribuicao.id)?.aprovado===true;
+  const isReprovada = x=> findMedicaoPoda(x.atribuicao.id)?.aprovado===false;
+  const med = x=> findMedicaoPoda(x.atribuicao.id);
+
+  const tabela = `
+    <div class="panel" style="padding:0;overflow:hidden;">
+      <div class="panel-head" style="padding:14px 16px;">
+        <div><h3>Medição de PODA</h3><div class="admin-field-meta">Dados do RDO de poda para aprovação e medição. Aprove para liberar os campos de medição.</div></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1250px;">
+          <thead>
+            <tr>
+              <th style="width:30px;">#</th>
+              <th>Programação</th>
+              <th>Equipe</th>
+              <th style="text-align:center;">Data</th>
+              <th style="text-align:center;">Status</th>
+              <th style="text-align:center;">Prev.</th>
+              <th style="text-align:center;">Exec.</th>
+              <th style="text-align:center;width:110px;">Progresso</th>
+              <th style="text-align:center;">Status Validação</th>
+              <th style="text-align:center;">EQTL</th>
+              <th style="text-align:center;">Recolha</th>
+              <th style="text-align:center;width:120px;">Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${registros.map((x,i)=>{
+              const eq = findEquipe(x.atribuicao.equipeId);
+              const res = rdoResumo(x);
+              const m = med(x);
+              const rowStyle = m?.aprovado===false
+                ? 'border-left:3px solid var(--red);background:rgba(224,97,91,.06);'
+                : m?.aprovado===true
+                  ? 'border-left:3px solid var(--green);background:rgba(34,139,34,.05);'
+                  : '';
+              const acao = m?.aprovado===false
+                ? (pode? `<button type="button" class="btn btn-sm btn-primary" data-med-poda-reaprovar="${x.atribuicao.id}">${icon('check',12)} Reaprovar</button>` : `<span class="badge" style="color:var(--red);background:rgba(224,97,91,.14);">REPROVADO</span>`)
+                : m?.aprovado===true
+                  ? (pode? `<button type="button" class="btn btn-sm btn-danger-solid" data-med-poda-reprovar="${x.atribuicao.id}">${icon('x',12)} Reprovado?</button>` : '<span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);">Aprovado</span>')
+                  : (pode? `<button type="button" class="btn btn-sm btn-primary" data-med-poda-aprovar="${x.atribuicao.id}">${icon('check',12)} Aprovar</button>` : '<span style="color:var(--muted-2);">—</span>');
+              return `
+                <tr data-med-poda-prog="${x.programacao.id}" data-med-poda-atrib="${x.atribuicao.id}" style="cursor:pointer;${rowStyle}">
+                  <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
+                  <td><strong>${podaProgLabel(x.programacao)}</strong><div class="admin-field-meta">OSI ${esc(x.programacao.osi||'—')} · ${esc(x.programacao.subestacao||'—')}</div>${m?.aprovado===false&&m?.motivoReprovacao? `<div style="font-size:11px;color:var(--red);margin-top:2px;">${icon('alert',10)} ${esc(m.motivoReprovacao)}</div>`:''}</td>
+                  <td>${esc(equipeLabel(eq))}<div class="admin-field-meta">${esc(eq?.supervisor||'')}</div></td>
+                  <td style="text-align:center;" class="mono">${fmtDate(x.atribuicao.dataProgramada)}</td>
+                  <td style="text-align:center;">${rdoStatusBadge(x.atribuicao.status)}</td>
+                  <td style="text-align:center;" class="mono">${fmtNum(res.prev)}</td>
+                  <td style="text-align:center;" class="mono"><strong>${fmtNum(res.exec)}</strong></td>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                      <div style="flex:1;height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${Math.min(100,res.pct)}%;background:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};border-radius:3px;"></div></div>
+                      <span class="mono" style="font-size:11px;min-width:34px;text-align:right;">${res.pct}%</span>
+                    </div>
+                  </td>
+                  <td style="text-align:center;">${medicaoPodaValidacaoBadge(m?.statusValidacao)}</td>
+                  <td style="text-align:center;">${simNaoBadge(m?.enviadoEqtl)}</td>
+                  <td style="text-align:center;">${simNaoBadge(m?.recolha)}</td>
+                  <td style="text-align:center;white-space:nowrap;">${acao}</td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  if(!registros.length){
+    el.innerHTML = `<div class="section-gap">${stats}<div class="panel"><div class="empty-state">${icon('ruler',36)}<h3 style="margin-bottom:6px;">Nenhuma execução de poda para medir</h3><p>Quando as equipes responderem o RDO de poda, os dados aparecerão aqui para aprovação e medição.</p></div></div></div>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="section-gap">${stats}${filters}${tabela}</div>`;
+
+  const fEq = document.getElementById('med-poda-f-equipe');
+  const fSit = document.getElementById('med-poda-f-situacao');
+  const fDe = document.getElementById('med-poda-f-de');
+  const fAte = document.getElementById('med-poda-f-ate');
+  const fBusca = document.getElementById('med-poda-f-busca');
+  const norm = s=> String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const aplicar = ()=>{
+    const q = norm(fBusca.value.trim());
+    registros.forEach(x=>{
+      const eq = findEquipe(x.atribuicao.equipeId);
+      const m = med(x);
+      const situacao = m?.aprovado===true?'aprovada':m?.aprovado===false?'reprovada':'pendente';
+      const okEq = !fEq.value || String(x.atribuicao.equipeId)===String(fEq.value);
+      const okSit = !fSit.value || situacao===fSit.value;
+      const data = x.atribuicao.dataProgramada||'';
+      const okDe = !fDe.value || data >= fDe.value;
+      const okAte = !fAte.value || data <= fAte.value;
+      const hay = norm([
+        podaProgLabel(x.programacao), x.programacao.osi, x.programacao.subestacao,
+        equipeLabel(eq), eq?.supervisor, data, x.atribuicao.status,
+        String(x.programacao.id), String(x.atribuicao.id)
+      ].join(' '));
+      const okBusca = !q || hay.indexOf(q)!==-1;
+      const tr = document.querySelector(`tr[data-med-poda-prog="${x.programacao.id}"][data-med-poda-atrib="${x.atribuicao.id}"]`);
+      if(tr) tr.style.display = (okEq&&okSit&&okDe&&okAte&&okBusca)? '' : 'none';
+    });
+  };
+  fBusca.addEventListener('input', aplicar);
+  document.getElementById('med-poda-f-busca-aplicar').addEventListener('click', aplicar);
+  document.getElementById('med-poda-f-aplicar').addEventListener('click', aplicar);
+  document.getElementById('med-poda-f-limpar').addEventListener('click', ()=>{
+    fEq.value=''; fSit.value=''; fDe.value=''; fAte.value=''; fBusca.value=''; aplicar();
+  });
+
+  registros.forEach(x=>{
+    const tr = document.querySelector(`tr[data-med-poda-prog="${x.programacao.id}"][data-med-poda-atrib="${x.atribuicao.id}"]`);
+    if(!tr) return;
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('[data-med-poda-aprovar]') || e.target.closest('[data-med-poda-reprovar]') || e.target.closest('[data-med-poda-reaprovar]')) return;
+      openMedicaoPodaModal(Number(x.atribuicao.id));
+    });
+    const ap = tr.querySelector(`[data-med-poda-aprovar="${x.atribuicao.id}"]`);
+    if(ap) ap.addEventListener('click', (e)=>{ e.stopPropagation(); aprovarMedicaoPoda(Number(x.atribuicao.id)); });
+    const rp = tr.querySelector(`[data-med-poda-reprovar="${x.atribuicao.id}"]`);
+    if(rp) rp.addEventListener('click', (e)=>{ e.stopPropagation(); reprovarMedicaoPodaModal(Number(x.atribuicao.id)); });
+    const rp2 = tr.querySelector(`[data-med-poda-reaprovar="${x.atribuicao.id}"]`);
+    if(rp2) rp2.addEventListener('click', (e)=>{ e.stopPropagation(); reaprovarMedicaoPoda(Number(x.atribuicao.id)); });
+  });
+}
+
+function aprovarMedicaoPoda(atribId){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoPoda()){ toast('Apenas administradores podem aprovar a medição.', 'error'); return; }
+  const r = podaAtribGlobal(atribId);
+  if(!r) return;
+  if(findMedicaoPoda(atribId)){ toast('Este RDO já possui registro de medição.', 'error'); return; }
+  DB.medicaoPoda.push({
+    id: nextId(),
+    programacaoId: r.programacao.id,
+    atribuicaoId: r.atribuicao.id,
+    rdoData: structuredClone(r.atribuicao),
+    statusValidacao: '',
+    enviadoEqtl: '',
+    recolha: '',
+    aprovado: true,
+    motivoReprovacao: '',
+    aprovadoPor: currentAutor(),
+    aprovadoEm: Date.now(),
+    custom: {}
+  });
+  r.atribuicao.historico = r.atribuicao.historico||[];
+  r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo:'RDO enviado para medição de poda'});
+  registrarEvento('medicao','atribuicao',r.atribuicao.id,podaProgLabel(r.programacao),'RDO aprovado para medição de poda');
+  saveData();
+  toast('RDO aprovado para medição.');
+  renderMediçãoPoda();
+}
+
+function reaprovarMedicaoPoda(atribId){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoPoda()){ toast('Apenas administradores podem reaprovar a medição.', 'error'); return; }
+  const m = findMedicaoPoda(atribId);
+  if(!m){ toast('Registro não encontrado na medição.', 'error'); return; }
+  const r = podaAtribGlobal(atribId);
+  m.aprovado = true;
+  m.motivoReprovacao = '';
+  m.aprovadoPor = currentAutor();
+  m.aprovadoEm = Date.now();
+  r.atribuicao.historico = r.atribuicao.historico||[];
+  r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo:'RDO reaprovado na medição após revisão'});
+  registrarEvento('medicao','atribuicao',atribId,podaProgLabel(r.programacao),'RDO reaprovado na medição');
+  saveData();
+  toast('Medição reaprovada.');
+  renderMediçãoPoda();
+}
+
+function reprovarMedicaoPodaModal(atribId){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoPoda()){ toast('Apenas administradores podem reprovar a medição.', 'error'); return; }
+  const m = findMedicaoPoda(atribId);
+  if(!m){ toast('Registro não encontrado na medição.', 'error'); return; }
+  const r = podaAtribGlobal(atribId);
+  const q = r? findEquipe(r.atribuicao.equipeId) : null;
+  const body = `
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Reprovar a medição de <strong>${esc(podaProgLabel(r.programacao))}</strong>${q? ' — '+esc(equipeLabel(q)):''}. Isso marcará como pendência para o responsável pelo RDO anexar mais evidências ou editar o registro.</div>
+    <div class="field"><label>Motivo da reprovação <span class="req">*</span></label><textarea name="motivo" required rows="3" maxlength="500" placeholder="Descreva o motivo da reprovação."></textarea></div>`;
+  openModal({
+    title:'Reprovar medição de PODA', bodyHtml: body, submitLabel:'Reprovar',
+    onSubmit:(fd)=>{
+      const motivo = String(fd.get('motivo')||'').trim();
+      if(!motivo){ toast('Informe o motivo da reprovação.', 'error'); return false; }
+      m.aprovado = false;
+      m.motivoReprovacao = motivo;
+      m.reprovadoPor = currentAutor();
+      m.reprovadoEm = Date.now();
+      r.atribuicao.historico = r.atribuicao.historico||[];
+      r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Reprovado', motivo});
+      registrarEvento('medicao','atribuicao',r.atribuicao.id,podaProgLabel(r.programacao),'RDO reprovado na medição: '+motivo);
+      saveData();
+      toast('Medição reprovada.');
+      renderMediçãoPoda();
+      return true;
+    }
+  });
+}
+
+function medicaoPodaFormHtml(m){
+  const isReprovada = m?.aprovado===false;
+  return `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px;">
+      <div class="field" style="margin:0;">
+        <label>STATUS DA VALIDAÇÃO</label>
+        <select name="statusValidacao" ${isReprovada?'disabled':''}>
+          <option value="">Selecione...</option>
+          ${STATUS_VALIDACAO_OPCOES.map(o=>`<option value="${o}" ${m?.statusValidacao===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+        ${isReprovada? '<div class="field-hint" style="color:var(--red);">Reprovado — edite o RDO e anexe evidências para reenviar.</div>':''}
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ENVIADO EQTL</label>
+        <select name="enviadoEqtl" ${isReprovada?'disabled':''}>
+          <option value="">Selecione...</option>
+          ${SIM_NAO_OPCOES.map(o=>`<option value="${o}" ${m?.enviadoEqtl===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>RECOLHA</label>
+        <select name="recolha" ${isReprovada?'disabled':''}>
+          <option value="">Selecione...</option>
+          ${SIM_NAO_OPCOES.map(o=>`<option value="${o}" ${m?.recolha===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+      </div>
+    </div>`;
+}
+
+function openMedicaoPodaModal(atribId){
+  const x = flatPodaAtribuicoes().find(y=> y.atribuicao.id===Number(atribId));
+  if(!x) return;
+  const m = findMedicaoPoda(atribId);
+  const eq = findEquipe(x.atribuicao.equipeId);
+  const rdo = x.atribuicao.rdoRespostas||{};
+  const res = rdoResumo(x);
+  const imped = rdoImpedimentos(x.atribuicao);
+  const pode = appvMedicaoPoda();
+  const estaAprovada = m?.aprovado===true;
+  const estaReprovada = m?.aprovado===false;
+
+  const banner = estaReprovada
+    ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(224,97,91,.35);background:rgba(224,97,91,.08);border-radius:10px;margin-bottom:16px;">
+        <span style="color:var(--red);flex-shrink:0;margin-top:2px;">${icon('alert',18)}</span>
+        <div>
+          <strong style="color:var(--red);">Medição REPROVADA</strong>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Motivo: <strong>${esc(m?.motivoReprovacao||'—')}</strong><br>Reprovado por <strong>${esc(m?.reprovadoPor?.usuarioNome||'—')}</strong> em <span class="mono">${fmtDateTime(m?.reprovadoEm)}</span>. O responsável pelo RDO deve anexar mais evidências ou editar o registro para reenvio.</div>
+          <button type="button" class="btn btn-sm" data-editar-rdo-med style="margin-top:8px;">${icon('edit',13)} Editar registro RDO</button>
+        </div>
+      </div>`
+    : estaAprovada
+      ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(34,139,34,.35);background:rgba(34,139,34,.07);border-radius:10px;margin-bottom:16px;">
+          <span style="color:var(--green);flex-shrink:0;margin-top:2px;">${icon('check',18)}</span>
+          <div><strong style="color:var(--green);">Medição APROVADA</strong><div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Aprovado por <strong>${esc(m?.aprovadoPor?.usuarioNome||'—')}</strong> em <span class="mono">${fmtDateTime(m?.aprovadoEm)}</span>. Preencha os campos de medição abaixo.</div></div>
+        </div>`
+      : (m? '' : `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Este RDO ainda não foi enviado para medição. Utilize o botão "Aprovar" no RDO de PODA.</div>`);
+
+  const body = `
+    ${banner}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div>
+        <h4 style="margin-bottom:8px;">Programação ${podaProgLabel(x.programacao)}</h4>
+        <p class="admin-field-meta" style="margin:2px 0;">OSI: ${esc(x.programacao.osi||'—')} ${zonaBadge(x.programacao.zona)}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Subestação: ${esc(x.programacao.subestacao||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Tipo Rede: ${esc(x.programacao.tipoRede||'—')} · Chave: ${esc(x.programacao.chave||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Data: ${fmtDate(x.atribuicao.dataProgramada)}</p>
+        <div style="margin-top:8px;">${rdoStatusBadge(x.atribuicao.status)}</div>
+      </div>
+      <div>
+        <h4 style="margin-bottom:8px;">Equipe</h4>
+        <p class="admin-field-meta" style="margin:2px 0;"><strong>${esc(equipeLabel(eq))}</strong></p>
+        <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:6px;">Quantidades executadas</h4>
+      <div style="display:flex;gap:14px;margin-bottom:10px;">
+        <span class="badge-prefix">Prev. ${fmtNum(res.prev)}</span>
+        <span class="badge-prefix alt">Exec. ${fmtNum(res.exec)}</span>
+        <span class="badge-prefix" style="color:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};">${res.pct}%</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;">Fotos</th></tr></thead>
+        <tbody>
+          ${((m?.rdoData?.atividades||x.atribuicao.atividades)||[]).map((a,idx)=>{
+            const at = findAtividade(a.atividadeId);
+            const p = parseFloat(a.quantidadePrevista)||0;
+            const e = a.quantidadeExecutada==null? null : parseFloat(a.quantidadeExecutada);
+            const pct = p? Math.round((e||0)/p*100) : 0;
+            const fotos = String(a.fotos||'').split(';;').filter(Boolean);
+            return `<tr style="border-top:1px solid var(--border-soft);">
+              <td style="padding:4px 6px;color:var(--muted-2);">${idx+1}</td>
+              <td class="mono" style="padding:4px 6px;">${esc(at?.codigo||'?')}</td>
+              <td style="padding:4px 6px;">${esc(at?.descricao||'')}</td>
+              <td style="text-align:center;">${esc(at?.unidade||'')}</td>
+              <td style="text-align:center;" class="mono">${p? fmtNum(p):'—'}</td>
+              <td style="text-align:center;" class="mono"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
+              <td style="text-align:center;color:${pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--red)'};font-weight:700;">${p? pct+'%':'—'}</td>
+              <td style="text-align:center;">${fotos.length? `<div class="rdo-fotos" style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">${fotos.map(u=>`<img class="rdo-foto" src="${esc(u)}" alt="foto" title="Ampliar" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:zoom-in;">`).join('')}</div>`:'<span style="color:var(--muted-2);">—</span>'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${imped.length? `<div style="margin-bottom:16px;">${imped.map(i=>`<span class="badge" style="color:var(--red);background:rgba(224,97,91,.12);margin-right:4px;">${esc(i)}</span>`).join('')}</div>`:''}
+    ${(m && !estaReprovada)? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);">
+      <h4 style="margin-bottom:4px;">Campos de medição</h4>
+      ${medicaoPodaFormHtml(m)}
+    </div>`:(m === undefined? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);font-size:12.5px;color:var(--muted);">Aprovando este RDO, os campos de medição (Status da Validação, Enviado EQTL e Recolha) ficarão disponíveis para preenchimento.</div>`:'')}
+    <div class="admin-field-meta" style="margin-top:16px;">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
+
+  openModal({
+    title:'Medição PODA — '+podaProgLabel(x.programacao),
+    bodyHtml: body,
+    submitLabel: pode? 'Salvar medição' : 'Fechar',
+    wide:true, maxW:760,
+    footerBtns:[
+      { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'poda') }
+    ],
+    onSubmit:(fd)=>{
+      if(!pode) return true;
+      if(!m || estaReprovada) return true;
+      m.statusValidacao = fd.get('statusValidacao');
+      m.enviadoEqtl = fd.get('enviadoEqtl');
+      m.recolha = fd.get('recolha');
+      saveData();
+      toast('Medição salva.');
+      return true;
+    },
+    onMount:(root)=>{
+      root.querySelector('[data-editar-rdo-med]')?.addEventListener('click', ()=>{
+        document.getElementById('modal-root').innerHTML='';
+        editRdoModal(x, podaProgLabel);
+        renderMediçãoPoda();
+      });
+    }
+  });
 }
 function renderModuloEmDesenvolvimento(titulo){
   const el = document.getElementById('content');
@@ -8619,7 +9061,7 @@ function openRDOModal(progId, attribId){
     </div>
     <div class="admin-field-meta">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
 
-  openModal({ title:'RDO — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, footerBtns:[
+  openModal({ title:'RDO — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, maxW:760, footerBtns:[
     { label: icon('download',14)+' Baixar fotos', cls:'btn', style:'background:var(--green);border-color:var(--green);color:#fff;', onClick: ()=> baixarFotosRdo(x.atribuicao.atividades) },
     { label: icon('edit',14)+' Editar registro', cls:'btn', onClick: ()=> editRdoModal(x) },
     { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOCompleto(x) }
@@ -8662,7 +9104,7 @@ function editRdoModal(x, gidOf){
     </div>
     <div class="field" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);"><label>Observação da execução</label><textarea name="obs" rows="3" placeholder="Observação registrada pela equipe">${esc(at.observacao||'')}</textarea></div>`;
   openModal({
-    title:'Editar registro RDO', bodyHtml: body, wide:true, submitLabel:'Salvar alterações',
+    title:'Editar registro RDO', bodyHtml: body, wide:true, maxW:760, submitLabel:'Salvar alterações',
     onSubmit:(fd)=>{
       const motivo = String(fd.get('motivo')||'').trim();
       if(!motivo){ toast('Informe o motivo da edição do registro.', 'error'); return false; }
