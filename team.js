@@ -79,6 +79,12 @@ function fmtDateTime(ts){ const d=new Date(ts); return d.toLocaleDateString('pt-
 function findProjeto(db,id){ return db.projetos.find(p=>p.id===Number(id)); }
 function findEquipe(db,id){ return db.equipes.find(e=>e.id===Number(id)); }
 function findAtividade(db,id){ return db.atividades.find(a=>a.id===Number(id)); }
+function tiposEstruturaList(db){ return (db&&db.tiposEstrutura)||[]; }
+function tipoEstruturaOptionsHtml(db, atual){
+  const opts = tiposEstruturaList(db);
+  const selAtual = String(atual||'');
+  return `<option value="">Nenhum</option>` + opts.map(t=>`<option value="${esc(t.nome)}" ${selAtual===String(t.nome)?'selected':''}>${esc(t.nome)}</option>`).join('');
+}
 function equipeLabel(eq){ if(!eq) return '—'; const parts=[]; if(eq.eqtl) parts.push(eq.eqtl); if(eq.prtn) parts.push(eq.prtn); return parts.length? parts.join(' / ') : ('Equipe #'+eq.id); }
 function eqtlLabel(eq){ return (eq && eq.eqtl)? eq.eqtl : '—'; }
 function prtnLabel(eq){ return (eq && eq.prtn)? eq.prtn : '—'; }
@@ -143,8 +149,56 @@ const ICONS = {
 /* ── FOTOS DOS REGISTROS (IMGGB) ── */
 var IMGGB_KEY = '95bb16ee776d7e20f26857cec98bd372';
 var FOTOS_SEP = ';;';
-var _fotos = {};        // _fotos[eqId] = [ [File,...], [File,...], ... ] (uma lista por linha de atividade)
+var _fotos = {};        // _fotos[eqId] = [ [dataUrl,...], [dataUrl,...], ... ] (uma lista por linha de atividade)
 var _fotosEnviando = false;
+
+/* FOTOS persistem no aparelho: não somem ao atualizar a página
+   e NÃO podem ser desanexadas/removidas depois de anexadas. */
+function fotosLocalKey(){ return 'g26_equipe_fotos_'+teamKey(); }
+function loadFotosPersist(){
+  try{ return JSON.parse(localStorage.getItem(fotosLocalKey())||'null'); }catch(e){ return null; }
+}
+function saveFotosPersist(obj){
+  try{ localStorage.setItem(fotosLocalKey(), JSON.stringify(obj)); }
+  catch(e){ /* quota excedida: ignora, mantém em memória */ }
+}
+function asyncFileToDataUrl(file){
+  return new Promise(resolve=>{
+    if(!file){ resolve(null); return; }
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        try{
+          const MAX = 1280;
+          let w = img.width, h = img.height;
+          const c = document.createElement('canvas');
+          if(w > MAX || h > MAX){
+            const r = Math.min(1, MAX / w, MAX / h);
+            w = Math.round(w * r); h = Math.round(h * r);
+          }
+          c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(c.toDataURL('image/jpeg', 0.82));
+        }catch(err){ resolve(null); }
+      };
+      img.onerror = ()=>resolve(null);
+      img.src = reader.result;
+    };
+    reader.onerror = ()=>resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+function dataUrlToBlob(dataUrl){
+  try{
+    const [meta, b64] = String(dataUrl).split(',');
+    const mime = (meta && meta.match(/data:(.*?);/)||[])[1] || 'image/jpeg';
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }catch(e){ return new Blob([], {type:'image/jpeg'}); }
+}
 function icon(name,size=18){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||''}</svg>`; }
 
 /* --- estado --- */
@@ -219,9 +273,9 @@ function dbToEditors(db){
     if(!item) return null;
     ocndsItem = item;
     editors = {};
-    editors[item.equipeId] = (item.atividades||[]).map(a=>({atividadeId:String(a.atividadeId||''), quantidadePrevista: a.quantidadePrevista??'', quantidadeExecutada: a.quantidadeExecutada??''}));
+    editors[item.equipeId] = (item.atividades||[]).map(a=>({atividadeId:String(a.atividadeId||''), quantidadePrevista: a.quantidadePrevista??'', quantidadeExecutada: a.quantidadeExecutada??'', tipoEstrutura: a.tipoEstrutura||''}));
     if(!editors[item.equipeId] || !editors[item.equipeId].length){
-      editors[item.equipeId] = [{atividadeId:'',quantidadePrevista:'',quantidadeExecutada:''}];
+      editors[item.equipeId] = [{atividadeId:'',quantidadePrevista:'',quantidadeExecutada:'',tipoEstrutura:''}];
     }
     return item;
   }
@@ -233,7 +287,7 @@ function dbToEditors(db){
   editors = {};
   const atrs = filterEquipeId? (pg.atribuicoes||[]).filter(at=>at.equipeId===filterEquipeId) : (pg.atribuicoes||[]);
   atrs.forEach(at=>{
-    editors[at.equipeId] = (at.atividades||[]).map(a=>({ atividadeId:String(a.atividadeId), quantidadePrevista: a.quantidadePrevista??'', quantidadeExecutada: a.quantidadeExecutada??'', qtdAnomalia: a.qtdAnomalia??'', qtdAnomaliaExecutada: a.qtdAnomaliaExecutada??'' }));
+    editors[at.equipeId] = (at.atividades||[]).map(a=>({ atividadeId:String(a.atividadeId), quantidadePrevista: a.quantidadePrevista??'', quantidadeExecutada: a.quantidadeExecutada??'', qtdAnomalia: a.qtdAnomalia??'', qtdAnomaliaExecutada: a.qtdAnomaliaExecutada??'', tipoEstrutura: a.tipoEstrutura||'' }));
   });
   return pg;
 }
@@ -257,11 +311,13 @@ function renderRDOForm(){
     ['rdo_horario_chegada','Horário Chegada'],
     ['rdo_horario_inicio','Horário Início das atividades']
   ];
+  const rdoEq = prog && (prog.equipeId!=null? findEquipe(DB, prog.equipeId) : (prog.atribuicoes||[])[0]? findEquipe(DB, (prog.atribuicoes||[])[0].equipeId) : null);
+  const rdoPlaca = rdoEq && rdoEq.placaVeiculo ? `<div style="font-size:12px;color:var(--muted-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">Placa do veículo: <strong>${esc(rdoEq.placaVeiculo)}</strong></div>` : '';
   return `
     ${anexosDoProgramadorHtml()}
     ${orientacoesPlanejamentoHtml()}
     <div class="panel section-gap" style="max-width:600px;margin:0 auto;">
-      <div class="panel-head"><h3>Questionário RDO - Saída da Base</h3><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${teamGidLabel(prog)}</span></div>
+      <div class="panel-head"><h3>Questionário RDO - Saída da Base</h3><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${teamGidLabel(prog)}${prog.zona? ' · Zona '+prog.zona:''}${prog.numeroReserva? ' · Nº Reserva/PEP '+prog.numeroReserva:''}</span></div>
       <div style="padding:24px;">
         <p style="font-size:14px;color:var(--muted);margin-bottom:20px;">Responda às questões abaixo e informe os horários de saída da base. Os dados ficam salvos neste aparelho e são enviados quando você concluir as atividades.</p>
         ${RDO_PERGUNTAS.map((p,i)=>`
@@ -282,6 +338,7 @@ function renderRDOForm(){
             <label style="display:block;margin-bottom:4px;">KM Final</label>
             <input type="number" class="rdo-input" data-rdo="rdo_km_final" inputmode="numeric" autocomplete="off" placeholder="0" style="width:100%;padding:8px;font-size:16px;font-family:'JetBrains Mono',monospace;letter-spacing:.06em;">
           </div>
+          ${rdoPlaca}
         </div>
         <div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--border);">
           <h4 style="margin:0 0 12px 0;font-size:13px;color:var(--dark);">Horários de saída da base</h4>
@@ -305,6 +362,8 @@ function renderOcNdsRDOForm(){
     ['rdo_horario_chegada','Horário Chegada'],
     ['rdo_horario_inicio','Horário Início das atividades']
   ];
+  const ocRdoEq = ocndsItem && findEquipe(DB, ocndsItem.equipeId);
+  const rdoPlaca = ocRdoEq && ocRdoEq.placaVeiculo ? `<div style="font-size:12px;color:var(--muted-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">Placa do veículo: <strong>${esc(ocRdoEq.placaVeiculo)}</strong></div>` : '';
   const gid = ocndsItem.gid||'G26-'+String(ocndsItem.id).padStart(7,'0');
   const anexos = (ocndsItem&&ocndsItem.anexos)||[];
   const anexosHtml = anexos.length ? `
@@ -317,7 +376,7 @@ function renderOcNdsRDOForm(){
   return `
     ${anexosHtml}
     <div class="panel section-gap" style="max-width:600px;margin:0 auto;">
-      <div class="panel-head"><h3>Questionário RDO - Saída da Base</h3><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${esc(gid)}</span></div>
+      <div class="panel-head"><h3>Questionário RDO - Saída da Base</h3><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${esc(gid)}${ocndsItem.zona? ' · Zona '+ocndsItem.zona:''}${ocndsItem.numeroReserva? ' · Nº Reserva/PEP '+ocndsItem.numeroReserva:''}</span></div>
       <div style="padding:24px;">
         <p style="font-size:14px;color:var(--muted);margin-bottom:20px;">Responda às questões abaixo e informe os horários de saída da base. Os dados ficam salvos neste aparelho e são enviados quando você concluir as atividades.</p>
         ${RDO_PERGUNTAS.map((p,i)=>`
@@ -338,6 +397,7 @@ function renderOcNdsRDOForm(){
             <label style="display:block;margin-bottom:4px;">KM Final</label>
             <input type="number" class="rdo-input" data-rdo="rdo_km_final" inputmode="numeric" autocomplete="off" placeholder="0" style="width:100%;padding:8px;font-size:16px;font-family:'JetBrains Mono',monospace;letter-spacing:.06em;">
           </div>
+          ${rdoPlaca}
         </div>
         <div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--border);">
           <h4 style="margin:0 0 12px 0;font-size:13px;color:var(--dark);">Horários de saída da base</h4>
@@ -554,7 +614,7 @@ function render(){
         <div class="panel-head">
           <div>
             <h3>Ocorrência ${esc(ocndsItem.tipo)} — ${ocndsItem.gid||'G26-'+String(ocndsItem.id).padStart(7,'0')}</h3>
-            <div class="admin-field-meta">Atividade de livre escolha · ${fmtDate(ocndsItem.data)}</div>
+            <div class="admin-field-meta">Atividade de livre escolha · ${fmtDate(ocndsItem.data)}${ocndsItem.zona? ' · Zona '+ocndsItem.zona:''}${ocndsItem.numeroReserva? ' · Nº Reserva/PEP '+ocndsItem.numeroReserva:''}</div>
           </div>
           <span class="badge" style="color:var(--blue);background:rgba(78,140,235,.12);">${esc(ocndsItem.status)}</span>
         </div>
@@ -569,35 +629,20 @@ function render(){
         </div>
       </div>`;
     document.getElementById('team-obs').addEventListener('input', e=>{ observacao = e.target.value; });
-    root.querySelectorAll('.te-select').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tes.split('|'); editors[eid][Number(idx)].atividadeId = e.target.value; }));
+    bindTeamActAutocomplete(root);
     root.querySelectorAll('.te-qty').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.teq.split('|'); editors[eid][Number(idx)].quantidadePrevista = e.target.value; }));
     root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; }));
+    root.querySelectorAll('.te-tipo-estrutura').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tte.split('|'); editors[eid][Number(idx)].tipoEstrutura = e.target.value; }));
     root.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', e=>{ const [eid,idx]=e.currentTarget.dataset.eqRm.split('|'); editors[eid].splice(Number(idx),1); resetFotos(); render(); }));
-    root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',quantidadeExecutada:''}); resetFotos(); render(); }));
+    root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',quantidadeExecutada:'',tipoEstrutura:''}); resetFotos(); render(); }));
     root.querySelectorAll('.te-camera').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.tec.split('|'); openPhotoPicker(eid, Number(idx), 'camera'); }));
     root.querySelectorAll('.te-gallery').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.teg.split('|'); openPhotoPicker(eid, Number(idx), 'gallery'); }));
     root.querySelectorAll('.te-photo-hint').forEach(h=>{
       const [eid,idx] = h.dataset.ph.split('|');
       const n = fotosCount(eid, Number(idx));
-      h.textContent = n? `${n} foto${n>1?'s':''} adicionada${n>1?'s':''}` : 'Obrigatório: adicione ao menos 1 foto';
+      h.textContent = n? `${n}/10 foto${n>1?'s':''}` : 'Obrigatório: adicione ao menos 1 foto';
       h.className = 'te-photo-hint ' + (n? 'ok':'missing');
-    });
-    root.querySelectorAll('input[type="search"][id^="te-search-"]').forEach(input=>{
-      const eqId = input.id.replace('te-search-','');
-      input.addEventListener('input', ()=>{
-        const term = input.value.toLowerCase();
-        root.querySelectorAll(`.te-select[data-tes^="${eqId}|"]`).forEach(sel=>{
-          const selected = sel.value;
-          Array.from(sel.options).forEach(opt=>{
-            if(opt.value==='') return;
-            const txt = opt.textContent.toLowerCase();
-            opt.style.display = txt.includes(term) ? '' : 'none';
-          });
-          if(selected && !Array.from(sel.options).find(o=>o.value===selected && o.style.display!=='none')){
-            sel.value = '';
-          }
-        });
-      });
+      atualizarFotosUI(eid, Number(idx));
     });
     document.getElementById('team-submit').addEventListener('click', submitEditOcNds);
     return;
@@ -653,6 +698,8 @@ function render(){
   const pr = findProjeto(DB, prog.projetoId);
   const headTitulo = m==='poda'? 'PODA — OSI '+(prog.osi||'—') : m==='ose'? 'OSE — '+(prog.municipio||'Município') : (pr?.nome||'Projeto');
   const headSub = [teamGidLabel(prog),
+    prog.zona? 'Zona '+prog.zona : '',
+    prog.numeroReserva? 'Reserva/PEP '+prog.numeroReserva : '',
     m==='poda'? [prog.subestacao? 'SE '+prog.subestacao:'', prog.tipoRede, prog.chave? 'Chave '+prog.chave:''].filter(Boolean).join(' · ')
     : m==='ose'? [prog.subestacao? 'SE '+prog.subestacao:'', prog.tipoIntervencao].filter(Boolean).join(' · ')
     : [(pr?.codigo||''), prog.ciclo? 'Ciclo '+prog.ciclo : ''].filter(Boolean).join(' · ')
@@ -678,36 +725,21 @@ function render(){
       </div>
     </div>`;
   document.getElementById('team-obs').addEventListener('input', e=>{ observacao = e.target.value; });
-  root.querySelectorAll('.te-select').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tes.split('|'); editors[eid][Number(idx)].atividadeId = e.target.value; }));
+  bindTeamActAutocomplete(root);
   root.querySelectorAll('.te-qty').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.teq.split('|'); editors[eid][Number(idx)].quantidadePrevista = e.target.value; }));
   root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; }));
+  root.querySelectorAll('.te-tipo-estrutura').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tte.split('|'); editors[eid][Number(idx)].tipoEstrutura = e.target.value; }));
   root.querySelectorAll('.te-anom').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tea.split('|'); editors[eid][Number(idx)].qtdAnomaliaExecutada = e.target.value; }));
   root.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', e=>{ const [eid,idx]=e.currentTarget.dataset.eqRm.split('|'); editors[eid].splice(Number(idx),1); resetFotos(); render(); }));
-  root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',qtdAnomaliaExecutada:''}); resetFotos(); render(); }));
+  root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',qtdAnomaliaExecutada:'',tipoEstrutura:''}); resetFotos(); render(); }));
   root.querySelectorAll('.te-camera').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.tec.split('|'); openPhotoPicker(eid, Number(idx), 'camera'); }));
   root.querySelectorAll('.te-gallery').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.teg.split('|'); openPhotoPicker(eid, Number(idx), 'gallery'); }));
   root.querySelectorAll('.te-photo-hint').forEach(h=>{
     const [eid,idx] = h.dataset.ph.split('|');
     const n = fotosCount(eid, Number(idx));
-    h.textContent = n? `${n} foto${n>1?'s':''} adicionada${n>1?'s':''}` : 'Obrigatório: adicione ao menos 1 foto';
+    h.textContent = n? `${n}/10 foto${n>1?'s':''}` : 'Obrigatório: adicione ao menos 1 foto';
     h.className = 'te-photo-hint ' + (n? 'ok':'missing');
-  });
-  root.querySelectorAll('input[type="search"][id^="te-search-"]').forEach(input=>{
-    const eqId = input.id.replace('te-search-','');
-    input.addEventListener('input', ()=>{
-      const term = input.value.toLowerCase();
-      root.querySelectorAll(`.te-select[data-tes^="${eqId}|"]`).forEach(sel=>{
-        const selected = sel.value;
-        Array.from(sel.options).forEach(opt=>{
-          if(opt.value==='') return;
-          const txt = opt.textContent.toLowerCase();
-          opt.style.display = txt.includes(term) ? '' : 'none';
-        });
-        if(selected && !Array.from(sel.options).find(o=>o.value===selected && o.style.display!=='none')){
-          sel.value = '';
-        }
-      });
-    });
+    atualizarFotosUI(eid, Number(idx));
   });
   document.getElementById('team-submit').addEventListener('click', submitEdit);
   const btnAcidente = document.getElementById('btn-informar-acidente');
@@ -813,22 +845,27 @@ function abrirModalAcidente(){
 function renderTeamBlock(eqId){
   const eq = findEquipe(DB, Number(eqId));
   const rows = editors[eqId];
-  const searchId = `te-search-${eqId}`;
+  const qtyStyle = 'flex:0 0 90px;';
   return `<div class="panel" style="border-color:var(--border);">
     <div class="panel-head"><h4>${equipeLabel(eq)}</h4><span class="badge-prefix">${eqtlLabel(eq)}</span></div>
     <div style="padding:12px 14px;">
-      <div class="field" style="margin-bottom:12px;">
-        <label for="${searchId}">${icon('search',14)} Buscar atividade (código ou descrição)</label>
-        <input type="search" id="${searchId}" placeholder="Filtrar atividades…" style="width:100%;">
-      </div>
-      ${rows.map((r,i)=>`
+      ${rows.map((r,i)=>{
+        const atDef = r.atividadeId? findAtividade(DB, r.atividadeId) : null;
+        return `
         <div class="team-atividade">
-          <div class="activity-row">
-            <select class="te-select" data-tes="${eqId}|${i}"><option value="">Atividade…</option>${DB.atividades.map(a=>`<option value="${a.id}" ${String(r.atividadeId)===String(a.id)?'selected':''}>${esc(a.codigo)} · ${esc(a.descricao)}</option>`).join('')}</select>
-            <div class="qty-field"><label>Prevista</label><input type="number" step="0.01" min="0" class="te-qty" data-teq="${eqId}|${i}" placeholder="Qtd." value="${r.atividadeId ? r.quantidadePrevista : '0'}" readonly>${r.atividadeId?'':' (bloqueado)'}</div>
-            <div class="qty-field"><label>Executada</label><input type="number" step="0.01" min="0" class="te-exec" data-tee="${eqId}|${i}" placeholder="Qtd." value="${r.quantidadeExecutada??''}"></div>
-            ${teamMode()==='ose'? `<div class="qty-field"><label title="Quantidade de anomalias executadas">Anomalias</label><input type="number" step="1" min="0" class="te-anom" data-tea="${eqId}|${i}" placeholder="Qtd." value="${r.qtdAnomaliaExecutada??''}"></div>`:''}
-            <button type="button" class="icon-btn te-remove" data-eq-rm="${eqId}|${i}" title="Remover atividade" ${r.atividadeId?'disabled':''}>${icon('close',13)}</button>
+          <div class="activity-row act-ac-row">
+            <div class="act-ac" data-tes="${eqId}|${i}">
+              <input type="text" class="act-ac-input te-ac-input" data-tes="${eqId}|${i}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+              <div class="act-ac-list" data-tes="${eqId}|${i}" style="display:none;"></div>
+            </div>
+            <div class="qty-field" style="${qtyStyle}"><label>Prevista</label><input type="number" step="0.01" min="0" class="te-qty" data-teq="${eqId}|${i}" placeholder="Qtd." value="${r.atividadeId ? r.quantidadePrevista : '0'}" readonly>${r.atividadeId?'':'<span class="te-bloq" style="font-size:9px;color:var(--muted-2);">bloqueado</span>'}</div>
+            <div class="qty-field" style="${qtyStyle}"><label>Executada</label><input type="number" step="0.01" min="0" class="te-exec" data-tee="${eqId}|${i}" placeholder="Qtd." value="${r.quantidadeExecutada??''}"></div>
+            ${teamMode()==='ose'? `<div class="qty-field" style="${qtyStyle}"><label title="Quantidade de anomalias executadas">Anomalias</label><input type="number" step="1" min="0" class="te-anom" data-tea="${eqId}|${i}" placeholder="Qtd." value="${r.qtdAnomaliaExecutada??''}"></div>`:''}
+            <button type="button" class="icon-btn act-remove te-remove" data-eq-rm="${eqId}|${i}" title="Remover atividade" ${r.atividadeId?'disabled':''}>${icon('close',13)}</button>
+          </div>
+          <div class="te-estrutura">
+            <label>Tipo de estruturas</label>
+            <select class="te-tipo-estrutura" data-tte="${eqId}|${i}">${tipoEstruturaOptionsHtml(DB, r.tipoEstrutura)}</select>
           </div>
           <div class="activity-fotos">
             <div class="te-thumbs" data-tef="${eqId}|${i}"></div>
@@ -838,10 +875,84 @@ function renderTeamBlock(eqId){
               <button type="button" class="btn btn-sm btn-ghost te-gallery" data-teg="${eqId}|${i}">${icon('image',13)} Galeria</button>
             </div>
           </div>
-        </div>`).join('')}
+        </div>`;}).join('')}
       <button type="button" class="btn btn-sm te-add" data-eq-add="${eqId}">${icon('plus',13)} Adicionar atividade</button>
     </div>
   </div>`;
+}
+function bindTeamActAutocomplete(root){
+  if(!DB || !DB.atividades) return;
+  const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const list = DB.atividades;
+  const bind = ac=>{
+    const [eid, i] = ac.dataset.tes.split('|');
+    const idx = Number(i);
+    const input = ac.querySelector('.act-ac-input');
+    const listEl = ac.querySelector('.act-ac-list');
+    let arrow = -1;
+    const row = ()=> (editors[eid]||[])[idx];
+    const selDef = ()=>{ const r=row(); return r && r.atividadeId ? findAtividade(DB, r.atividadeId) : null; };
+    function syncInput(){
+      const d = selDef();
+      input.value = d ? (d.codigo+' · '+d.descricao) : '';
+      listEl.style.display='none';
+    }
+    function openList(){
+      const d = selDef();
+      const currentLabel = d ? (d.codigo+' · '+d.descricao) : '';
+      const normQ = norm(input.value);
+      let items = list;
+      if(normQ && input.value !== currentLabel){
+        items = items.filter(a=> norm(a.codigo).includes(normQ) || norm(a.descricao).includes(normQ));
+      }
+      items = items.slice(0, 30);
+      listEl.scrollTop = 0;
+      if(!items.length){
+        listEl.innerHTML = `<div class="act-ac-empty">Nenhuma atividade encontrada</div>`;
+        listEl.style.display='block'; arrow=-1; return;
+      }
+      listEl.innerHTML = items.map(a=>{
+        const sel = d && String(d.id)===String(a.id);
+        return `<div class="act-ac-item${sel?' ac-selected':''}" data-id="${a.id}"><span class="ac-cc">${esc(a.codigo)}</span><span class="ac-desc">${esc(a.descricao)}</span></div>`;
+      }).join('');
+      listEl.style.display='block'; arrow=-1;
+      listEl.querySelectorAll('.act-ac-item').forEach(it=>{
+        it.addEventListener('mousedown', e=>{ e.preventDefault(); selectActivity(it.dataset.id); });
+      });
+    }
+    function highlight(items){ items.forEach((it,k)=> it.classList.toggle('active', k===arrow)); }
+    function selectActivity(id){
+      const r = row();
+      if(r) r.atividadeId = id;
+      syncInput();
+      const rowEl = ac.closest('.activity-row');
+      if(rowEl){
+        const qty = rowEl.querySelector('.te-qty');
+        if(qty && r) qty.value = r.quantidadePrevista!=null && r.quantidadePrevista!=='' ? r.quantidadePrevista : '0';
+        const bloq = rowEl.querySelector('.te-bloq');
+        if(bloq) bloq.remove();
+        const rm = rowEl.querySelector('.te-remove');
+        if(rm) rm.disabled = false;
+      }
+      listEl.style.display='none';
+    }
+    input.addEventListener('focus', ()=>{ input.select(); openList(); });
+    input.addEventListener('input', openList);
+    input.addEventListener('keydown', e=>{
+      const items = listEl.querySelectorAll('.act-ac-item');
+      if(e.key==='ArrowDown'){ e.preventDefault(); if(items.length){ arrow=Math.min(arrow+1,items.length-1); highlight(items);} }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); if(items.length){ arrow=Math.max(arrow-1,0); highlight(items);} }
+      else if(e.key==='Enter'){
+        e.preventDefault();
+        if(arrow>=0 && items[arrow]) selectActivity(items[arrow].dataset.id);
+        else if(items.length===1) selectActivity(items[0].dataset.id);
+        else syncInput();
+      }
+      else if(e.key==='Escape'){ syncInput(); input.blur(); }
+    });
+    input.addEventListener('blur', ()=>{ setTimeout(syncInput, 130); });
+  };
+  root.querySelectorAll('.act-ac[data-tes]').forEach(bind);
 }
 
 /* --- envio / fila offline --- */
@@ -850,57 +961,66 @@ function openPhotoPicker(eqId, idx, modo){
   const inp = document.createElement('input');
   inp.type = 'file';
   inp.accept = 'image/*';
-  if(modo==='camera') inp.setAttribute('capture','environment');
+  if(modo==='camera'){
+    inp.setAttribute('capture','environment');
+  }else{
+    inp.multiple = true;
+  }
   inp.style.display = 'none';
-  inp.onchange = ()=>{
-    if(inp.files && inp.files[0]) addFoto(eqId, idx, inp.files[0]);
+  inp.onchange = async ()=>{
+    if(!inp.files || !inp.files.length){ inp.remove(); return; }
+    const max = 10 - fotosCount(eqId, Number(idx));
+    const files = Array.from(inp.files).slice(0, max);
+    for(const f of files){ await addFoto(eqId, Number(idx), f); }
     inp.remove();
   };
   document.body.appendChild(inp);
   inp.click();
 }
-function addFoto(eqId, idx, file){
+async function addFoto(eqId, idx, file){
+  const dataUrl = await asyncFileToDataUrl(file);
+  if(!dataUrl) return;
   if(!_fotos[eqId]) _fotos[eqId] = [];
   if(!_fotos[eqId][idx]) _fotos[eqId][idx] = [];
-  _fotos[eqId][idx].push(file);
+  _fotos[eqId][idx].push(dataUrl);
   atualizarFotosUI(eqId, idx);
+  persistFotos();
 }
 function removerFoto(eqId, idx, fIdx){
-  const arr = (_fotos[eqId]||[])[idx];
-  if(!arr) return;
-  arr.splice(fIdx,1);
-  atualizarFotosUI(eqId, idx);
+  /* Fotos anexadas são permanentes — não podem ser desanexadas. */
+  return;
 }
-function fotoUrl(file){ return URL.createObjectURL(file); }
+function persistFotos(){
+  saveFotosPersist(_fotos);
+}
+function fotoUrl(file){ return file; }
 function atualizarFotosUI(eqId, idx){
   const thumbs = document.querySelector('.te-thumbs[data-tef="'+eqId+'|'+idx+'"]');
   if(!thumbs) return;
   const arr = (_fotos[eqId]||[])[idx]||[];
   thumbs.innerHTML = arr.map((f,i)=>`
     <div class="te-thumb">
-      <img src="${fotoUrl(f)}" alt="foto">
-      <button type="button" class="icon-btn te-del-foto" data-te-df="${eqId}|${idx}|${i}" title="Remover foto">${icon('close',13)}</button>
+      <img src="${f}" alt="foto ${i+1}">
     </div>`).join('');
-  thumbs.querySelectorAll('.te-del-foto').forEach(b=>{
-    b.addEventListener('click', ()=>{
-      const p = b.dataset.teDf.split('|');
-      removerFoto(p[0], Number(p[1]), Number(p[2]));
-    });
-  });
 }
 function resetFotos(){
+  const persisted = loadFotosPersist() || {};
   _fotos = {};
   Object.keys(editors).forEach(eqId=>{
-    const existing = _fotos[eqId] || [];
-    _fotos[eqId] = editors[eqId].map((_a, i)=> existing[i] || []);
+    const saved = persisted[eqId] || [];
+    _fotos[eqId] = editors[eqId].map((_a, i)=> (saved[i]||[]).slice());
   });
 }
 function fotosCount(eqId, idx){
   return ((_fotos[eqId]||[])[idx]||[]).length;
 }
-async function uploadToImGbb(file){
+async function uploadToImGbb(f){
   const fd = new FormData();
-  fd.append('image', file);
+  if(typeof f === 'string' && f.indexOf('data:') === 0){
+    fd.append('image', dataUrlToBlob(f), 'foto.jpg');
+  }else{
+    fd.append('image', f);
+  }
   const res = await fetch('https://api.imgbb.com/1/upload?key='+IMGGB_KEY, { method:'POST', body: fd });
   const j = await res.json();
   if(!j.success) throw new Error((j.error&&j.error.message)||'Falha no upload');
@@ -955,6 +1075,7 @@ async function submitEditOcNds(){
             atividadeId: Number(r.atividadeId),
             quantidadePrevista: r.quantidadePrevista? parseFloat(r.quantidadePrevista): null,
             quantidadeExecutada: (r.quantidadeExecutada===''||r.quantidadeExecutada==null)? null : parseFloat(r.quantidadeExecutada),
+            tipoEstrutura: r.tipoEstrutura||'',
             fotos: fotosUrls[eqId][i]||''
           }))
         }))
@@ -992,7 +1113,7 @@ async function syncNowOcNds(){
       const v = snap.val();
       db = (typeof v==='string')? JSON.parse(v) : v;
     }else{
-      db = { equipes:[], atividades:[], projetos:[], programacoes:[], ocnds:[], usuarios:[], customFields:{equipes:[],atividades:[],projetos:[],programacoes:[]}, seq:1 };
+      db = { equipes:[], atividades:[], projetos:[], programacoes:[], ocnds:[], usuarios:[], customFields:{equipes:[],atividades:[],projetos:[],programacoes:[]}, tiposEstrutura:[], seq:1 };
     }
     let changed = false;
     q.forEach(patch=>{
@@ -1014,6 +1135,7 @@ async function syncNowOcNds(){
       DB = db; saveCache(db); dbToEditors(DB);
     }
     saveQueue([]);
+    try{ localStorage.removeItem(fotosLocalKey()); }catch(e){}
     setStatus('Alterações enviadas ✓', 'ok');
     toast('Alterações enviadas ao escritório.');
   }catch(err){
@@ -1068,6 +1190,7 @@ async function submitEdit(){
             quantidadePrevista: r.quantidadePrevista? parseFloat(r.quantidadePrevista): null,
             quantidadeExecutada: (r.quantidadeExecutada===''||r.quantidadeExecutada==null)? null : parseFloat(r.quantidadeExecutada),
             qtdAnomaliaExecutada: (teamMode()==='ose' && r.qtdAnomaliaExecutada!=='' && r.qtdAnomaliaExecutada!=null)? parseFloat(r.qtdAnomaliaExecutada) : null,
+            tipoEstrutura: r.tipoEstrutura||'',
             fotos: fotosUrls[eqId][i]||''
           }))
         }))
@@ -1146,7 +1269,7 @@ async function syncNow(){
       const v = snap.val();
       db = (typeof v==='string')? JSON.parse(v) : v;
     }else{
-      db = { equipes:[], atividades:[], projetos:[], programacoes:[], ocnds:[], podaProgramacoes:[], oseProgramacoes:[], usuarios:[], customFields:{equipes:[],atividades:[],projetos:[],programacoes:[]}, seq:1 };
+      db = { equipes:[], atividades:[], projetos:[], programacoes:[], ocnds:[], podaProgramacoes:[], oseProgramacoes:[], usuarios:[], customFields:{equipes:[],atividades:[],projetos:[],programacoes:[]}, tiposEstrutura:[], seq:1 };
     }
     let changed = false;
     q.forEach(patch=>{
@@ -1163,6 +1286,7 @@ async function syncNow(){
           quantidadeExecutada: x.quantidadeExecutada != null ? x.quantidadeExecutada : (existing.find(y=>String(y.atividadeId)===String(x.atividadeId))?.quantidadeExecutada ?? null),
           qtdAnomalia: x.qtdAnomalia ?? existing.find(y=>String(y.atividadeId)===String(x.atividadeId))?.qtdAnomalia ?? null,
           qtdAnomaliaExecutada: x.qtdAnomaliaExecutada != null ? x.qtdAnomaliaExecutada : (existing.find(y=>String(y.atividadeId)===String(x.atividadeId))?.qtdAnomaliaExecutada ?? null),
+          tipoEstrutura: x.tipoEstrutura != null ? x.tipoEstrutura : (existing.find(y=>String(y.atividadeId)===String(x.atividadeId))?.tipoEstrutura ?? ''),
           fotos: x.fotos || existing.find(y=>String(y.atividadeId)===String(x.atividadeId))?.fotos || ''
         }));
         at.historico = at.historico||[];

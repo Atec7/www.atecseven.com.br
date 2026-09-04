@@ -265,6 +265,33 @@ a.anexo-thumb{text-decoration:none;}
 .lb-counter{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);color:#ccc;font-size:13px;font-family:ui-monospace,Consolas,monospace;background:rgba(0,0,0,.5);padding:3px 10px;border-radius:20px;}
 .activity-row{display:grid;grid-template-columns:1fr 90px 90px 28px;gap:8px;align-items:center;margin-bottom:8px;width:100%;}
 .activity-row select{width:100%;min-width:0;}
+.act-ac-row{display:flex;gap:8px;align-items:center;width:100%;box-sizing:border-box;}
+.act-ac-row .act-ac{flex:1;min-width:0;position:relative;}
+.act-ac-row .act-qty,.act-ac-row .act-anom{width:90px;flex:0 0 90px;}
+.act-ac-row .act-remove{flex:0 0 28px;}
+.act-ac-input{width:100%;min-width:0;box-sizing:border-box;}
+.act-ac-list{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:60;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);max-height:260px;overflow:auto;}
+.act-ac-item{padding:8px 10px;font-size:12.5px;cursor:pointer;display:flex;gap:8px;align-items:center;box-sizing:border-box;}
+.act-ac-item:hover,.act-ac-item.active{background:var(--panel-2);}
+.act-ac-item .ac-fav{flex:0 0 auto;display:inline-flex;color:var(--accent);}
+.act-ac-item.ac-selected{background:rgba(0,0,0,.05);position:relative;}
+.act-ac-item.ac-selected::after{content:'✓';position:absolute;right:10px;color:var(--green);font-weight:700;}
+.act-ac-item .ac-cc{font-weight:700;color:var(--accent);font-family:ui-monospace,Consolas,monospace;flex:0 0 auto;white-space:nowrap;}
+.act-ac-item .ac-desc{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.act-ac-item.ac-selected .ac-desc{padding-right:16px;}
+.act-ac-item.ac-prio-item{background:rgba(var(--green-rgb,53,169,53),.10);}
+.act-ac-item.ac-prio-item:hover,.act-ac-item.ac-prio-item.active{background:rgba(var(--green-rgb,53,169,53),.18);}
+.act-ac-item.ac-prio-item .ac-cc{color:var(--green);}
+.act-ac-item.ac-prio-item .ac-desc{color:var(--green);}
+.act-ac-item .ac-prio-tag{flex:0 0 auto;font-size:9.5px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--green);border:1px solid var(--green);border-radius:999px;padding:1px 6px;margin-left:auto;}
+.act-ac-empty{padding:10px;font-size:12px;color:var(--muted-2);}
+@media(max-width:560px){
+  .act-ac-row{flex-wrap:wrap;}
+  .act-ac-row .act-ac{flex:1 1 100%;}
+  .act-ac-row .act-qty,.act-ac-row .act-anom{flex:1 1 40%;width:auto;}
+}
+.pg-proj-ac{position:relative;}
+.pg-proj-ac-list{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:60;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);max-height:260px;overflow:auto;}
 .qty-field{display:flex;flex-direction:column;gap:3px;}
 .qty-field label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-2);}
 .qty-field input{width:100%;min-width:0;text-align:right;}
@@ -357,6 +384,9 @@ a.anexo-thumb{text-decoration:none;}
 .team-atividade .activity-row{margin-bottom:8px;}
 .activity-fotos{display:flex;flex-direction:column;gap:8px;}
 .te-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.te-estrutura{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.te-estrutura label{font-size:11.5px;font-weight:600;color:var(--muted);white-space:nowrap;margin:0;}
+.te-estrutura select{flex:1;padding:7px 9px;font-size:13px;color:var(--dark);background:var(--panel);border:1px solid var(--border);border-radius:6px;}
 .te-photo-hint{font-size:11.5px;flex:1;}
 .te-photo-hint.missing{color:var(--red);}
 .te-photo-hint.ok{color:var(--green);}
@@ -426,6 +456,54 @@ a.anexo-thumb{text-decoration:none;}
    CENTRAL DE MONITORAMENTO
 ========================================================= */
 .mon-panel{margin-bottom:16px;}
+
+/* =========================================================
+   REPROVAÇÃO NA MEDIÇÃO DE PODA (ABA PODA > RDO)
+========================================================= */
+@keyframes podaReprovBlink{
+  0%,100%{ background-color: rgba(224,97,91,.06); border-left-color: var(--red); }
+  50%{ background-color: rgba(224,97,91,.28); border-left-color: #c0392b; }
+}
+tr.poda-rdo-reprovado{
+  border-left: 4px solid var(--red);
+  animation: podaReprovBlink 1.1s ease-in-out infinite;
+}
+tr.poda-rdo-reprovado td{
+  border-top: 1px solid rgba(224,97,91,.30);
+}
+.med-poda-reprov-msg{
+  margin-top:5px;
+  padding:5px 8px;
+  border:1px solid rgba(224,97,91,.45);
+  border-radius:6px;
+  background: rgba(224,97,91,.10);
+  color: var(--red);
+  font-size:11.5px;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  flex-wrap:wrap;
+}
+.med-poda-reprov-motivo{
+  flex-basis:100%;
+  font-weight:500;
+  color: #7a2b26;
+  white-space:normal;
+  word-break:break-word;
+}
+.med-poda-reprov-count{
+  display:inline-flex;
+  align-items:center;
+  padding:1px 8px;
+  border-radius:10px;
+  background: var(--red);
+  color:#fff;
+  font-size:10.5px;
+  font-weight:700;
+  letter-spacing:.3px;
+}
+
 .mon-panel .panel-head{border-bottom-color:rgba(224,164,88,.25);}
 .mon-live{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--green);background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.35);padding:4px 10px;border-radius:20px;white-space:nowrap;}
 .mon-live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:monBlink 1.6s infinite;}

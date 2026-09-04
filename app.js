@@ -22,7 +22,8 @@ const AUD_REF = rtdb.ref('g26_planner/auditoria');
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js').catch(()=>{}); }
 
 const DEFAULT_DATA = {
-  equipes: [], atividades: [], projetos: [], programacoes: [], ocnds: [], podaProgramacoes: [], oseProgramacoes: [], usuarios: [],
+  equipes: [], atividades: [], projetos: [], programacoes: [], ocnds: [], podaProgramacoes: [], oseProgramacoes: [], usuarios: [], medicaoPoda: [],
+  tiposEstrutura: [],
   customFields: { equipes: [], atividades: [], projetos: [], programacoes: [], podaProgramacoes: [], oseProgramacoes: [] },
   cidades: [], cidadeDistancias: [], cidadeMaxDist: 50,
   seq: 1, rev: 0
@@ -50,6 +51,7 @@ let warnSaveFail = false;
 let servidorSincronizado = false;
 let lastServerJson = null;
 let salvando = false;
+let forceSave = false;
 const ADMIN_CACHE_KEY = 'g26_admin_cache';
 function loadAdminCache(){ try{ const c = JSON.parse(localStorage.getItem(ADMIN_CACHE_KEY)||'null'); return (c && c.synced && c.data)? c.data : null; }catch(e){ return null; } }
 function saveAdminCache(db, synced){ try{ localStorage.setItem(ADMIN_CACHE_KEY, JSON.stringify({ synced: !!synced, data: db })); }catch(e){} }
@@ -93,7 +95,7 @@ function guardarPendente(snapshot){
   try{ localStorage.setItem('g26_admin_pending', JSON.stringify({ snapshot, server: lastServerJson })); }catch(e){}
 }
 function flushSave(){
-  if(lastServerJson){
+  if(lastServerJson && !forceSave){
     try{
       const srv = JSON.parse(lastServerJson);
       const srvRev = Number(srv && srv.rev)||0;
@@ -113,7 +115,8 @@ function flushSave(){
   }
   const snapshot = JSON.stringify(DB);
   if(servidorSincronizado && lastWrittenJson===snapshot) return; // nada mudou de fato: evita regravar o banco inteiro
-  DB.rev = (DB.rev||0)+1;
+  DB.rev = Math.max((DB.rev||0)+1, Number(lastServerJson? (JSON.parse(lastServerJson).rev||0) : 0)+1);
+  forceSave = false;
   lastWrittenJson = snapshot;
   saveAdminCache(DB, true);
   if(!servidorSincronizado){
@@ -140,7 +143,7 @@ function nextId(){ DB.seq = (DB.seq||1)+1; return DB.seq; }
 
 let DB = structuredClone(DEFAULT_DATA);
 let currentView = 'dashboard';
-let progFilters = (()=>{ const r=monthRangeISO(); return { projeto:'', equipe:'', status:'Programado', ciclo:'', dataDe:r.de, dataAte:r.ate, modo:'lista', calView:'mes', calDay:todayISO() }; })();
+let progFilters = (()=>{ const r=monthRangeISO(); return { projeto:'', projQ:'', equipe:'', status:'Programado', ciclo:'', dataDe:r.de, dataAte:r.ate, modo:'lista', calView:'mes', calDay:todayISO() }; })();
 let ativFilters = { q:'', fav:'' };
 let equipeFilters = { q:'', status:'' };
 let projFilters = { q:'', status:'', ciclo:'', recebido:'', cidade:'', periodoDe:'', periodoAte:'' };
@@ -323,6 +326,9 @@ const ICONS = {
   tree:'<path d="M12 21V12"/><path d="M12 3c-2 0-3 2-3 4 0-2-2-3-4-3 0 3 2 4 3 6-2 0-4 1-4 3 0 1.5 1 3 3 3h10c2 0 3-1.5 3-3 0-2-2-3-4-3 1-2 3-3 3-6-2 0-4 1-4 3 0-2-1-4-3-4Z"/><path d="M12 21v-4"/>',
   siren:'<path d="M7 18v-6a5 5 0 0 1 10 0v6"/><path d="M7 21h10"/><path d="M6.5 9.5 4 10M17.5 9.5 20 10M12 3v2M5 6l2 2M19 6l-2 2M8 12h.01M16 12h.01"/><path d="M12 18v3"/>',
   ruler:'<path d="M21.7 7.3l-5-5a1 1 0 0 0-1.4 0l-13 13a1 1 0 0 0 0 1.4l5 5a1 1 0 0 0 1.4 0l13-13a1 1 0 0 0 0-1.4zM8 11l2 2M11 8l2 2M14 11l2 2"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  photo:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
 };
 function icon(name,size=16){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||''}</svg>`; }
 
@@ -907,6 +913,7 @@ function importarAtividadesLinhas(linhas){
     if(codigoExiste(codigo)){ ignorados++; return; }
     DB.atividades.push({ id:nextId(), codigo, descricao, unidade: String(partes[2]||'').trim(), valorUnitario: parseValor(partes[3]), custom:{} });
     criadas++;
+    forceSave = true;
   });
   return { criadas, ignoradas, erros, msgErro, renumerados };
 }
@@ -1034,7 +1041,7 @@ function openImportArquivoModal({title, templateName, headers, exampleRow, texto
         }
         const r = processar(linhas);
         root.innerHTML='';
-        if(r.criados>0 || consumoRegistrado){ saveData(); renderContent(); }
+        if((r.criados||0)>0 || (r.criadas||0)>0 || consumoRegistrado){ saveData(); renderContent(); }
         if(linhas.length===0){
           const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''}).slice(0,12);
           root.innerHTML = `
@@ -1141,15 +1148,16 @@ function parseCustomFieldsFromForm(moduleKey, fd){
 /* =========================================================
    MODAL GENÉRICO
 ========================================================= */
-function openModal({title, bodyHtml, onMount, onSubmit, submitLabel='Salvar', wide=false, extraWide=false, footerBtns=[]}){
+function openModal({title, bodyHtml, onMount, onSubmit, submitLabel='Salvar', wide=false, extraWide=false, maxW=0, footerBtns=[]}){
   const root = document.getElementById('modal-root');
+  const modalW = maxW? `max-width:${maxW}px` : (extraWide?'max-width:900px':wide?'max-width:660px':'');
   root.innerHTML = `
     <div class="modal-overlay" id="modal-overlay">
-      <div class="modal" style="${extraWide?'max-width:900px':wide?'max-width:660px':''}">
+      <div class="modal" style="${modalW}">
         <div class="modal-head"><h3>${title}</h3><button class="icon-btn" id="modal-close">${icon('close')}</button></div>
         <form id="modal-form">
           <div class="modal-body">${bodyHtml}</div>
-          <div class="modal-foot">${footerBtns.map((b,i)=>`<button type="button" class="${b.cls||'btn btn-ghost'}" id="modal-btn-${i}">${b.label}</button>`).join('')}<button type="button" class="btn btn-ghost" id="modal-cancel">Cancelar</button><button type="submit" class="btn btn-primary">${submitLabel}</button></div>
+          <div class="modal-foot">${footerBtns.map((b,i)=>`<button type="button" class="${b.cls||'btn btn-ghost'}" id="modal-btn-${i}" ${b.style? `style="${b.style}"`:''}>${b.label}</button>`).join('')}<button type="button" class="btn btn-ghost" id="modal-cancel">Cancelar</button><button type="submit" class="btn btn-primary">${submitLabel}</button></div>
         </form>
       </div>
     </div>`;
@@ -1651,7 +1659,7 @@ function renderEquipes(){
       <span style="font-size:12px;color:var(--muted);">${list.length} de ${visiveis.length} equipes</span>
     </div>
     ${list.length? `<div class="grid-crews">${list.map(crewCard).join('')}</div>` : `<div class="panel"><div class="empty-state">${icon('empty',34)}<p>Nenhuma equipe encontrada com os filtros.</p></div></div>`}`;
-  document.getElementById('f-eq-q').addEventListener('input', e=>{ equipeFilters.q=e.target.value; renderContent(); });
+  document.getElementById('f-eq-q').addEventListener('input', e=>{ equipeFilters.q=e.target.value; renderSearchKeepFocus(); });
   document.getElementById('f-eq-status').addEventListener('change', e=>{ equipeFilters.status=e.target.value; renderContent(); });
   el.querySelectorAll('[data-edit-equipe]').forEach(b=>b.addEventListener('click', ()=>openEquipeModal(b.dataset.editEquipe)));
   el.querySelectorAll('[data-del-equipe]').forEach(b=>b.addEventListener('click', ()=>deleteEquipe(b.dataset.delEquipe)));
@@ -1678,6 +1686,7 @@ function crewCard(eq){
       <div class="crew-role"><span class="r-lbl">Supervisor</span><span class="r-val">${esc(eq.supervisor||'—')}</span></div>
       <div class="crew-role"><span class="r-lbl">Encarregado</span><span class="r-val">${esc(eq.encarregado||'—')}</span></div>
       <div class="crew-role"><span class="r-lbl">Motorista</span><span class="r-val">${esc(eq.motorista||'—')}</span></div>
+      <div class="crew-role"><span class="r-lbl">Placa veículo</span><span class="r-val">${esc(eq.placaVeiculo||'—')}</span></div>
       <div class="crew-role"><span class="r-lbl">WhatsApp</span><span class="r-val">${eq.whatsapp? `<a href="${esc(waLink(eq.whatsapp, 'Olá!'))}" target="_blank" rel="noopener" style="color:var(--green);font-weight:600;">${esc(eq.whatsapp)}</a>` : '—'}</span></div>
       <div class="crew-role"><span class="r-lbl">Meta diária</span><span class="r-val mono">${metaDiaria(eq)? fmtMoney(metaDiaria(eq)) : '—'}</span></div>
       <div class="crew-role"><span class="r-lbl">Eletricistas</span><span class="r-val">${eletricistas.length? esc(eletricistas.join(', ')) : '—'}</span></div>
@@ -1697,6 +1706,7 @@ function crewCard(eq){
     <div class="field"><label>Supervisor</label><input type="text" name="supervisor" value="${esc(eq?.supervisor||'')}" placeholder="Nome do supervisor"></div>
     <div class="field"><label>Encarregado</label><input type="text" name="encarregado" value="${esc(eq?.encarregado||'')}" placeholder="Nome do encarregado"></div>
     <div class="field"><label>Motorista</label><input type="text" name="motorista" value="${esc(eq?.motorista||'')}" placeholder="Nome do motorista"></div>
+    <div class="field"><label>Placa do veículo</label><input type="text" name="placaVeiculo" value="${esc(eq?.placaVeiculo||'')}" placeholder="Ex: ABC1D23" style="text-transform:uppercase;"></div>
     <div class="field"><label>WhatsApp</label><input type="text" name="whatsapp" value="${esc(eq?.whatsapp||'')}" placeholder="Ex: (11) 98765-4321" inputmode="tel"><div class="field-hint">💡 Usado no botão "Encaminhar para equipe" das programações. Informe com DDD.</div></div>
     <div class="field"><label>Meta diária (R$)</label><input type="number" step="0.01" min="0" name="metaDiaria" value="${eq?.metaDiaria??''}" placeholder="0,00"><div class="field-hint">💡 Se a programação do dia ficar abaixo deste valor, o sistema alerta na programação.</div></div>
     <div class="field"><label>Eletricistas</label><input type="text" name="eletricistas" value="${esc((eq?.eletricistas||[]).join(', '))}" placeholder="Separe por vírgula: Fulano, Ciclano"><div class="field-hint">💡 Separe os nomes por vírgula.</div></div>
@@ -1715,7 +1725,7 @@ function crewCard(eq){
       if(!fd.get('setor') || !fd.get('coordenacao')){ toast('Selecione o setor e a coordenação da equipe.', 'error'); return false; }
       const setor = usuarioRestrito()? CURRENT_USER.setor : fd.get('setor');
       const coordenacao = usuarioRestrito()? CURRENT_USER.coordenacao : fd.get('coordenacao');
-      const data = { eqtl, prtn, setor, coordenacao, supervisor: fd.get('supervisor').trim(), encarregado: fd.get('encarregado').trim(), motorista: fd.get('motorista').trim(), whatsapp: fd.get('whatsapp').trim(), metaDiaria: parseFloat(fd.get('metaDiaria'))||0,
+      const data = { eqtl, prtn, setor, coordenacao, supervisor: fd.get('supervisor').trim(), encarregado: fd.get('encarregado').trim(), motorista: fd.get('motorista').trim(), placaVeiculo: fd.get('placaVeiculo').trim().toUpperCase(), whatsapp: fd.get('whatsapp').trim(), metaDiaria: parseFloat(fd.get('metaDiaria'))||0,
         eletricistas: fd.get('eletricistas').split(',').map(s=>s.trim()).filter(Boolean), ativo: fd.get('ativo')==='on', custom: parseCustomFieldsFromForm('equipes', fd) };
       if(eq){ Object.assign(eq, data); toast('Equipe atualizada.'); registrarEvento('edicao','equipe',eq.id,eq.eqtl||eq.prtn,'Equipe atualizada'); }
       else { data.id = nextId(); DB.equipes.push(data); toast('Equipe cadastrada.'); registrarEvento('criacao','equipe',data.id,data.eqtl||data.prtn,'Equipe criada · '+data.setor); }
@@ -1761,6 +1771,10 @@ function renderAtividades(){
       </div>
       <span style="font-size:12px;color:var(--muted);">${ativFilters.q? 'Encontradas ':'Total '}<strong style="color:var(--accent);">${list.length}</strong> de ${DB.atividades.length} atividades</span>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <button type="button" class="btn" id="btn-tipos-estrutura">${icon('layers',14)} <span>Tipos de Estrutura</span></button>
+      <span style="font-size:12px;color:var(--muted-2);">${(DB.tiposEstrutura||[]).length? `${(DB.tiposEstrutura||[]).length} tipo(s) de estrutura cadastrado(s) — opcionais em cada atividade na página da equipe.` : 'Nenhum tipo de estrutura cadastrado ainda.'}</span>
+    </div>
     <div class="panel"><div class="table-scroll"><table>
       <thead><tr><th>Fav.</th><th>Código</th><th>Descrição</th><th>Unidade</th><th>Valor unitário</th>${customFields.map(f=>`<th>${esc(f.label)}</th>`).join('')}<th></th></tr></thead>
       <tbody>${list.map(a=>`<tr>
@@ -1771,13 +1785,15 @@ function renderAtividades(){
         <td><div class="row-actions"><button class="icon-btn" data-edit-at="${a.id}">${icon('edit',14)}</button><button class="icon-btn" data-del-at="${a.id}">${icon('trash',14)}</button></div></td>
       </tr>`).join('') || `<tr class="empty-row"><td colspan="${6+customFields.length}">Nenhuma atividade encontrada para "${esc(ativFilters.q)}".</td></tr>`}
       </tbody></table></div></div>`;
-  document.getElementById('f-at-q').addEventListener('input', e=>{ ativFilters.q=e.target.value; renderContent(); });
+  document.getElementById('f-at-q').addEventListener('input', e=>{ ativFilters.q=e.target.value; renderSearchKeepFocus(); });
   document.getElementById('f-at-q').addEventListener('keydown', e=>{ if(e.key==='Escape'){ ativFilters.q=''; renderContent(); } });
   document.getElementById('f-at-q-clear').addEventListener('click', ()=>{ ativFilters.q=''; renderContent(); });
   document.getElementById('f-at-fav').addEventListener('change', e=>{ ativFilters.fav=e.target.value; renderContent(); });
   el.querySelectorAll('[data-fav-at]').forEach(b=>b.addEventListener('click', ()=>toggleFavAtividade(b.dataset.favAt)));
   el.querySelectorAll('[data-edit-at]').forEach(b=>b.addEventListener('click', ()=>openAtividadeModal(b.dataset.editAt)));
   el.querySelectorAll('[data-del-at]').forEach(b=>b.addEventListener('click', ()=>deleteAtividade(b.dataset.delAt)));
+  const btnTipos = document.getElementById('btn-tipos-estrutura');
+  if(btnTipos) btnTipos.addEventListener('click', openTiposEstruturaModal);
 }
     function openAtividadeModal(id){
       if(!requerEscrita()) return;
@@ -1821,6 +1837,78 @@ function renderAtividades(){
   registrarEvento('exclusao','atividade',id,findAtividade(id)? findAtividade(id).codigo+' · '+findAtividade(id).descricao : String(id),'Atividade excluída'+(inUse? ' e removida das programações':''));
   saveData(); renderContent(); toast('Atividade excluída.');
 }
+
+/* =========================================================
+   TIPOS DE ESTRUTURA
+   Lista opcional por atividade na página da equipe. Se usada,
+   acompanha todos os dados da execução (RDO/banco).
+========================================================= */
+function findTipoEstrutura(id){ return (DB.tiposEstrutura||[]).find(t=>String(t.id)===String(id)); }
+function tipoEstruturaNome(id){ return findTipoEstrutura(id)?.nome || id || ''; }
+function openTiposEstruturaModal(){
+  if(!requerEscrita()) return;
+  const tipos = DB.tiposEstrutura||[];
+  const body = `
+    <div class="field"><label>Novo tipo de estrutura</label>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="te-novo" placeholder="Ex: Poste concreto, Torre treliçada, Estrutura de madeira…" style="flex:1;">
+        <button type="button" class="btn btn-primary" id="te-add">${icon('plus',14)} Adicionar</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Tipos cadastrados (${tipos.length})</label>
+      <div id="te-lista" style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;">
+        ${tipos.length? tipos.map(t=>`
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border-soft);">
+            <span style="flex:1;">${esc(t.nome)}</span>
+            <button type="button" class="icon-btn te-remove" data-id="${t.id}" title="Excluir">${icon('trash',14)}</button>
+          </div>`).join('') : '<div style="padding:14px;color:var(--muted-2);font-size:12.5px;text-align:center;">Nenhum tipo de estrutura cadastrado.</div>'}
+      </div>
+    </div>`;
+  openModal({
+    title:'Tipos de Estrutura', bodyHtml: body, submitLabel:'Fechar',
+    onMount:(modal)=>{
+      const listaEl = modal.querySelector('#te-lista');
+      const addBtn = modal.querySelector('#te-add');
+      const novo = modal.querySelector('#te-novo');
+      function adicionar(){
+        const nome = novo.value.trim();
+        if(!nome){ toast('Informe o nome do tipo de estrutura.', 'error'); return; }
+        if((DB.tiposEstrutura||[]).some(t=>t.nome.toLowerCase()===nome.toLowerCase())){ toast('Já existe um tipo de estrutura com esse nome.', 'error'); return; }
+        DB.tiposEstrutura = DB.tiposEstrutura||[];
+        const t = { id: nextId(), nome };
+        DB.tiposEstrutura.push(t);
+        registrarEvento('criacao','tiposEstrutura',t.id,t.nome,'Tipo de estrutura criado');
+        saveData();
+        novo.value='';
+        renderTiposLista();
+      }
+      function renderTiposLista(){
+        const tipos = DB.tiposEstrutura||[];
+        listaEl.innerHTML = tipos.length? tipos.map(t=>`
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border-soft);">
+            <span style="flex:1;">${esc(t.nome)}</span>
+            <button type="button" class="icon-btn te-remove" data-id="${t.id}" title="Excluir">${icon('trash',14)}</button>
+          </div>`).join('') : '<div style="padding:14px;color:var(--muted-2);font-size:12.5px;text-align:center;">Nenhum tipo de estrutura cadastrado.</div>';
+        listaEl.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', ()=>{
+          const id = Number(b.dataset.id);
+          const t = findTipoEstrutura(id);
+          if(!t) return;
+          if(!confirm('Excluir o tipo de estrutura "'+t.nome+'"?')) return;
+          DB.tiposEstrutura = DB.tiposEstrutura.filter(x=>x.id!==id);
+          registrarEvento('exclusao','tiposEstrutura',id,t.nome,'Tipo de estrutura excluído');
+          saveData();
+          renderTiposLista();
+        }));
+      }
+      renderTiposLista();
+      addBtn.addEventListener('click', adicionar);
+      novo.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); adicionar(); } });
+    },
+    onSubmit:()=>{ return true; }
+  });
+}
+
 function limparTodasAtividades(){
   if(!requerEscrita()) return;
   const total = DB.atividades.length;
@@ -1901,7 +1989,7 @@ function renderProjetos(){
         <td><div class="row-actions"><button class="icon-btn" title="Imprimir projeto" data-print-pj="${p.id}">${icon('printer',14)}</button><button class="icon-btn" title="Ver avanço" data-avanco-detalhe="${p.id}">${icon('trend',14)}</button><button class="icon-btn" data-edit-pj="${p.id}">${icon('edit',14)}</button><button class="icon-btn" data-del-pj="${p.id}">${icon('trash',14)}</button></div></td>
       </tr>${alerta}`;
     }).join('') || `<tr class="empty-row"><td colspan="${(ehMestre()?14:13)+customFields.length}">Nenhum projeto encontrado com os filtros.</td></tr>`}</tbody></table></div></div>`;
-  document.getElementById('f-pj-q').addEventListener('input', e=>{ projFilters.q=e.target.value; renderContent(); });
+  document.getElementById('f-pj-q').addEventListener('input', e=>{ projFilters.q=e.target.value; renderSearchKeepFocus(); });
   document.getElementById('f-pj-status').addEventListener('change', e=>{ projFilters.status=e.target.value; renderContent(); });
   document.getElementById('f-pj-ciclo').addEventListener('change', e=>{ projFilters.ciclo=e.target.value; renderContent(); });
   document.getElementById('f-pj-recebido').addEventListener('change', e=>{ projFilters.recebido=e.target.value; renderContent(); });
@@ -1970,6 +2058,10 @@ function viabilidadeAlertBadge(p){
       <div class="field"><label>Cidade</label><input type="text" name="cidade" value="${esc(pj?.cidade||'')}" placeholder="Ex: Rio Verde"><div class="field-hint">💡 Município de referência do projeto (usado na localização dos relatórios).</div></div>
       <div class="field"><label>Valor orçado (R$)</label><input type="number" step="0.01" min="0" name="valorOrcado" value="${pj?.valorOrcado??''}" placeholder="0,00"><div class="field-hint">💡 O avanço financeiro é calculado conforme as atividades concluídas pelas equipes.</div></div>
     </div>
+    <div class="field-row">
+      <div class="field"><label>Nº da Reserva/PEP</label><input type="text" name="numeroReserva" value="${esc(pj?.numeroReserva||'')}" placeholder="Ex: RES-2026-000123"><div class="field-hint">💡 Usado como padrão nas programações deste projeto (pode ser ajustado em cada programação).</div></div>
+      <div class="field"><label>Localização / local de execução</label><input type="text" name="local" value="${esc(pj?.local||'')}" placeholder="Ex: Av. Presidente Vargas, 1200 — Centro"><div class="field-hint">💡 Local padrão das programações deste projeto; também usado como ponto de referência.</div></div>
+    </div>
     <div class="field"><label>Ciclo recebido carteira <span class="req">*</span></label><input type="text" name="ciclo" class="ciclo-input" required maxlength="13" value="${esc(pj?.ciclo||'')}" placeholder="CICLO-XX/XXXX"><div class="field-hint">💡 Digite apenas o mês e o ano (ex.: 01/2026). O prefixo "CICLO-" é automático.</div></div>
     <div class="field">
       <label>Plano físico — atividades e quantidades</label>
@@ -1992,7 +2084,7 @@ function viabilidadeAlertBadge(p){
       if(!fd.get('setor') || !fd.get('coordenacao')){ toast('Selecione o setor e a coordenação do projeto.', 'error'); return false; }
       const setor = usuarioRestrito()? CURRENT_USER.setor : fd.get('setor');
       const coordenacao = usuarioRestrito()? CURRENT_USER.coordenacao : fd.get('coordenacao');
-      const data = { codigo: fd.get('codigo').trim(), nome: fd.get('nome').trim(), descricao: fd.get('descricao').trim(), dataInicio: fd.get('dataInicio'), dataFim: fd.get('dataFim'), dataRecebimentoCarteira: fd.get('dataRecebimentoCarteira'), dataVencimento: fd.get('dataVencimento'), dataViabilizacao: fd.get('dataViabilizacao')||'', setor, coordenacao, cidade: fd.get('cidade').trim(), status: fd.get('status'), valorOrcado: parseFloat(fd.get('valorOrcado'))||0, ciclo, planoFisico: (planoEditor? planoEditor.getData() : []).map(x=>({atividadeId:x.atividadeId, quantidade:x.quantidadePrevista})), custom: parseCustomFieldsFromForm('projetos', fd) };
+      const data = { codigo: fd.get('codigo').trim(), nome: fd.get('nome').trim(), descricao: fd.get('descricao').trim(), dataInicio: fd.get('dataInicio'), dataFim: fd.get('dataFim'), dataRecebimentoCarteira: fd.get('dataRecebimentoCarteira'), dataVencimento: fd.get('dataVencimento'), dataViabilizacao: fd.get('dataViabilizacao')||'', setor, coordenacao, cidade: fd.get('cidade').trim(), status: fd.get('status'), valorOrcado: parseFloat(fd.get('valorOrcado'))||0, ciclo, numeroReserva: String(fd.get('numeroReserva')||'').trim(), local: String(fd.get('local')||'').trim(), planoFisico: (planoEditor? planoEditor.getData() : []).map(x=>({atividadeId:x.atividadeId, quantidade:x.quantidadePrevista})), custom: parseCustomFieldsFromForm('projetos', fd) };
       if(pj){ Object.assign(pj, data); toast('Projeto atualizado.'); registrarEvento('edicao','projeto',pj.id,pj.codigo+' · '+pj.nome,'Projeto atualizado'); }
       else { data.id = nextId(); DB.projetos.push(data); toast('Projeto cadastrado.'); registrarEvento('criacao','projeto',data.id,data.codigo+' · '+data.nome,'Projeto criado · '+data.ciclo); }
       saveData(); renderContent();
@@ -2164,7 +2256,7 @@ function renderAvanco(){
       <span style="font-size:12px;color:var(--muted);">${list.length} de ${visiveis.length} projetos</span>
     </div>
     <div style="display:flex;flex-direction:column;gap:18px;">${list.length? list.map(avancoCard).join('') : `<div class="panel"><div class="empty-state">${icon('empty',34)}<p>Nenhum projeto encontrado com os filtros.</p></div></div>`}</div>`;
-  document.getElementById('f-av-q').addEventListener('input', e=>{ avancoFilters.q=e.target.value; renderContent(); });
+  document.getElementById('f-av-q').addEventListener('input', e=>{ avancoFilters.q=e.target.value; renderSearchKeepFocus(); });
   document.getElementById('f-av-status').addEventListener('change', e=>{ avancoFilters.status=e.target.value; renderContent(); });
   el.querySelectorAll('[data-avanco-detalhe]').forEach(b=>b.addEventListener('click', ()=>openAvancoDetalhe(b.dataset.avancoDetalhe)));
   el.querySelectorAll('[data-plano-pj]').forEach(b=>b.addEventListener('click', ()=>openPlanoFisicoModal(b.dataset.planoPj)));
@@ -2267,6 +2359,11 @@ function openAvancoDetalhe(pjId){
 function programacoesFiltradas(){
   return flatAtribuicoes().filter(x=>{
     if(progFilters.projeto && String(x.programacao.projetoId)!==progFilters.projeto) return false;
+    if(progFilters.projQ){
+      const pr = findProjeto(x.programacao.projetoId);
+      const t = ((pr?.codigo||'')+' '+(pr?.nome||'')+' '+(pr?.setor||'')+' '+(pr?.coordenacao||'')+' '+(pr?.cidade||'')+' '+(pr?.ciclo||'')).toLowerCase();
+      if(!t.includes(progFilters.projQ.toLowerCase())) return false;
+    }
     if(progFilters.equipe && String(x.atribuicao.equipeId)!==progFilters.equipe) return false;
     if(progFilters.status && x.atribuicao.status!==progFilters.status) return false;
     if(progFilters.ciclo && (x.programacao.ciclo||'')!==progFilters.ciclo) return false;
@@ -2299,7 +2396,7 @@ function renderProgramacoes(){
   el.innerHTML = `
     <div class="panel-head" style="padding:0;margin-bottom:16px;border:none;">
       <div class="filters">
-        <select id="f-projeto"><option value="">Todos os projetos</option>${projetosVisiveis().map(p=>`<option value="${p.id}" ${progFilters.projeto==String(p.id)?'selected':''}>${esc(p.codigo)} · ${esc(p.nome)}</option>`).join('')}</select>
+        <div class="search-wrap"><span class="search-ic">${icon('search',14)}</span><input id="f-proj-q" type="search" placeholder="Buscar projeto…" value="${esc(progFilters.projQ)}"><button type="button" class="search-clear" id="f-proj-q-clear" title="Limpar busca">${icon('close',12)}</button></div>
         <select id="f-equipe"><option value="">Todas as equipes</option>${equipesVisiveis().map(e=>`<option value="${e.id}" ${progFilters.equipe==String(e.id)?'selected':''}>${equipeLabel(e)}${e.encarregado? ' — '+esc(e.encarregado):''}</option>`).join('')}</select>
         <select id="f-status"><option value="">Todos os status</option>${STATUS_PROG.map(s=>`<option ${progFilters.status===s?'selected':''}>${s}</option>`).join('')}</select>
         <select id="f-ciclo"><option value="">Todos os ciclos</option>${ciclosUnicos().map(c=>`<option ${progFilters.ciclo===c?'selected':''}>${c}</option>`).join('')}</select>
@@ -2309,6 +2406,7 @@ function renderProgramacoes(){
         <button class="btn btn-sm" id="f-mes-atual" title="Filtrar pelo mês vigente">${icon('calendar',12)} Mês atual</button>
         <button class="btn btn-sm btn-ghost" id="f-limpar-datas" title="Remover o filtro de datas">Limpar</button>
       </div>
+      <span style="font-size:12px;color:var(--muted);">${progFilters.projQ? 'Encontradas ':'Total '}<strong style="color:var(--accent);">${list.length}</strong> de ${flatAtribuicoes().length} programações</span>
       <div class="tabs">
         <button class="tab ${progFilters.modo==='lista'?'active':''}" data-modo="lista">Lista</button>
         <button class="tab ${progFilters.modo==='fluxo'?'active':''}" data-modo="fluxo">Fluxo</button>
@@ -2316,7 +2414,9 @@ function renderProgramacoes(){
       </div>
     </div>
     <div id="prog-area"></div>`;
-  document.getElementById('f-projeto').addEventListener('change', e=>{progFilters.projeto=e.target.value; renderContent();});
+  document.getElementById('f-proj-q').addEventListener('input', e=>{progFilters.projQ=e.target.value; renderSearchKeepFocus();});
+  document.getElementById('f-proj-q').addEventListener('keydown', e=>{ if(e.key==='Escape'){ progFilters.projQ=''; renderContent(); } });
+  document.getElementById('f-proj-q-clear').addEventListener('click', ()=>{ progFilters.projQ=''; renderContent(); });
   document.getElementById('f-equipe').addEventListener('change', e=>{progFilters.equipe=e.target.value; renderContent();});
   document.getElementById('f-status').addEventListener('change', e=>{progFilters.status=e.target.value; renderContent();});
   document.getElementById('f-ciclo').addEventListener('change', e=>{progFilters.ciclo=e.target.value; renderContent();});
@@ -2346,7 +2446,7 @@ function renderProgListaInto(area, list){
       const valPrev = p.atividades.reduce((s,a)=> s + (a.quantidadePrevista||0)*(findAtividade(a.atividadeId)?.valorUnitario||0), 0);
       const metaWarn = metaWarningHtml(p);
       const gid = progGid(x.programacao);
-      return `<tr ${late?'style="background:rgba(239,68,68,.08);border-left:3px solid var(--red);':''} data-programacao-id="${x.programacao.id}" style="cursor:pointer;">
+      return `<tr style="cursor:pointer;${late?'background:rgba(239,68,68,.08);border-left:3px solid var(--red);':''}" data-programacao-id="${x.programacao.id}" data-atrib-id="${p.id}">
         <td class="mono" style="white-space:nowrap;">${gid}</td>
         <td class="mono">${fmtDate(p.dataProgramada)} ${late?`<div class="late-flag">VENCIDA</div>`:''}</td>
         <td><strong>${esc(pr?.codigo||'—')}</strong><div style="color:var(--muted-2);font-size:11px;">${esc(pr?.nome||'')} · ${esc(pr?.setor||'')} · ${esc(pr?.coordenacao||'')}</div></td>
@@ -2376,7 +2476,21 @@ function bindProgRowActions(area){
   area.querySelectorAll('[data-edit-prog]').forEach(b=>b.addEventListener('click', ()=>openProgramacaoModal(b.dataset.editProg)));
   area.querySelectorAll('[data-del-atrib]').forEach(b=>b.addEventListener('click', ()=>{ const [pgId,atId]=b.dataset.delAtrib.split('|'); deleteAtribuicao(pgId, atId); }));
   // Clicar na linha da programação abre o modal
-  area.querySelectorAll('tr[data-programacao-id]').forEach(tr=>tr.addEventListener('click', ()=>{ const pgId = tr.dataset.programacaoId; openProgramacaoDetalheModal(pgId); }));
+  let _lastTrClick = null;
+  area.querySelectorAll('tr[data-programacao-id]').forEach(tr=>{
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('.icon-btn') || e.target.closest('.row-actions')) return;
+      const pgId = tr.dataset.programacaoId;
+      const atId = tr.dataset.atribId;
+      if(_lastTrClick && _lastTrClick.pgId===pgId && (Date.now()-_lastTrClick.ts)<350){
+        _lastTrClick = null;
+        if(atId) openAtribDetalhe(atId);
+      }else{
+        _lastTrClick = { pgId, ts: Date.now() };
+        setTimeout(()=>{ if(_lastTrClick && _lastTrClick.pgId===pgId){ _lastTrClick=null; openProgramacaoDetalheModal(pgId); } }, 360);
+      }
+    });
+  });
 }
 function deleteAtribuicao(pgId, atId){
   if(!confirm('Remover esta equipe desta programação?')) return;
@@ -2719,6 +2833,8 @@ function atribDetalheHtml(programacao, atrib, comAcoes=true){
         <div class="dtl-tile"><div class="dtl-tile-lbl">Data programada</div><div class="dtl-tile-val mono">${fmtDate(atrib.dataProgramada)}</div>${late? `<div class="late-flag" style="font-size:11px;margin-top:4px;">VENCIDA</div>`:''}</div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Encarregado</div><div class="dtl-tile-val">${esc(eq?.encarregado||'—')}</div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Status</div><div class="dtl-tile-val">${statusBadge(atrib.status, late)}</div></div>
+        <div class="dtl-tile"><div class="dtl-tile-lbl">Zona</div><div class="dtl-tile-val">${zonaBadge(programacao.zona)}</div></div>
+        <div class="dtl-tile"><div class="dtl-tile-lbl">Nº Reserva/PEP</div><div class="dtl-tile-val">${esc(programacao.numeroReserva||'—')}</div></div>
         <div class="dtl-tile" style="grid-column:1/-1;"><div class="dtl-tile-lbl">Local de execução</div><div class="dtl-tile-val">${programacao.local? esc(programacao.local) : '—'}</div>${(programacao.local||programacao.localLat!=null)? `<div style="margin-top:4px;font-size:11.5px;"><a href="${esc(localMapsHref(programacao.local,programacao.localLat,programacao.localLng))}" target="_blank" rel="noopener" style="color:var(--blue);font-weight:600;">${icon('pin',11)} Abrir no Google Maps</a></div>`:''}</div>
       </div>
 
@@ -2821,6 +2937,72 @@ function openAtribDetalhe(atribId){
   let localLat = pg?.localLat??null;
   let localLng = pg?.localLng??null;
 
+  function bindProjetoAutocomplete(root, onSelect){
+    const input = root.querySelector('#pg-projeto');
+    const hid = root.querySelector('#pg-projeto-id');
+    const listEl = root.querySelector('.pg-proj-ac-list');
+    if(!input||!hid||!listEl) return;
+    const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const projList = projetosVisiveis().filter(p=>!['Encerrado','Aguardando Viabilidade'].includes(p.status));
+    let arrow = -1;
+    function syncInput(){
+      input.value = selProjeto ? (selProjeto.codigo+' · '+selProjeto.nome) : '';
+      hid.value = selProjeto? selProjeto.id : '';
+      listEl.style.display='none';
+    }
+    function openList(){
+      const normQ = norm(input.value);
+      const currentLabel = selProjeto ? (selProjeto.codigo+' · '+selProjeto.nome) : '';
+      let items = projList;
+      if(normQ && input.value !== currentLabel){
+        items = items.filter(p=> norm(p.codigo).includes(normQ) || norm(p.nome).includes(normQ) || norm(p.cidade||'').includes(normQ) || norm(p.ciclo||'').includes(normQ));
+      }
+      items = items.slice(0, 60);
+      listEl.scrollTop = 0;
+      if(!items.length){
+        listEl.innerHTML = `<div class="act-ac-empty">Nenhum projeto encontrado</div>`;
+        listEl.style.display='block'; arrow=-1; return;
+      }
+      listEl.innerHTML = items.map(p=>{
+        const sel = selProjeto && String(selProjeto.id)===String(p.id);
+        return `<div class="act-ac-item${sel?' ac-selected':''}" data-id="${p.id}">
+          <span class="ac-cc">${esc(p.codigo)}</span><span class="ac-desc">${esc(p.nome)}${p.cidade? ' · '+esc(p.cidade):''}${p.ciclo? ' · '+esc(p.ciclo):''}</span>
+        </div>`;
+      }).join('');
+      listEl.style.display='block'; arrow=-1;
+      listEl.querySelectorAll('.act-ac-item').forEach(it=>{
+        it.addEventListener('mousedown', e=>{ e.preventDefault(); selectProject(it.dataset.id); });
+      });
+    }
+    function selectProject(id){
+      const pr = findProjeto(Number(id));
+      if(!pr) return;
+      selProjeto = pr;
+      syncInput();
+      listEl.style.display='none';
+      onSelect && onSelect();
+    }
+    function highlight(items){
+      items.forEach((it,i)=> it.classList.toggle('active', i===arrow));
+    }
+    input.addEventListener('focus', ()=>{ input.select(); openList(); });
+    input.addEventListener('input', openList);
+    input.addEventListener('keydown', e=>{
+      const items = listEl.querySelectorAll('.act-ac-item');
+      if(e.key==='ArrowDown'){ e.preventDefault(); if(items.length){ arrow = Math.min(arrow+1, items.length-1); highlight(items); } }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); if(items.length){ arrow = Math.max(arrow-1, 0); highlight(items); } }
+      else if(e.key==='Enter'){
+        e.preventDefault();
+        if(arrow>=0 && items[arrow]) selectProject(items[arrow].dataset.id);
+        else if(items.length===1) selectProject(items[0].dataset.id);
+        else { syncInput(); input.blur(); }
+      }
+      else if(e.key==='Escape'){ syncInput(); input.blur(); }
+    });
+    input.addEventListener('blur', ()=>{ setTimeout(syncInput, 130); });
+    syncInput();
+  }
+
   function atribBlockHtml(a,i){
     const eqList = equipesDoProjeto(selProjeto);
     // Garante que a equipe atual (se houver) apareça no dropdown mesmo se não passar no filtro
@@ -2830,24 +3012,23 @@ function openAtribDetalhe(atribId){
         eqList.push(currentEq);
       }
     }
-    const searchId = `prog-act-search-${i}`;
     return `<div class="atrib-block" data-idx="${i}">
       <div class="atrib-head">
         <select class="atrib-equipe" data-idx="${i}"><option value="">Selecione a equipe…</option>${eqList.map(e=>`<option value="${e.id}" ${String(a.equipeId)===String(e.id)?'selected':''}>${equipeLabel(e)}${e.encarregado? ' · '+esc(e.encarregado):''}</option>`).join('')}</select>
         ${atribs.length>1? `<button type="button" class="icon-btn atrib-remove" data-idx="${i}">${icon('trash',14)}</button>`:''}
       </div>
       <div class="atrib-meta-live" data-idx="${i}"></div>
-      <div class="field" style="margin-bottom:8px;">
-        <label for="${searchId}">${icon('search',14)} Buscar atividade (código ou descrição)</label>
-        <input type="search" id="${searchId}" placeholder="Filtrar atividades…" style="width:100%;">
-      </div>
       <div class="atrib-activities">${a.atividades.map((at,j)=>activityRowHtml(a,i,at,j)).join('')}</div>
       <button type="button" class="btn btn-sm btn-ghost atrib-add-activity" data-idx="${i}">${icon('plus',13)} Adicionar atividade</button>
     </div>`;
   }
   function activityRowHtml(a,i,at,j){
-    return `<div class="activity-row" data-idx="${i}" data-jdx="${j}">
-      <select class="act-select" data-idx="${i}" data-jdx="${j}"><option value="">Atividade…</option>${atividadesOrdenadas().map(x=>`<option value="${x.id}" ${String(at.atividadeId)===String(x.id)?'selected':''}>${isFavorita(x.id)?'★ ':''}${esc(x.codigo)} · ${esc(x.descricao)}</option>`).join('')}</select>
+    const atDef = at.atividadeId? findAtividade(at.atividadeId) : null;
+    return `<div class="activity-row act-ac-row" data-idx="${i}" data-jdx="${j}">
+      <div class="act-ac" data-idx="${i}" data-jdx="${j}">
+        <input type="text" class="act-ac-input" data-idx="${i}" data-jdx="${j}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+        <div class="act-ac-list" data-idx="${i}" data-jdx="${j}" style="display:none;"></div>
+      </div>
       <input type="number" step="0.01" min="0" class="act-qty" data-idx="${i}" data-jdx="${j}" placeholder="Qtd." value="${at.quantidadePrevista??''}">
       ${a.atividades.length>1? `<button type="button" class="icon-btn act-remove" data-idx="${i}" data-jdx="${j}">${icon('close',13)}</button>`:''}
     </div>`;
@@ -2855,7 +3036,13 @@ function openAtribDetalhe(atribId){
   function renderAtribsHtml(){ return atribs.map((a,i)=> atribBlockHtml(a,i)).join(''); }
 
   const baseFieldsHtml = `
-    <div class="field"><label>Projeto <span class="req">*</span></label><select name="projetoId" id="pg-projeto" required>${projetosVisiveis().filter(p=>!['Encerrado','Aguardando Viabilidade'].includes(p.status)).map(pr=>`<option value="${pr.id}" ${pg?.projetoId===pr.id?'selected':''}>${esc(pr.codigo)} · ${esc(pr.nome)}</option>`).join('')}</select></div>
+    <div class="field"><label>Projeto <span class="req">*</span></label>
+      <input type="hidden" name="projetoId" id="pg-projeto-id" value="${pg?.projetoId||''}">
+      <div class="pg-proj-ac">
+        <input type="text" id="pg-projeto" autocomplete="off" placeholder="Buscar projeto por código ou nome…" value="${selProjeto? esc(selProjeto.codigo+' · '+selProjeto.nome):''}">
+        <div class="pg-proj-ac-list" style="display:none;"></div>
+      </div>
+    </div>
     <div class="field-row">
       <div class="field"><label>Setor</label><input type="text" id="pg-setor" disabled value=""><div class="field-hint">💡 Preenchido automaticamente do projeto.</div></div>
       <div class="field"><label>Coordenação</label><input type="text" id="pg-coord" disabled value=""><div class="field-hint">💡 Preenchido automaticamente do projeto.</div></div>
@@ -2864,8 +3051,10 @@ function openAtribDetalhe(atribId){
       <div class="field"><label>Data início <span class="req">*</span></label><input type="date" name="dataInicio" required value="${pg?.dataProgramada||''}"></div>
       <div class="field"><label>Data fim (opcional)</label><input type="date" name="dataFim" value="${pg?.dataProgramada||''}"><div class="field-hint">💡 Se preenchido, cria uma programação para cada dia no intervalo. Deixe vazio ou igual à data início para criar apenas 1 programação.</div></div>
     </div>
+    ${zonaRadioHtml(pg?.zona)}
     <div class="field-row">
       <div class="field" style="flex:1;"><label>Ciclo recebido carteira <span class="req">*</span></label><input type="text" name="ciclo" class="ciclo-input" id="pg-ciclo" required maxlength="13" value="${esc(pg?.ciclo||'')}" placeholder="CICLO-XX/XXXX"><div class="field-hint">💡 Preenchido automaticamente do projeto; pode ser ajustado.</div></div>
+      <div class="field"><label>Nº da Reserva/PEP</label><input type="text" name="numeroReserva" value="${esc(pg?.numeroReserva||'')}" placeholder="Opcional"></div>
     </div>
     <div class="field-row">
       <div class="field"><label>Nº SI</label><input type="text" name="numeroSI" value="${esc(pg?.numeroSI||'')}" placeholder="Opcional"></div>
@@ -2875,7 +3064,7 @@ function openAtribDetalhe(atribId){
     <div class="field">
       <label>Local / endereço de execução</label>
       <input type="text" name="local" id="pg-local" required value="${esc(pg?.local||'')}" placeholder="Digite o endereço onde a equipe vai executar…">
-      <div class="field-hint">💡 Obrigatório. Enquanto você digita, geramos automaticamente o link do Google Maps com a localização. Também dá para abrir o mapa e marcar o ponto exato. O local e o mapa vão para o documento (PDF), para os registros e para a mensagem do WhatsApp.</div>
+      <div class="field-hint">💡 Obrigatório. Preenchido automaticamente do projeto (quando cadastrado) — pode ser ajustado. Enquanto você digita, geramos automaticamente o link do Google Maps com a localização. Também dá para abrir o mapa e marcar o ponto exato. O local e o mapa vão para o documento (PDF), para os registros e para a mensagem do WhatsApp.</div>
       <div id="pg-local-tools"></div>
       <div id="pg-map-wrap" style="display:none;margin-top:8px;">
         <div id="pg-local-map" style="height:460px;width:100%;border-radius:10px;overflow:hidden;border:1px solid var(--border-soft);"></div>
@@ -2907,16 +3096,18 @@ function openAtribDetalhe(atribId){
     title: pg? 'Editar programação' : 'Nova programação', bodyHtml: baseFieldsHtml, extraWide: true, submitLabel: pg? 'Salvar alterações':'Programar',
     onMount:(root)=>{
       bindCicloMasks(root);
-      const projSel = root.querySelector('#pg-projeto');
       function applyProjetoData(){
-        const pr = projSel.value? findProjeto(Number(projSel.value)) : null;
-        selProjeto = pr;
+        const pr = selProjeto;
         root.querySelector('#pg-setor').value = pr?.setor||'';
         root.querySelector('#pg-coord').value = pr?.coordenacao||'';
         root.querySelector('#pg-ciclo').value = pr?.ciclo? cicloMask(pr.ciclo) : '';
+        const resInput = root.querySelector('[name="numeroReserva"]');
+        if(resInput && !resInput.value.trim() && pr?.numeroReserva){ resInput.value = pr.numeroReserva; }
+        const locInput = root.querySelector('#pg-local');
+        if(locInput && !locInput.value.trim() && pr?.local){ locInput.value = pr.local; }
         refreshContainer();
       }
-      projSel.addEventListener('change', applyProjetoData);
+      bindProjetoAutocomplete(root, applyProjetoData);
       applyProjetoData();
       function refreshContainer(){
         const ok = equipesDoProjeto(selProjeto);
@@ -2958,26 +3149,9 @@ function openAtribDetalhe(atribId){
         root.querySelectorAll('.atrib-equipe').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].equipeId = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.atrib-remove').forEach(b=>b.addEventListener('click', e=>{ atribs.splice(Number(e.currentTarget.dataset.idx),1); refreshContainer(); }));
         root.querySelectorAll('.atrib-add-activity').forEach(b=>b.addEventListener('click', e=>{ atribs[Number(e.currentTarget.dataset.idx)].atividades.push({atividadeId:'',quantidadePrevista:''}); refreshContainer(); }));
-        root.querySelectorAll('.act-select').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].atividadeId = e.target.value; atualizarMetaIndicadores(); }));
+        bindActAutocomplete(root, atribs, atualizarMetaIndicadores, (typeof selProjeto!=='undefined' && selProjeto)? (selProjeto.planoFisico||[]).map(x=>x.atividadeId) : null);
         root.querySelectorAll('.act-qty').forEach(s=>s.addEventListener('input', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].quantidadePrevista = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.act-remove').forEach(b=>b.addEventListener('click', e=>{ const i=Number(e.currentTarget.dataset.idx), j=Number(e.currentTarget.dataset.jdx); atribs[i].atividades.splice(j,1); refreshContainer(); }));
-        root.querySelectorAll('input[type="search"][id^="prog-act-search-"]').forEach(input=>{
-          const idx = input.id.replace('prog-act-search-','');
-          input.addEventListener('input', ()=>{
-            const term = input.value.toLowerCase();
-            root.querySelectorAll(`.act-select[data-idx="${idx}"]`).forEach(sel=>{
-              const selected = sel.value;
-              Array.from(sel.options).forEach(opt=>{
-                if(opt.value==='') return;
-                const txt = opt.textContent.toLowerCase();
-                opt.style.display = txt.includes(term) ? '' : 'none';
-              });
-              if(selected && !Array.from(sel.options).find(o=>o.value===selected && o.style.display!=='none')){
-                sel.value = '';
-              }
-            });
-          });
-        });
         atualizarMetaIndicadores();
       }
       bindDynamic();
@@ -3130,6 +3304,7 @@ function openAtribDetalhe(atribId){
     },
     onSubmit:(fd)=>{
       if(anexosEnviando){ toast('Aguarde o envio das imagens dos anexos antes de salvar.', 'error'); return false; }
+      if(!selProjeto){ toast('Selecione o projeto da programação.', 'error'); return false; }
       const ciclo = cicloMask(fd.get('ciclo'));
       if(!isCicloValido(ciclo)){ toast('Informe o ciclo recebido no formato CICLO-XX/XXXX (ex.: CICLO-01/2026).', 'error'); return false; }
       if(!atribs.length || atribs.some(a=>!a.equipeId)){ toast('Selecione a equipe em todos os blocos.', 'error'); return false; }
@@ -3137,11 +3312,13 @@ function openAtribDetalhe(atribId){
       const dataInicio = fd.get('dataInicio'); const dataFim = fd.get('dataFim') || dataInicio;
       if(!dataInicio){ toast('Informe a data de início.', 'error'); return false; }
       if(dataFim && dataFim < dataInicio){ toast('A data fim não pode ser anterior à data início.', 'error'); return false; }
+      const zona = fd.get('zona');
+      if(!zona){ toast('Selecione a zona (RURAL ou URBANA).', 'error'); return false; }
       const datas = gerarDatasIntervalo(dataInicio, dataFim || dataInicio);
       if(datas.length > 31){ toast('O intervalo não pode ultrapassar 31 dias.', 'error'); return false; }
-      const projetoId = Number(fd.get('projetoId')); const observacoes = fd.get('observacoes').trim();
-      const orientacoesPlanejamento = String(fd.get('orientacoesPlanejamento')||'').trim();
+      const projetoId = Number(selProjeto.id); const observacoes = fd.get('observacoes').trim();      const orientacoesPlanejamento = String(fd.get('orientacoesPlanejamento')||'').trim();
       const numeroSI = String(fd.get('numeroSI')||'').trim();
+      const numeroReserva = String(fd.get('numeroReserva')||'').trim();
       let statusSI = String(fd.get('statusSI')||'');
       if(numeroSI && !statusSI){ toast('Informe o Status SI — obrigatório quando o Nº SI é preenchido.', 'error'); return false; }
       if(!numeroSI) statusSI = '';
@@ -3152,7 +3329,7 @@ function openAtribDetalhe(atribId){
       const locLng = local? localLng : null;
       if(pg){
         const dataBaseAntiga = pg.dataProgramada;
-        pg.projetoId = projetoId; pg.dataProgramada = dataInicio; pg.ciclo = ciclo; pg.observacoes = observacoes; pg.orientacoesPlanejamento = orientacoesPlanejamento; pg.custom = custom; pg.anexos = anexos; pg.local = local; pg.localLat = locLat; pg.localLng = locLng; pg.numeroSI = numeroSI; pg.statusSI = statusSI;
+        pg.projetoId = projetoId; pg.dataProgramada = dataInicio; pg.ciclo = ciclo; pg.observacoes = observacoes; pg.orientacoesPlanejamento = orientacoesPlanejamento; pg.custom = custom; pg.anexos = anexos; pg.local = local; pg.localLat = locLat; pg.localLng = locLng; pg.numeroSI = numeroSI; pg.statusSI = statusSI; pg.zona = zona; pg.numeroReserva = numeroReserva;
         const oldAtribs = pg.atribuicoes;
         pg.atribuicoes = atribs.map(a=>{
           const existing = oldAtribs.find(old => String(old.equipeId)===String(a.equipeId));
@@ -3166,7 +3343,7 @@ function openAtribDetalhe(atribId){
         const grupoId = 'GRP-'+Date.now()+'-'+Math.random().toString(36).slice(2,7);
         let count = 0;
         for(const dt of datas){
-          const novaProg = { id: nextId(), gid: novoGid(), grupoId, projetoId, dataProgramada: dt, ciclo, numeroSI, statusSI, observacoes, orientacoesPlanejamento, custom, anexos: anexos.map(a=>({...a})), local, localLat: locLat, localLng: locLng,
+          const novaProg = { id: nextId(), gid: novoGid(), grupoId, projetoId, dataProgramada: dt, ciclo, numeroSI, statusSI, numeroReserva, observacoes, orientacoesPlanejamento, custom, anexos: anexos.map(a=>({...a})), local, localLat: locLat, localLng: locLng, zona,
             atribuicoes: atribs.map(a=> ({ id: nextId(), equipeId:Number(a.equipeId), dataProgramada: dt, status:'Programado',
               atividades: a.atividades.map(x=>({atividadeId:Number(x.atividadeId), quantidadePrevista:x.quantidadePrevista?parseFloat(x.quantidadePrevista):null, quantidadeExecutada:null})),
               historico:[{...currentAutor(), ts:Date.now(),tipo:'criacao',de:null,para:'Programado',motivo:'Programação criada'}] })) };
@@ -3343,7 +3520,7 @@ function buildWhatsMessage(prog, atrib){
     `*Programação:* ${progGid(prog)}`,
     `*Projeto:* ${pr?.nome||'—'} (${pr?.codigo||''})`,
     `*Setor:* ${pr?.setor||'—'}  ·  *Coordenação:* ${pr?.coordenacao||'—'}`,
-    `*Data:* ${fmtDate(atrib.dataProgramada)}  ·  *Ciclo:* ${prog.ciclo||'—'}`,
+    `*Data:* ${fmtDate(atrib.dataProgramada)}  ·  *Ciclo:* ${prog.ciclo||'—'}${prog.numeroReserva? '  ·  *Reserva/PEP:* '+prog.numeroReserva:''}`,
     `*Equipe:* ${equipeLabel(eq)}`,
     ``,
     ...localWhatsLine(prog.local, prog.localLat, prog.localLng),
@@ -3496,6 +3673,8 @@ function buildDocProjeto(pj){
       <div style="display:flex;gap:24px;margin-top:10px;font-size:11px;color:#444;flex-wrap:wrap;">
         <div><strong>Setor/Coord.:</strong> ${esc(pj.setor||'—')} / ${esc(pj.coordenacao||'—')}</div>
         <div><strong>Cidade:</strong> ${esc(pj.cidade||'—')}</div>
+        <div><strong>Nº Reserva/PEP:</strong> ${esc(pj.numeroReserva||'—')}</div>
+        <div><strong>Local:</strong> ${esc(pj.local||'—')}</div>
         <div><strong>Ciclo:</strong> ${esc(pj.ciclo||'—')}</div>
         <div><strong>Período:</strong> ${fmtDate(pj.dataInicio)} → ${fmtDate(pj.dataFim||'—')}</div>
         <div><strong>Receb. carteira:</strong> ${fmtDate(pj.dataRecebimentoCarteira)}${pj.dataViabilizacao? ` · Viabilizado: ${fmtDate(pj.dataViabilizacao)}` : ''}</div>
@@ -3634,7 +3813,8 @@ function buildDocProgramacao(prog){
       <tr><th>Programação</th><td><strong>${progGid(prog)}</strong></td><th>Emissão</th><td>${fmtDateTime(Date.now())}</td></tr>
       <tr><th>Projeto</th><td colspan="3"><strong>${esc(pr?.nome||'—')}</strong> (${esc(pr?.codigo||'')})</td></tr>
       <tr><th>Setor</th><td>${esc(pr?.setor||'—')}</td><th>Coordenação</th><td>${esc(pr?.coordenacao||'—')}</td></tr>
-      <tr><th>Ciclo</th><td>${esc(prog.ciclo||'—')}</td><th>Valor orçado</th><td>${fmtMoney(pr?.valorOrcado||0)}</td></tr>
+      <tr><th>Ciclo</th><td>${esc(prog.ciclo||'—')}</td><th>Zona</th><td>${esc(prog.zona||'—')}</td></tr>
+      <tr><th>Nº da Reserva/PEP</th><td>${esc(prog.numeroReserva||'—')}</td><th>Valor orçado</th><td>${fmtMoney(pr?.valorOrcado||0)}</td></tr>
       <tr><th>Período do projeto</th><td colspan="3">${fmtDate(pr?.dataInicio)} → ${fmtDate(pr?.dataFim)}</td></tr>
       ${prog.observacoes? `<tr><th>Observações gerais</th><td colspan="3">${esc(prog.observacoes)}</td></tr>`:''}
       ${String(prog.orientacoesPlanejamento||'').trim()? `<tr><th>Orientações do Setor de Planejamento</th><td colspan="3">${esc(prog.orientacoesPlanejamento)}</td></tr>`:''}
@@ -4089,6 +4269,25 @@ document.getElementById('import-file').addEventListener('change', (e)=>{
 /* =========================================================
    ROUTER
 ========================================================= */
+let _searchRefreshTimer = null;
+function renderSearchKeepFocus(){
+  const el = document.activeElement;
+  const keep = (el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA'))
+    ? { id: el.id, selStart: el.selectionStart, selEnd: el.selectionEnd }
+    : null;
+  clearTimeout(_searchRefreshTimer);
+  _searchRefreshTimer = setTimeout(()=>{
+    renderContent();
+    if(keep){
+      const t = document.getElementById(keep.id);
+      if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA')){
+        t.focus();
+        try{ t.setSelectionRange(keep.selStart, keep.selEnd); }catch(e){}
+      }
+    }
+    _searchRefreshTimer = null;
+  }, 200);
+}
 function renderContent(){
   if(!telaPodeVer(currentView)){
     currentView = 'dashboard';
@@ -4234,7 +4433,7 @@ function renderOseProgramacoes(){
       </div>
     </div>
     <div id="ose-area"></div>`;
-  document.getElementById('ose-f-busca').addEventListener('input', e=>{ oseFilters.busca=e.target.value; renderContent(); });
+  document.getElementById('ose-f-busca').addEventListener('input', e=>{ oseFilters.busca=e.target.value; renderSearchKeepFocus(); });
   document.getElementById('ose-f-equipe').addEventListener('change', e=>{ oseFilters.equipe=e.target.value; renderContent(); });
   document.getElementById('ose-f-status').addEventListener('change', e=>{ oseFilters.status=e.target.value; renderContent(); });
   document.getElementById('ose-f-de').addEventListener('change', e=>{ oseFilters.dataDe=e.target.value; renderContent(); });
@@ -4261,7 +4460,7 @@ function renderOseListaInto(area, list){
       const p=x.programacao, a=x.atribuicao, eq=findEquipe(a.equipeId);
       const late = a.dataProgramada < todayISO() && !['Concluído','Cancelado'].includes(a.status);
       const ativResumo = (a.atividades||[]).map(at=>{ const atd=findAtividade(at.atividadeId); return `${esc(atd?.codigo||'?')} ×${at.quantidadePrevista??'—'}`; }).join(', ');
-      return `<tr style="cursor:pointer;" data-ose-open="${a.id}">
+      return `<tr style="cursor:pointer;" data-ose-open="${a.id}" data-ose-pg-id="${p.id}">
         <td class="mono" style="white-space:nowrap;">${oseProgLabel(p)}</td>
         <td class="mono">${fmtDate(a.dataProgramada)} ${late?'<div class="late-flag">VENCIDA</div>':''}</td>
         <td class="mono">${esc(p.numeroOse||'—')}</td>
@@ -4286,7 +4485,21 @@ function renderOseListaInto(area, list){
 }
 
 function bindOseRowActions(area){
-  area.querySelectorAll('[data-ose-open]').forEach(c=>c.addEventListener('click', (e)=>{ if(e.target.closest('.row-actions')) return; openOseDetalhe(c.dataset.oseOpen); }));
+  let _lastOseClick = null;
+  area.querySelectorAll('tr[data-ose-open]').forEach(tr=>{
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('.icon-btn') || e.target.closest('.row-actions')) return;
+      const atId = tr.dataset.oseOpen;
+      const pgId = tr.dataset.osePgId;
+      if(_lastOseClick && _lastOseClick.pgId===pgId && (Date.now()-_lastOseClick.ts)<350){
+        _lastOseClick = null;
+        if(atId) openOseDetalhe(atId);
+      }else{
+        _lastOseClick = { pgId, ts: Date.now() };
+        setTimeout(()=>{ if(_lastOseClick && _lastOseClick.pgId===pgId){ _lastOseClick=null; openOseDetalhe(atId); } }, 360);
+      }
+    });
+  });
   area.querySelectorAll('[data-ose-whats]').forEach(b=>b.addEventListener('click', ()=>encaminharOseWhats(b.dataset.oseWhats)));
   area.querySelectorAll('[data-ose-doc]').forEach(b=>b.addEventListener('click', ()=>openOseDocProgramacao(b.dataset.oseDoc)));
   area.querySelectorAll('[data-ose-hist]').forEach(b=>b.addEventListener('click', ()=>openOseHistoricoModal(b.dataset.oseHist)));
@@ -4486,6 +4699,8 @@ function oseDetalheHtml(programacao, atrib, comAcoes=true){
         <div class="dtl-tile"><div class="dtl-tile-lbl">Data programada</div><div class="dtl-tile-val mono">${fmtDate(atrib.dataProgramada)}</div>${late? `<div class="late-flag" style="font-size:11px;margin-top:4px;">VENCIDA</div>`:''}</div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Encarregado</div><div class="dtl-tile-val">${esc(eq?.encarregado||'—')}</div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Status</div><div class="dtl-tile-val">${statusBadge(atrib.status, late)}</div></div>
+        <div class="dtl-tile"><div class="dtl-tile-lbl">Zona</div><div class="dtl-tile-val">${zonaBadge(programacao.zona)}</div></div>
+        <div class="dtl-tile"><div class="dtl-tile-lbl">Nº Reserva/PEP</div><div class="dtl-tile-val">${esc(programacao.numeroReserva||'—')}</div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Status Doc.</div><div class="dtl-tile-val"><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${esc(programacao.statusDocumentacao||'—')}</span></div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Tipo Intervenção</div><div class="dtl-tile-val"><span class="badge" style="color:${programacao.tipoIntervencao==='Aéreo'?'var(--blue)':programacao.tipoIntervencao==='Subterrâneo'?'var(--accent)':'var(--red)'};background:${programacao.tipoIntervencao==='Aéreo'?'rgba(78,140,235,.14)':programacao.tipoIntervencao==='Subterrâneo'?'rgba(224,164,88,.14)':'rgba(180,140,224,.14)'};">${esc(programacao.tipoIntervencao||'—')}</span></div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Município</div><div class="dtl-tile-val">${esc(programacao.municipio||'—')}</div></div>
@@ -4577,7 +4792,7 @@ function buildOseWhatsMessage(prog, atrib){
     ``,
     `*Programação:* ${oseProgLabel(prog)}`,
     `*Município:* ${prog.municipio||'—'}  ·  *Subestação:* ${prog.subestacao||'—'}`,
-    `*Tipo Intervenção:* ${prog.tipoIntervencao||'—'}`,
+    `*Tipo Intervenção:* ${prog.tipoIntervencao||'—'}${prog.numeroReserva? '  ·  *Reserva/PEP:* '+prog.numeroReserva:''}`,
     `*Data:* ${fmtDate(atrib.dataProgramada)}`,
     `*Equipe:* ${equipeLabel(eq)}`,
     ``,
@@ -4696,7 +4911,8 @@ function buildOseDocProgramacao(prog){
     <table class="ps-info">
       <tr><th>Programação</th><td><strong>${oseProgLabel(prog)}</strong></td><th>Emissão</th><td>${fmtDateTime(Date.now())}</td></tr>
       <tr><th>Município</th><td>${esc(prog.municipio||'—')}</td><th>Subestação</th><td>${esc(prog.subestacao||'—')}</td></tr>
-      <tr><th>Tipo Intervenção</th><td>${esc(prog.tipoIntervencao||'—')}</td><th>Status Doc.</th><td>${esc(prog.statusDocumentacao||'—')}</td></tr>
+      <tr><th>Tipo Intervenção</th><td>${esc(prog.tipoIntervencao||'—')}</td><th>Zona</th><td>${esc(prog.zona||'—')}</td></tr>
+      <tr><th>Nº da Reserva/PEP</th><td>${esc(prog.numeroReserva||'—')}</td><th>Data Programação</th><td>${fmtDate(prog.dataProgramacao)}</td></tr>
       ${prog.observacoes? `<tr><th>Observações</th><td colspan="3">${esc(prog.observacoes)}</td></tr>`:''}
       ${String(prog.orientacoesPlanejamento||'').trim()? `<tr><th>Orientações do Setor de Planejamento</th><td colspan="3">${esc(prog.orientacoesPlanejamento)}</td></tr>`:''}
       ${prog.local? `<tr><th>Local de execução</th><td colspan="3"><strong>${esc(prog.local)}</strong>${(prog.localLat!=null&&prog.localLng!=null)? ` — <a href="${esc(mapsLinkByCoords(prog.localLat,prog.localLng))}">${esc(mapsLinkByCoords(prog.localLat,prog.localLng))}</a>`:(prog.local? ` — <a href="${esc(mapsLinkByAddress(prog.local))}">${esc(mapsLinkByAddress(prog.local))}</a>`:'')}</td></tr>`:''}
@@ -4762,6 +4978,80 @@ function openOseHistoricoModal(atribId){
   openModal({ title:'Histórico — '+oseProgLabel(r.programacao), bodyHtml:html, submitLabel:'Fechar', onSubmit:()=>true, wide:true });
 }
 
+/* --- Autocomplete de atividades (OSE / PODA) --- */
+function bindActAutocomplete(root, atribs, onChange, prioIds){
+  const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const prioSet = new Set((prioIds||[]).map(String));
+  let acList = atividadesOrdenadas();
+  if(prioSet.size){
+    acList = [...acList].sort((a,b)=> (prioSet.has(String(b.id))?1:0)-(prioSet.has(String(a.id))?1:0));
+  }
+  root.querySelectorAll('.act-ac').forEach(ac=>{
+    const idx = Number(ac.dataset.idx), jdx = Number(ac.dataset.jdx);
+    const input = ac.querySelector('.act-ac-input');
+    const listEl = ac.querySelector('.act-ac-list');
+    let arrow = -1;
+    const getAt = ()=> atribs[idx] && atribs[idx].atividades[jdx];
+    const selDef = ()=>{ const at=getAt(); return at && at.atividadeId ? findAtividade(at.atividadeId) : null; };
+    function syncInput(){
+      const d = selDef();
+      input.value = d ? (d.codigo+' · '+d.descricao) : '';
+      listEl.style.display='none';
+    }
+    function openList(){
+      if(!listEl) return;
+      const d = selDef();
+      const currentLabel = d ? (d.codigo+' · '+d.descricao) : '';
+      const normQ = norm(input.value);
+      let items = acList;
+      if(normQ && input.value !== currentLabel){
+        items = items.filter(a=> norm(a.codigo).includes(normQ) || norm(a.descricao).includes(normQ));
+      }
+      items = items.slice(0, 60);
+      listEl.scrollTop = 0;
+      if(!items.length){
+        listEl.innerHTML = `<div class="act-ac-empty">Nenhuma atividade encontrada</div>`;
+        listEl.style.display='block'; arrow=-1; return;
+      }
+      listEl.innerHTML = items.map(a=>{
+        const sel = d && String(d.id)===String(a.id);
+        const fav = isFavorita(a.id) ? `<span class="ac-fav">${icon('star',12)}</span>` : '';
+        const isPrio = prioSet.has(String(a.id));
+        return `<div class="act-ac-item${sel?' ac-selected':''}${isPrio?' ac-prio-item':''}" data-id="${a.id}">${fav}<span class="ac-cc">${esc(a.codigo)}</span><span class="ac-desc">${esc(a.descricao)}</span>${isPrio?`<span class="ac-prio-tag">do projeto</span>`:''}</div>`;
+      }).join('');
+      listEl.style.display='block'; arrow=-1;
+      listEl.querySelectorAll('.act-ac-item').forEach(it=>{
+        it.addEventListener('mousedown', e=>{ e.preventDefault(); selectActivity(it.dataset.id); });
+      });
+    }
+    function selectActivity(id){
+      const at = getAt();
+      if(at) at.atividadeId = id;
+      syncInput();
+      listEl.style.display='none';
+      onChange && onChange();
+    }
+    function highlight(items){
+      items.forEach((it,i)=> it.classList.toggle('active', i===arrow));
+    }
+    input.addEventListener('focus', ()=>{ input.select(); openList(); });
+    input.addEventListener('input', openList);
+    input.addEventListener('keydown', e=>{
+      const items = listEl.querySelectorAll('.act-ac-item');
+      if(e.key==='ArrowDown'){ e.preventDefault(); if(items.length){ arrow = Math.min(arrow+1, items.length-1); highlight(items); } }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); if(items.length){ arrow = Math.max(arrow-1, 0); highlight(items); } }
+      else if(e.key==='Enter'){
+        e.preventDefault();
+        if(arrow>=0 && items[arrow]) selectActivity(items[arrow].dataset.id);
+        else if(items.length===1) selectActivity(items[0].dataset.id);
+        else { syncInput(); input.blur(); }
+      }
+      else if(e.key==='Escape'){ syncInput(); input.blur(); }
+    });
+    input.addEventListener('blur', ()=>{ setTimeout(syncInput, 130); });
+  });
+}
+
 /* --- openOseProgramacaoModal --- */
 function openOseProgramacaoModal(id){
   if(!requerEscrita()) return;
@@ -4774,26 +5064,25 @@ function openOseProgramacaoModal(id){
   let localLng = pg?.localLng??null;
 
   function atribBlockHtml(a,i){
-    const searchId = `ose-act-search-${i}`;
     return `<div class="atrib-block" data-idx="${i}">
       <div class="atrib-head">
         <select class="atrib-equipe" data-idx="${i}"><option value="">Selecione a equipe…</option>${equipesVisiveis().filter(e=>e.ativo!==false).map(e=>`<option value="${e.id}" ${String(a.equipeId)===String(e.id)?'selected':''}>${equipeLabel(e)}${e.encarregado? ' · '+esc(e.encarregado):''}</option>`).join('')}</select>
         ${atribs.length>1? `<button type="button" class="icon-btn atrib-remove" data-idx="${i}">${icon('trash',14)}</button>`:''}
       </div>
       <div class="atrib-meta-live" data-idx="${i}"></div>
-      <div class="field" style="margin-bottom:8px;">
-        <label for="${searchId}">${icon('search',14)} Buscar atividade (código ou descrição)</label>
-        <input type="search" id="${searchId}" placeholder="Filtrar atividades…" style="width:100%;">
-      </div>
       <div class="atrib-activities">${a.atividades.map((at,j)=>activityRowHtml(a,i,at,j)).join('')}</div>
       <button type="button" class="btn btn-sm btn-ghost atrib-add-activity" data-idx="${i}">${icon('plus',13)} Adicionar atividade</button>
     </div>`;
   }
   function activityRowHtml(a,i,at,j){
-    return `<div class="activity-row" data-idx="${i}" data-jdx="${j}">
-      <select class="act-select" data-idx="${i}" data-jdx="${j}"><option value="">Atividade…</option>${atividadesOrdenadas().map(x=>`<option value="${x.id}" ${String(at.atividadeId)===String(x.id)?'selected':''}>${isFavorita(x.id)?'★ ':''}${esc(x.codigo)} · ${esc(x.descricao)}</option>`).join('')}</select>
+    const atDef = at.atividadeId? findAtividade(at.atividadeId) : null;
+    return `<div class="activity-row act-ac-row" data-idx="${i}" data-jdx="${j}">
+      <div class="act-ac" data-idx="${i}" data-jdx="${j}">
+        <input type="text" class="act-ac-input" data-idx="${i}" data-jdx="${j}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+        <div class="act-ac-list" data-idx="${i}" data-jdx="${j}" style="display:none;"></div>
+      </div>
       <input type="number" step="0.01" min="0" class="act-qty" data-idx="${i}" data-jdx="${j}" placeholder="Qtd." value="${at.quantidadePrevista??''}">
-      <input type="number" step="1" min="0" class="act-anom" data-idx="${i}" data-jdx="${j}" placeholder="Anom." title="Quantidade de anomalias programadas" style="max-width:90px;" value="${at.qtdAnomalia??''}">
+      <input type="number" step="1" min="0" class="act-anom" data-idx="${i}" data-jdx="${j}" placeholder="Anom." title="Quantidade de anomalias programadas" value="${at.qtdAnomalia??''}">
       ${a.atividades.length>1? `<button type="button" class="icon-btn act-remove" data-idx="${i}" data-jdx="${j}">${icon('close',13)}</button>`:''}
     </div>`;
   }
@@ -4806,6 +5095,7 @@ function openOseProgramacaoModal(id){
     </div>
     <div class="field-row">
       <div class="field"><label>Número da OSE</label><input type="text" name="numeroOse" value="${esc(pg?.numeroOse||'')}"></div>
+      <div class="field"><label>Nº da Reserva/PEP</label><input type="text" name="numeroReserva" value="${esc(pg?.numeroReserva||'')}" placeholder="Opcional"></div>
       <div class="field"><label>Tipo de Intervenção</label><select name="tipoIntervencao"><option value="">Selecione…</option>${TIPO_INTERVENCAO_OPCOES.map(v=>`<option ${pg?.tipoIntervencao===v?'selected':''}>${v}</option>`).join('')}</select></div>
     </div>
     <div class="field-row">
@@ -4814,6 +5104,7 @@ function openOseProgramacaoModal(id){
       <div class="field"><label>Data início <span class="req">*</span></label><input type="date" name="dataProgramacao" required value="${pg?.dataProgramacao||todayISO()}"></div>
       <div class="field"><label>Data fim (opcional)</label><input type="date" name="dataFim" value="${pg?.dataProgramacao||''}"><div class="field-hint">Se preenchido, cria uma programação para cada dia no intervalo. Deixe vazio para criar apenas 1.</div></div>
     </div>
+    ${zonaRadioHtml(pg?.zona)}
     <div class="field"><label>Observações</label><textarea name="observacoes" rows="2" placeholder="Observações da programação OSE">${esc(pg?.observacoes||'')}</textarea></div>
     <div class="field"><label>Local / endereço de execução</label>
       <input type="text" name="local" id="ose-local" required value="${esc(pg?.local||'')}" placeholder="Digite o endereço...">
@@ -4855,24 +5146,10 @@ function openOseProgramacaoModal(id){
         root.querySelectorAll('.atrib-equipe').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].equipeId = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.atrib-remove').forEach(b=>b.addEventListener('click', e=>{ atribs.splice(Number(e.currentTarget.dataset.idx),1); refreshContainer(); }));
         root.querySelectorAll('.atrib-add-activity').forEach(b=>b.addEventListener('click', e=>{ atribs[Number(e.currentTarget.dataset.idx)].atividades.push({atividadeId:'',quantidadePrevista:'',qtdAnomalia:''}); refreshContainer(); }));
-        root.querySelectorAll('.act-select').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].atividadeId = e.target.value; atualizarMetaIndicadores(); }));
+        bindActAutocomplete(root, atribs, atualizarMetaIndicadores, (typeof selProjeto!=='undefined' && selProjeto)? (selProjeto.planoFisico||[]).map(x=>x.atividadeId) : null);
         root.querySelectorAll('.act-qty').forEach(s=>s.addEventListener('input', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].quantidadePrevista = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.act-anom').forEach(s=>s.addEventListener('input', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].qtdAnomalia = e.target.value; }));
         root.querySelectorAll('.act-remove').forEach(b=>b.addEventListener('click', e=>{ const i=Number(e.currentTarget.dataset.idx), j=Number(e.currentTarget.dataset.jdx); atribs[i].atividades.splice(j,1); refreshContainer(); }));
-        root.querySelectorAll('input[type="search"][id^="ose-act-search-"]').forEach(input=>{
-          const idx = input.id.replace('ose-act-search-','');
-          input.addEventListener('input', ()=>{
-            const term = input.value.toLowerCase();
-            root.querySelectorAll(`.act-select[data-idx="${idx}"]`).forEach(sel=>{
-              const selected = sel.value;
-              Array.from(sel.options).forEach(opt=>{
-                if(opt.value==='') return;
-                opt.style.display = opt.textContent.toLowerCase().includes(term) ? '' : 'none';
-              });
-              if(selected && !Array.from(sel.options).find(o=>o.value===selected && o.style.display!=='none')) sel.value = '';
-            });
-          });
-        });
         atualizarMetaIndicadores();
       }
       function atualizarMetaIndicadores(){
@@ -5004,6 +5281,8 @@ function openOseProgramacaoModal(id){
       if(!municipio){ toast('Informe o município.', 'error'); return false; }
       const dataProgramacao = fd.get('dataProgramacao');
       if(!dataProgramacao){ toast('Informe a data de programação.', 'error'); return false; }
+      const zona = fd.get('zona');
+      if(!zona){ toast('Selecione a zona (RURAL ou URBANA).', 'error'); return false; }
       if(!atribs.length || atribs.some(a=>!a.equipeId)){ toast('Selecione a equipe em todos os blocos.', 'error'); return false; }
       for(const a of atribs){ if(!a.atividades.length || a.atividades.some(x=>!x.atividadeId)){ toast('Selecione a atividade em todas as linhas.', 'error'); return false; } }
       const observacoes = String(fd.get('observacoes')||'').trim();
@@ -5015,10 +5294,12 @@ function openOseProgramacaoModal(id){
       const base = {
         municipio, subestacao: fd.get('subestacao').trim(),
         numeroOse: fd.get('numeroOse').trim(),
+        numeroReserva: String(fd.get('numeroReserva')||'').trim(),
         tipoIntervencao: fd.get('tipoIntervencao'),
         dataProgramacao, statusDocumentacao: fd.get('statusDocumentacao'),
         observacoes, orientacoesPlanejamento, custom,
         local, localLat: local? localLat : null, localLng: local? localLng : null, anexos: anexos.map(a=>({...a})),
+        zona,
         atividades: atribs.map(a=>({
           equipeId: Number(a.equipeId),
           atividades: a.atividades.map(x=>({atividadeId:Number(x.atividadeId), quantidadePrevista: x.quantidadePrevista?parseFloat(x.quantidadePrevista):null, qtdAnomalia: x.qtdAnomalia? parseFloat(x.qtdAnomalia): null, quantidadeExecutada:null}))
@@ -5029,8 +5310,8 @@ function openOseProgramacaoModal(id){
       if(pg){
         Object.assign(pg, base);
         pg.atribuicoes = base.atividades.map((a,i)=>{
-          const existing = pg.atribuicoes.find(x=>x.equipeId===a.equipeId);
-          if(existing){ existing.atividades = a.atividades; return existing; }
+          const existing = pg.atribuicoes.find(x=>String(x.equipeId)===String(a.equipeId));
+          if(existing){ existing.atividades = a.atividades.map(nv=>({...nv, quantidadeExecutada: existing.atividades.find(ev=>ev.atividadeId===nv.atividadeId)?.quantidadeExecutada ?? null})); return existing; }
           return { id: nextId(), equipeId:a.equipeId, dataProgramada:dataProgramacao, status:'Programado', atividades:a.atividades, historico:[{...currentAutor(), ts:Date.now(),tipo:'criacao',de:null,para:'Programado',motivo:'Atribuição criada'}] };
         });
         pg.atribuicoes.forEach(at=>{ at.dataProgramada = dataProgramacao; });
@@ -5217,6 +5498,55 @@ function renderOseRdo(){
   document.getElementById('ose-rdo-print').addEventListener('click', ()=> printRDOReportTipo(registros,'ose'));
 }
 
+function rdoFotoExtensao(url){
+  try{ const m = new URL(url).pathname.match(/\.(\w{2,5})$/); return m? '.'+m[1].toLowerCase() : '.jpg'; }catch(e){ return '.jpg'; }
+}
+function baixarBlobArquivo(url, nome){
+  try{ const a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); }catch(e){ console.error('Falha ao baixar arquivo', e); }
+}
+function baixarFotosRdo(atividades){
+  const itens = [];
+  (atividades||[]).forEach(a=>{
+    const at = findAtividade(a.atividadeId);
+    const codigo = String(at?.codigo || 'atividade');
+    const fotos = String(a.fotos||'').split(';;').filter(Boolean);
+    fotos.forEach((url,n)=>{ itens.push({ url, base: codigo+'_'+String(n+1).padStart(2,'0') }); });
+  });
+  if(!itens.length){ toast('Não há fotos para baixar neste RDO.', 'error'); return; }
+  let pendentes = itens.length;
+  let falhas = 0;
+  toast(`Baixando ${pendentes} foto(s)…`);
+  itens.forEach(({url, base})=>{
+    if(url.startsWith('data:') || url.startsWith('blob:')){
+      baixarBlobArquivo(url, base+rdoFotoExtensao(url));
+      if(--pendentes===0) toast(falhas? `${falhas} foto(s) com falha.` : 'Download das fotos concluído.');
+      return;
+    }
+    fetch(url, {mode:'cors', credentials:'omit'})
+      .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.blob(); })
+      .then(blob=>{
+        const ext = blob.type? '.'+(blob.type.split('/')[1]||'jpg') : rdoFotoExtensao(url);
+        baixarBlobArquivo(URL.createObjectURL(blob), base+ext);
+      })
+      .catch(err=>{ console.error('Falha ao baixar foto', url, err); falhas++; })
+      .finally(()=>{ if(--pendentes===0){ toast(falhas? `${pendentes===0&&falhas?falhas:falhas} foto(s) com falha. Verifique a conexão.` : 'Download das fotos concluído.'); } });
+  });
+}
+function zonaRadioHtml(val){
+  return `
+  <div class="field"><label>Zona <span class="req">*</span></label>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13.5px;"><input type="radio" name="zona" value="RURAL" ${val==='RURAL'?'checked':''}> ZONA RURAL</label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13.5px;"><input type="radio" name="zona" value="URBANA" ${val==='URBANA'?'checked':''}> ZONA URBANA</label>
+    </div>
+  </div>`;
+}
+function zonaBadge(zona){
+  if(!zona) return '';
+  const rural = zona==='RURAL';
+  return `<span class="badge-prefix" style="background:${rural?'rgba(76,175,109,.14)':'rgba(91,141,239,.14)'};color:${rural?'var(--green)':'var(--blue)'};">${esc(zona)}</span>`;
+}
+
 function openOseRDOModal(progId, attribId){
   const x = flatOseAtribuicoes().find(y=> y.programacao.id===progId && y.atribuicao.id===attribId);
   if(!x) return;
@@ -5232,8 +5562,9 @@ function openOseRDOModal(progId, attribId){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
       <div>
         <h4 style="margin-bottom:8px;">Programação ${oseProgLabel(x.programacao)}</h4>
-        <p class="admin-field-meta" style="margin:2px 0;">Município: ${esc(x.programacao.municipio||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Município: ${esc(x.programacao.municipio||'—')} ${zonaBadge(x.programacao.zona)}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Subestação: ${esc(x.programacao.subestacao||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Nº da Reserva/PEP: ${esc(x.programacao.numeroReserva||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Tipo Intervenção: ${esc(x.programacao.tipoIntervencao||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Data: ${fmtDate(x.atribuicao.dataProgramada)}</p>
         <div style="margin-top:8px;">${rdoStatusBadge(x.atribuicao.status)}</div>
@@ -5244,6 +5575,7 @@ function openOseRDOModal(progId, attribId){
         <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
       </div>
     </div>
     ${(x.programacao.anexos&&x.programacao.anexos.length)? `<div style="margin-bottom:20px;">
@@ -5279,7 +5611,7 @@ function openOseRDOModal(progId, attribId){
         <span class="badge-prefix" style="color:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};">${res.pct}%</span>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;" title="Anomalias programadas → executadas">Anom.</th><th style="text-align:center;">Fotos</th></tr></thead>
+        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:left;">Estrutura</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;" title="Anomalias programadas → executadas">Anom.</th><th style="text-align:center;">Fotos</th></tr></thead>
         <tbody>
           ${(x.atribuicao.atividades||[]).map((a,idx)=>{
             const at = findAtividade(a.atividadeId);
@@ -5292,6 +5624,7 @@ function openOseRDOModal(progId, attribId){
               <td class="mono" style="padding:4px 6px;">${esc(at?.codigo||'?')}</td>
               <td style="padding:4px 6px;">${esc(at?.descricao||'')}</td>
               <td style="text-align:center;">${esc(at?.unidade||'')}</td>
+              <td style="padding:4px 6px;">${esc(a.tipoEstrutura||'—')}</td>
               <td style="text-align:center;" class="mono">${p? fmtNum(p):'—'}</td>
               <td style="text-align:center;" class="mono"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
               <td style="text-align:center;color:${pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--red)'};font-weight:700;">${p? pct+'%':'—'}</td>
@@ -5308,10 +5641,11 @@ function openOseRDOModal(progId, attribId){
     </div>
     <div class="admin-field-meta">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
 
-  openModal({ title:'RDO OSE — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, footerBtns:[
+  openModal({ title:'RDO OSE — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, maxW:760, footerBtns:[
+    { label: icon('download',14)+' Baixar fotos', cls:'btn', onClick: ()=> baixarFotosRdo(x.atribuicao.atividades) },
     { label: icon('edit',14)+' Editar registro', cls:'btn', onClick: ()=> editRdoModal(x, oseProgLabel) },
     { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'ose') }
-  ] });
+  ], onMount: (root)=>{ root.querySelector('[data-baixar-fotos-rdo]')?.addEventListener('click', ()=> baixarFotosRdo(x.atribuicao.atividades)); } });
 }
 
 /* --- OSE Confirmação de Execução (bloqueante) --- */
@@ -5425,6 +5759,8 @@ function renderPoda(){ setView('poda-programacoes'); }
 const STATUS_DOC_OPCOES = ['Confirmado','Em elaboração','Elaborado','Validado'];
 const TIPO_REDE_OPCOES = ['MT','BT'];
 const STATUS_PODA = ['Programado','Em Execução','Concluído','Reprogramado','Cancelado'];
+const STATUS_VALIDACAO_OPCOES = ['ENVIADA','REJEITADA','FATURADA','ERP SISTÊMICO'];
+const SIM_NAO_OPCOES = ['SIM','NÃO'];
 let podaFilters = (()=>{ const r=monthRangeISO(); return { busca:'', equipe:'', status:'', dataDe:r.de, dataAte:r.ate, modo:'lista', calView:'mes', calDay:todayISO() }; })();
 let podaCalRef = new Date();
 function podaProgLabel(p){ return p.gid || ('PODA-'+String(p.id).padStart(7,'0')); }
@@ -5446,6 +5782,97 @@ function podaAtribGlobal(atribId){
 }
 function podaProgDaAtrib(atribId){
   return (DB.podaProgramacoes||[]).find(pg=> (pg.atribuicoes||[]).some(a=>a.id===Number(atribId)));
+}
+function findMedicaoPoda(atribId){
+  return (DB.medicaoPoda||[]).find(m=> m.atribuicaoId===Number(atribId));
+}
+function medicaoPodaValidacaoBadge(status){
+  const s = status||'';
+  const cor = { 'ENVIADA':'var(--blue)','REJEITADA':'var(--red)','FATURADA':'var(--green)','ERP SISTÊMICO':'var(--accent)' }[s]||'var(--muted)';
+  const bg = { 'ENVIADA':'rgba(78,140,235,.14)','REJEITADA':'rgba(224,97,91,.14)','FATURADA':'rgba(34,139,34,.14)','ERP SISTÊMICO':'rgba(224,164,88,.14)' }[s]||'rgba(128,128,128,.14)';
+  return s? `<span class="badge" style="color:${cor};background:${bg};">${esc(s)}</span>` : '<span style="color:var(--muted-2);">—</span>';
+}
+function simNaoBadge(v){
+  if(v==='SIM') return '<span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);">SIM</span>';
+  if(v==='NÃO') return '<span class="badge" style="color:var(--red);background:rgba(224,97,91,.14);">NÃO</span>';
+  return '<span style="color:var(--muted-2);">—</span>';
+}
+function appvMedicaoPoda(){
+  if(!CURRENT_USER) return true;
+  return ehMestre() || (CURRENT_USER.role==='administrador' && CURRENT_USER.nivel==='total');
+}
+function medicaoPodaReprovacaoInfo(m){
+  if(!m || m.aprovado!==false) return null;
+  const total = m.totalReprovacoes||0;
+  return {
+    motivo: m.motivoReprovacao||'RDO reprovado na medição.',
+    total,
+    por: m.reprovadoPor?.usuarioNome||'Medição',
+    em: m.reprovadoEm
+  };
+}
+function medicaoPodaCountTag(total){
+  const n = Number(total)||0;
+  return `<span class="med-poda-reprov-count">${n} reprovação${n===1?'':'ões'}</span>`;
+}
+function modalComMotivo({title, texto, submitLabel='Confirmar', onConfirm}){
+  openModal({
+    title: title||'Confirmar',
+    submitLabel,
+    bodyHtml: `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">${texto||''}</div>
+      <div class="field"><label>Motivo <span class="req">*</span></label><textarea name="motivo" required rows="3" maxlength="300" placeholder="Descreva o motivo. Ele fica registrado nos fluxos e nos dados do RDO."></textarea></div>`,
+    onSubmit:(fd)=>{
+      const motivo = String(fd.get('motivo')||'').trim();
+      if(!motivo){ toast('Informe o motivo.', 'error'); return false; }
+      onConfirm(motivo);
+      return true;
+    }
+  });
+}
+function aprovarRdoParaMedicao(x){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoPoda()){ toast('Apenas administradores podem aprovar a medição.', 'error'); return; }
+  if(!x) return;
+  const atribId = x.atribuicao.id;
+  let m = findMedicaoPoda(atribId);
+  if(m && m.aprovado===true){ toast('Este RDO já está aprovado para medição.'); return; }
+  modalComMotivo({
+    title:'Aprovar RDO para medição',
+    texto:'Confirma a aprovação deste RDO de <strong>'+esc(podaProgLabel(x.programacao))+'</strong> para a medição de poda? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Aprovar',
+    onConfirm:(motivo)=>{
+      if(!m){
+        m = {
+          id: nextId(),
+          programacaoId: x.programacao.id,
+          atribuicaoId: atribId,
+          rdoData: structuredClone(x.atribuicao),
+          statusValidacao: '',
+          enviadoEqtl: '',
+          recolha: '',
+          valorFaturado: '',
+          aprovado: null,
+          motivoReprovacao: '',
+          totalReprovacoes: 0,
+          historicoReprovacoes: [],
+          enviadoPor: currentAutor(),
+          enviadoEm: Date.now(),
+          custom: {}
+        };
+        DB.medicaoPoda.push(m);
+      }
+      m.aprovado = true;
+      m.motivoReprovacao = '';
+      m.motivoAprovacao = motivo;
+      m.aprovadoPor = currentAutor();
+      m.aprovadoEm = Date.now();
+      x.atribuicao.historico = x.atribuicao.historico||[];
+      x.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+      registrarEvento('medicao','atribuicao',atribId,podaProgLabel(x.programacao),'RDO aprovado para medição de poda · '+motivo);
+      saveData();
+      toast('RDO aprovado para medição de poda.');
+    }
+  });
 }
 function podaProgramacoesFiltradas(){
   const norm = s=> String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
@@ -5549,7 +5976,7 @@ function renderPodaProgramacoes(){
       </div>
     </div>
     <div id="poda-area"></div>`;
-  document.getElementById('poda-f-busca').addEventListener('input', e=>{ podaFilters.busca=e.target.value; renderContent(); });
+  document.getElementById('poda-f-busca').addEventListener('input', e=>{ podaFilters.busca=e.target.value; renderSearchKeepFocus(); });
   document.getElementById('poda-f-equipe').addEventListener('change', e=>{ podaFilters.equipe=e.target.value; renderContent(); });
   document.getElementById('poda-f-status').addEventListener('change', e=>{ podaFilters.status=e.target.value; renderContent(); });
   document.getElementById('poda-f-de').addEventListener('change', e=>{ podaFilters.dataDe=e.target.value; renderContent(); });
@@ -5576,7 +6003,7 @@ function renderPodaListaInto(area, list){
       const p=x.programacao, a=x.atribuicao, eq=findEquipe(a.equipeId);
       const late = a.dataProgramada < todayISO() && !['Concluído','Cancelado'].includes(a.status);
       const ativResumo = (a.atividades||[]).map(at=>{ const atd=findAtividade(at.atividadeId); return `${esc(atd?.codigo||'?')} ×${at.quantidadePrevista??'—'}`; }).join(', ');
-      return `<tr style="cursor:pointer;" data-poda-open="${a.id}">
+      return `<tr style="cursor:pointer;" data-poda-open="${a.id}" data-poda-pg-id="${p.id}">
         <td class="mono" style="white-space:nowrap;">${podaProgLabel(p)}</td>
         <td class="mono">${fmtDate(a.dataProgramada)} ${late?'<div class="late-flag">VENCIDA</div>':''}</td>
         <td>${esc(p.osi||'—')}</td>
@@ -5600,7 +6027,21 @@ function renderPodaListaInto(area, list){
 }
 
 function bindPodaRowActions(area){
-  area.querySelectorAll('[data-poda-open]').forEach(c=>c.addEventListener('click', (e)=>{ if(e.target.closest('.row-actions')) return; openPodaDetalhe(c.dataset.podaOpen); }));
+  let _lastPodaClick = null;
+  area.querySelectorAll('tr[data-poda-open]').forEach(tr=>{
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('.icon-btn') || e.target.closest('.row-actions')) return;
+      const atId = tr.dataset.podaOpen;
+      const pgId = tr.dataset.podaPgId;
+      if(_lastPodaClick && _lastPodaClick.pgId===pgId && (Date.now()-_lastPodaClick.ts)<350){
+        _lastPodaClick = null;
+        if(atId) openPodaDetalhe(atId);
+      }else{
+        _lastPodaClick = { pgId, ts: Date.now() };
+        setTimeout(()=>{ if(_lastPodaClick && _lastPodaClick.pgId===pgId){ _lastPodaClick=null; openPodaDetalhe(atId); } }, 360);
+      }
+    });
+  });
   area.querySelectorAll('[data-poda-whats]').forEach(b=>b.addEventListener('click', ()=>encaminharPodaWhats(b.dataset.podaWhats)));
   area.querySelectorAll('[data-poda-doc]').forEach(b=>b.addEventListener('click', ()=>openPodaDocProgramacao(b.dataset.podaDoc)));
   area.querySelectorAll('[data-poda-hist]').forEach(b=>b.addEventListener('click', ()=>openPodaHistoricoModal(b.dataset.podaHist)));
@@ -5800,6 +6241,8 @@ function podaDetalheHtml(programacao, atrib, comAcoes=true){
         <div class="dtl-tile"><div class="dtl-tile-lbl">Data programada</div><div class="dtl-tile-val mono">${fmtDate(atrib.dataProgramada)}</div>${late? `<div class="late-flag" style="font-size:11px;margin-top:4px;">VENCIDA</div>`:''}</div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Encarregado</div><div class="dtl-tile-val">${esc(eq?.encarregado||'—')}</div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Status</div><div class="dtl-tile-val">${statusBadge(atrib.status, late)}</div></div>
+        <div class="dtl-tile"><div class="dtl-tile-lbl">Zona</div><div class="dtl-tile-val">${zonaBadge(programacao.zona)}</div></div>
+        <div class="dtl-tile"><div class="dtl-tile-lbl">Nº Reserva/PEP</div><div class="dtl-tile-val">${esc(programacao.numeroReserva||'—')}</div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Status Doc.</div><div class="dtl-tile-val"><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${esc(programacao.statusDocumentacao||'—')}</span></div></div>
         <div class="dtl-tile"><div class="dtl-tile-lbl">Tipo Rede</div><div class="dtl-tile-val"><span class="badge" style="color:${programacao.tipoRede==='MT'?'var(--blue)':'var(--accent)'};background:${programacao.tipoRede==='MT'?'rgba(78,140,235,.14)':'rgba(224,164,88,.14)'};">${esc(programacao.tipoRede||'—')}</span></div></div>
         <div class="dtl-tile" style="grid-column:1/-1;"><div class="dtl-tile-lbl">Local de execução</div><div class="dtl-tile-val">${programacao.local? esc(programacao.local) : '—'}</div>${(programacao.local||programacao.localLat!=null)? `<div style="margin-top:4px;font-size:11.5px;"><a href="${esc(localMapsHref(programacao.local,programacao.localLat,programacao.localLng))}" target="_blank" rel="noopener" style="color:var(--blue);font-weight:600;">${icon('pin',11)} Abrir no Google Maps</a></div>`:''}</div>
@@ -5890,7 +6333,7 @@ function buildPodaWhatsMessage(prog, atrib){
     ``,
     `*Programação:* ${podaProgLabel(prog)}`,
     `*OSI:* ${prog.osi||'—'}  ·  *Subestação:* ${prog.subestacao||'—'}`,
-    `*Tipo Rede:* ${prog.tipoRede||'—'}  ·  *Chave:* ${prog.chave||'—'}`,
+    `*Tipo Rede:* ${prog.tipoRede||'—'}  ·  *Chave:* ${prog.chave||'—'}${prog.numeroReserva? '  ·  *Reserva/PEP:* '+prog.numeroReserva:''}`,
     `*Data:* ${fmtDate(atrib.dataProgramada)}`,
     `*Equipe:* ${equipeLabel(eq)}`,
     ``,
@@ -6009,8 +6452,9 @@ function buildPodaDocProgramacao(prog){
     <table class="ps-info">
       <tr><th>Programação</th><td><strong>${podaProgLabel(prog)}</strong></td><th>Emissão</th><td>${fmtDateTime(Date.now())}</td></tr>
       <tr><th>OSI</th><td>${esc(prog.osi||'—')}</td><th>Subestação</th><td>${esc(prog.subestacao||'—')}</td></tr>
-      <tr><th>Tipo Rede</th><td>${esc(prog.tipoRede||'—')}</td><th>Chave</th><td>${esc(prog.chave||'—')}</td></tr>
+      <tr><th>Tipo Rede</th><td>${esc(prog.tipoRede||'—')}</td><th>Chave</th><td>${esc(prog.chave||'—')} · Zona: ${esc(prog.zona||'—')}</td></tr>
       <tr><th>Qtd. Anomalia</th><td>${esc(String(prog.qtdAnomalia||'—'))}</td><th>OSE</th><td>${esc(String(prog.ose||'—'))}</td></tr>
+      <tr><th>Nº da Reserva/PEP</th><td>${esc(prog.numeroReserva||'—')}</td><th>Data Programação</th><td>${fmtDate(prog.dataProgramacao)}</td></tr>
       ${prog.observacoes? `<tr><th>Observações</th><td colspan="3">${esc(prog.observacoes)}</td></tr>`:''}
       ${String(prog.orientacoesPlanejamento||'').trim()? `<tr><th>Orientações do Setor de Planejamento</th><td colspan="3">${esc(prog.orientacoesPlanejamento)}</td></tr>`:''}
       ${prog.local? `<tr><th>Local de execução</th><td colspan="3"><strong>${esc(prog.local)}</strong>${(prog.localLat!=null&&prog.localLng!=null)? ` — <a href="${esc(mapsLinkByCoords(prog.localLat,prog.localLng))}">${esc(mapsLinkByCoords(prog.localLat,prog.localLng))}</a>`:(prog.local? ` — <a href="${esc(mapsLinkByAddress(prog.local))}">${esc(mapsLinkByAddress(prog.local))}</a>`:'')}</td></tr>`:''}
@@ -6088,24 +6532,23 @@ function openPodaProgramacaoModal(id){
   let localLng = pg?.localLng??null;
 
   function atribBlockHtml(a,i){
-    const searchId = `poda-act-search-${i}`;
     return `<div class="atrib-block" data-idx="${i}">
       <div class="atrib-head">
         <select class="atrib-equipe" data-idx="${i}"><option value="">Selecione a equipe…</option>${equipesVisiveis().filter(e=>e.ativo!==false).map(e=>`<option value="${e.id}" ${String(a.equipeId)===String(e.id)?'selected':''}>${equipeLabel(e)}${e.encarregado? ' · '+esc(e.encarregado):''}</option>`).join('')}</select>
         ${atribs.length>1? `<button type="button" class="icon-btn atrib-remove" data-idx="${i}">${icon('trash',14)}</button>`:''}
       </div>
       <div class="atrib-meta-live" data-idx="${i}"></div>
-      <div class="field" style="margin-bottom:8px;">
-        <label for="${searchId}">${icon('search',14)} Buscar atividade (código ou descrição)</label>
-        <input type="search" id="${searchId}" placeholder="Filtrar atividades…" style="width:100%;">
-      </div>
       <div class="atrib-activities">${a.atividades.map((at,j)=>activityRowHtml(a,i,at,j)).join('')}</div>
       <button type="button" class="btn btn-sm btn-ghost atrib-add-activity" data-idx="${i}">${icon('plus',13)} Adicionar atividade</button>
     </div>`;
   }
   function activityRowHtml(a,i,at,j){
-    return `<div class="activity-row" data-idx="${i}" data-jdx="${j}">
-      <select class="act-select" data-idx="${i}" data-jdx="${j}"><option value="">Atividade…</option>${atividadesOrdenadas().map(x=>`<option value="${x.id}" ${String(at.atividadeId)===String(x.id)?'selected':''}>${isFavorita(x.id)?'★ ':''}${esc(x.codigo)} · ${esc(x.descricao)}</option>`).join('')}</select>
+    const atDef = at.atividadeId? findAtividade(at.atividadeId) : null;
+    return `<div class="activity-row act-ac-row" data-idx="${i}" data-jdx="${j}">
+      <div class="act-ac" data-idx="${i}" data-jdx="${j}">
+        <input type="text" class="act-ac-input" data-idx="${i}" data-jdx="${j}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+        <div class="act-ac-list" data-idx="${i}" data-jdx="${j}" style="display:none;"></div>
+      </div>
       <input type="number" step="0.01" min="0" class="act-qty" data-idx="${i}" data-jdx="${j}" placeholder="Qtd." value="${at.quantidadePrevista??''}">
       ${a.atividades.length>1? `<button type="button" class="icon-btn act-remove" data-idx="${i}" data-jdx="${j}">${icon('close',13)}</button>`:''}
     </div>`;
@@ -6126,12 +6569,14 @@ function openPodaProgramacaoModal(id){
       <div class="field"><label>Chave</label><input type="text" name="chave" value="${esc(pg?.chave||'')}" placeholder="Código da chave"></div>
       <div class="field"><label>ID-SIPROG</label><input type="number" step="1" min="0" name="idSiprog" value="${pg?.idSiprog||''}" placeholder="0"></div>
       <div class="field"><label>OSE</label><input type="number" step="1" min="0" name="ose" value="${pg?.ose||''}" placeholder="0"></div>
+      <div class="field"><label>Nº da Reserva/PEP</label><input type="text" name="numeroReserva" value="${esc(pg?.numeroReserva||'')}" placeholder="Opcional"></div>
     </div>
     <div class="field-row">
       <div class="field"><label>Data início <span class="req">*</span></label><input type="date" name="dataProgramacao" required value="${pg?.dataProgramacao||todayISO()}"></div>
       <div class="field"><label>Data fim (opcional)</label><input type="date" name="dataFim" value="${pg?.dataProgramacao||''}"><div class="field-hint">Se preenchido, cria uma programação para cada dia no intervalo. Deixe vazio para criar apenas 1.</div></div>
       <div class="field"><label>Status Documentação</label><select name="statusDocumentacao"><option value="">Selecione…</option>${STATUS_DOC_OPCOES.map(v=>`<option ${pg?.statusDocumentacao===v?'selected':''}>${v}</option>`).join('')}</select></div>
     </div>
+    ${zonaRadioHtml(pg?.zona)}
     <div class="field"><label>Observações</label><textarea name="observacoes" rows="2" placeholder="Observações da programação de poda">${esc(pg?.observacoes||'')}</textarea></div>
     <div class="field"><label>Local / endereço de execução</label>
       <input type="text" name="local" id="poda-local" required value="${esc(pg?.local||'')}" placeholder="Digite o endereço...">
@@ -6173,23 +6618,9 @@ function openPodaProgramacaoModal(id){
         root.querySelectorAll('.atrib-equipe').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].equipeId = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.atrib-remove').forEach(b=>b.addEventListener('click', e=>{ atribs.splice(Number(e.currentTarget.dataset.idx),1); refreshContainer(); }));
         root.querySelectorAll('.atrib-add-activity').forEach(b=>b.addEventListener('click', e=>{ atribs[Number(e.currentTarget.dataset.idx)].atividades.push({atividadeId:'',quantidadePrevista:''}); refreshContainer(); }));
-        root.querySelectorAll('.act-select').forEach(s=>s.addEventListener('change', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].atividadeId = e.target.value; atualizarMetaIndicadores(); }));
+        bindActAutocomplete(root, atribs, atualizarMetaIndicadores, (typeof selProjeto!=='undefined' && selProjeto)? (selProjeto.planoFisico||[]).map(x=>x.atividadeId) : null);
         root.querySelectorAll('.act-qty').forEach(s=>s.addEventListener('input', e=>{ atribs[e.target.dataset.idx].atividades[e.target.dataset.jdx].quantidadePrevista = e.target.value; atualizarMetaIndicadores(); }));
         root.querySelectorAll('.act-remove').forEach(b=>b.addEventListener('click', e=>{ const i=Number(e.currentTarget.dataset.idx), j=Number(e.currentTarget.dataset.jdx); atribs[i].atividades.splice(j,1); refreshContainer(); }));
-        root.querySelectorAll('input[type="search"][id^="poda-act-search-"]').forEach(input=>{
-          const idx = input.id.replace('poda-act-search-','');
-          input.addEventListener('input', ()=>{
-            const term = input.value.toLowerCase();
-            root.querySelectorAll(`.act-select[data-idx="${idx}"]`).forEach(sel=>{
-              const selected = sel.value;
-              Array.from(sel.options).forEach(opt=>{
-                if(opt.value==='') return;
-                opt.style.display = opt.textContent.toLowerCase().includes(term) ? '' : 'none';
-              });
-              if(selected && !Array.from(sel.options).find(o=>o.value===selected && o.style.display!=='none')) sel.value = '';
-            });
-          });
-        });
         atualizarMetaIndicadores();
       }
       function atualizarMetaIndicadores(){
@@ -6321,6 +6752,8 @@ function openPodaProgramacaoModal(id){
       if(!osi){ toast('Informe a OSI (Referência).', 'error'); return false; }
       const dataProgramacao = fd.get('dataProgramacao');
       if(!dataProgramacao){ toast('Informe a data de programação.', 'error'); return false; }
+      const zona = fd.get('zona');
+      if(!zona){ toast('Selecione a zona (RURAL ou URBANA).', 'error'); return false; }
       if(!atribs.length || atribs.some(a=>!a.equipeId)){ toast('Selecione a equipe em todos os blocos.', 'error'); return false; }
       for(const a of atribs){ if(!a.atividades.length || a.atividades.some(x=>!x.atividadeId)){ toast('Selecione a atividade em todas as linhas.', 'error'); return false; } }
       const observacoes = String(fd.get('observacoes')||'').trim();
@@ -6334,8 +6767,10 @@ function openPodaProgramacaoModal(id){
         tipoRede: fd.get('tipoRede'), chave: fd.get('chave').trim(), asi: Number(fd.get('asi'))||0,
         dataProgramacao, statusDocumentacao: fd.get('statusDocumentacao'),
         idSiprog: Number(fd.get('idSiprog'))||0, ose: Number(fd.get('ose'))||0,
+        numeroReserva: String(fd.get('numeroReserva')||'').trim(),
         observacoes, orientacoesPlanejamento, custom,
         local, localLat: local? localLat : null, localLng: local? localLng : null, anexos: anexos.map(a=>({...a})),
+        zona,
         atividades: atribs.map(a=>({
           equipeId: Number(a.equipeId),
           atividades: a.atividades.map(x=>({atividadeId:Number(x.atividadeId), quantidadePrevista: x.quantidadePrevista?parseFloat(x.quantidadePrevista):null, quantidadeExecutada:null}))
@@ -6346,8 +6781,8 @@ function openPodaProgramacaoModal(id){
       if(pg){
         Object.assign(pg, base);
         pg.atribuicoes = base.atividades.map((a,i)=>{
-          const existing = pg.atribuicoes.find(x=>x.equipeId===a.equipeId);
-          if(existing){ existing.atividades = a.atividades; return existing; }
+          const existing = pg.atribuicoes.find(x=>String(x.equipeId)===String(a.equipeId));
+          if(existing){ existing.atividades = a.atividades.map(nv=>({...nv, quantidadeExecutada: existing.atividades.find(ev=>ev.atividadeId===nv.atividadeId)?.quantidadeExecutada ?? null})); return existing; }
           return { id: nextId(), equipeId:a.equipeId, dataProgramada:dataProgramacao, status:'Programado', atividades:a.atividades, historico:[{...currentAutor(), ts:Date.now(),tipo:'criacao',de:null,para:'Programado',motivo:'Atribuição criada'}] };
         });
         pg.atribuicoes.forEach(at=>{ at.dataProgramada = dataProgramacao; });
@@ -6458,10 +6893,12 @@ function renderPodaRdo(){
               const res = rdoResumo(x);
               const imped = rdoImpedimentos(x.atribuicao);
               const horarios = [x.atribuicao.rdoHorarioChegada, x.atribuicao.rdoHorarioSaidaObra].filter(Boolean).join(' → ')||'—';
+              const med = findMedicaoPoda(x.atribuicao.id);
+              const repInfo = medicaoPodaReprovacaoInfo(med);
               return `
-                <tr data-poda-prog="${x.programacao.id}" data-poda-atrib="${x.atribuicao.id}" style="cursor:pointer;" title="Ver detalhes">
+                <tr data-poda-prog="${x.programacao.id}" data-poda-atrib="${x.atribuicao.id}" style="cursor:pointer;" class="${repInfo?'poda-rdo-reprovado':''}" title="Ver detalhes">
                   <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
-                  <td><strong>${podaProgLabel(x.programacao)}</strong><div class="admin-field-meta">OSI ${esc(x.programacao.osi||'—')} · ${esc(x.programacao.subestacao||'—')}</div></td>
+                  <td><strong>${podaProgLabel(x.programacao)}</strong><div class="admin-field-meta">OSI ${esc(x.programacao.osi||'—')} · ${esc(x.programacao.subestacao||'—')}</div>${repInfo? `<div class="med-poda-reprov-msg">${icon('alert',12)} Reprovado na medição${repInfo.total>0? ' · '+medicaoPodaCountTag(repInfo.total):''}<div class="med-poda-reprov-motivo">${esc(repInfo.motivo)}</div></div>`:''}</td>
                   <td>${esc(equipeLabel(eq))}<div class="admin-field-meta">${esc(eq?.supervisor||'')}</div></td>
                   <td style="text-align:center;" class="mono">${fmtDate(x.atribuicao.dataProgramada)}</td>
                   <td style="text-align:center;">${rdoStatusBadge(x.atribuicao.status)}</td>
@@ -6545,12 +6982,21 @@ function openPodaRDOModal(progId, attribId){
     <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${x.atribuicao[h.k]||'—'}</td></tr>`).join('');
 
   const body = `
+    ${(()=>{ const ri = medicaoPodaReprovacaoInfo(findMedicaoPoda(x.atribuicao.id));
+      return ri? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(224,97,91,.45);background:rgba(224,97,91,.10);border-radius:10px;margin-bottom:16px;">
+        <span style="color:var(--red);flex-shrink:0;margin-top:2px;">${icon('alert',18)}</span>
+        <div style="font-size:12.5px;">
+          <strong style="color:var(--red);">RDO REPROVADO NA MEDIÇÃO</strong> <span class="med-poda-reprov-count" style="margin-left:4px;">${ri.total} reprovação${ri.total===1?'':'ões'}</span>
+          <div style="color:var(--muted);margin-top:2px;">Motivo: <strong style="color:#7a2b26;">${esc(ri.motivo)}</strong><br>Reprovado por <strong>${esc(ri.por)}</strong> em <span class="mono">${fmtDateTime(ri.em)}</span>. Anexe evidências ou edite o registro para reenvio à medição.</div>
+        </div>
+      </div>`:''; })()}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
       <div>
         <h4 style="margin-bottom:8px;">Programação ${podaProgLabel(x.programacao)}</h4>
-        <p class="admin-field-meta" style="margin:2px 0;">OSI: ${esc(x.programacao.osi||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">OSI: ${esc(x.programacao.osi||'—')} ${zonaBadge(x.programacao.zona)}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Subestação: ${esc(x.programacao.subestacao||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Tipo Rede: ${esc(x.programacao.tipoRede||'—')} · Chave: ${esc(x.programacao.chave||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Nº da Reserva/PEP: ${esc(x.programacao.numeroReserva||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Data: ${fmtDate(x.atribuicao.dataProgramada)}</p>
         <div style="margin-top:8px;">${rdoStatusBadge(x.atribuicao.status)}</div>
       </div>
@@ -6560,6 +7006,7 @@ function openPodaRDOModal(progId, attribId){
         <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
       </div>
     </div>
     ${(x.programacao.anexos&&x.programacao.anexos.length)? `<div style="margin-bottom:20px;">
@@ -6595,7 +7042,7 @@ function openPodaRDOModal(progId, attribId){
         <span class="badge-prefix" style="color:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};">${res.pct}%</span>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;">Fotos</th></tr></thead>
+        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:left;">Estrutura</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;">Fotos</th></tr></thead>
         <tbody>
           ${(x.atribuicao.atividades||[]).map((a,idx)=>{
             const at = findAtividade(a.atividadeId);
@@ -6608,6 +7055,7 @@ function openPodaRDOModal(progId, attribId){
               <td class="mono" style="padding:4px 6px;">${esc(at?.codigo||'?')}</td>
               <td style="padding:4px 6px;">${esc(at?.descricao||'')}</td>
               <td style="text-align:center;">${esc(at?.unidade||'')}</td>
+              <td style="padding:4px 6px;">${esc(a.tipoEstrutura||'—')}</td>
               <td style="text-align:center;" class="mono">${p? fmtNum(p):'—'}</td>
               <td style="text-align:center;" class="mono"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
               <td style="text-align:center;color:${pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--red)'};font-weight:700;">${p? pct+'%':'—'}</td>
@@ -6623,10 +7071,15 @@ function openPodaRDOModal(progId, attribId){
     </div>
     <div class="admin-field-meta">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
 
-  openModal({ title:'RDO Poda — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, footerBtns:[
+  const podeAprovar = appvMedicaoPoda();
+  const aprovarBtn = podeAprovar? { label: icon('check',14)+' Aprovar', cls:'btn btn-primary', onClick: ()=> aprovarRdoParaMedicao(x) } : null;
+  const footerBtns = [
+    aprovarBtn,
     { label: icon('edit',14)+' Editar registro', cls:'btn', onClick: ()=> editRdoModal(x, podaProgLabel) },
-    { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'poda') }
-  ] });
+    { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'poda') },
+    { label: icon('download',14)+' Baixar imagens', cls:'btn', onClick: ()=> baixarFotosRdo(x.atribuicao.atividades) }
+  ].filter(Boolean);
+  openModal({ title:'RDO Poda — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, maxW:760, footerBtns, onMount: (root)=>{ root.querySelector('[data-baixar-fotos-rdo]')?.addEventListener('click', ()=> baixarFotosRdo(x.atribuicao.atividades)); } });
 }
 function renderOcNds(){
   const el = document.getElementById('content');
@@ -6683,8 +7136,8 @@ function renderOcNds(){
             ${list.map((x,i)=>{
               const eq = findEquipe(x.equipeId);
               const detalhes = x.tipo==='OC'
-                ? [x.ptp&&'PTP: '+x.ptp, x.si&&'SI: '+x.si, x.ose&&'OSE: '+x.ose].filter(Boolean).join(' · ')||'—'
-                : [x.ocorrencia&&'Ocorrência: '+x.ocorrencia].filter(Boolean).join('')||'—';
+                ? [x.ptp&&'PTP: '+x.ptp, x.si&&'SI: '+x.si, x.ose&&'OSE: '+x.ose, x.zona&&'Zona: '+x.zona, x.numeroReserva&&'Reserva/PEP: '+x.numeroReserva].filter(Boolean).join(' · ')||'—'
+                : [x.ocorrencia&&'Ocorrência: '+x.ocorrencia, x.zona&&'Zona: '+x.zona, x.numeroReserva&&'Reserva/PEP: '+x.numeroReserva].filter(Boolean).join(' · ')||'—';
               const badge = x.tipo==='OC'
                 ? `<span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">OC</span>`
                 : `<span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);">NDS</span>`;
@@ -6787,7 +7240,12 @@ function openOcNdsModal(id){
       <div class="field"><label>Ocorrência <span class="req">*</span></label><input type="text" name="ocorrencia" value="${esc(item?.ocorrencia||'')}" placeholder="Número da ocorrência"></div>
     </div>
 
-    <div class="field"><label>Data <span class="req">*</span></label><input type="date" name="data" required value="${item?.data||todayISO()}"></div>
+    <div class="field-row">
+      <div class="field"><label>Data <span class="req">*</span></label><input type="date" name="data" required value="${item?.data||todayISO()}"></div>
+      <div class="field"><label>Nº da Reserva/PEP</label><input type="text" name="numeroReserva" value="${esc(item?.numeroReserva||'')}" placeholder="Opcional"></div>
+    </div>
+
+    ${zonaRadioHtml(item?.zona)}
 
     <div class="field"><label>Equipe(s) <span class="req">*</span></label>
       <div id="ocnds-equipe-container">
@@ -6900,6 +7358,8 @@ function openOcNdsModal(id){
 
       if(!setor || !coordenacao){ toast('Informe o setor e a coordenação.', 'error'); return false; }
       if(!data){ toast('Informe a data.', 'error'); return false; }
+      const zona = fd.get('zona');
+      if(!zona){ toast('Selecione a zona (RURAL ou URBANA).', 'error'); return false; }
 
       if(tipo==='OC'){
         const ocorr = fd.get('ocorrencia');
@@ -6925,6 +7385,8 @@ function openOcNdsModal(id){
         item.ocorrencia = fd.get('ocorrencia')?.trim()||'';
         item.data = data;
         item.observacoes = observacoes;
+        item.zona = zona;
+        item.numeroReserva = String(fd.get('numeroReserva')||'').trim();
         item.equipeId = equipeIds[0];
         item.equipeIds = equipeIds;
         item.anexos = (window._ocndsAnexos||[]).slice();
@@ -6945,6 +7407,8 @@ function openOcNdsModal(id){
             ose: fd.get('ose').trim(),
             ocorrencia: fd.get('ocorrencia')?.trim()||'',
             data,
+            zona,
+            numeroReserva: String(fd.get('numeroReserva')||'').trim(),
             equipeId: eqId,
             observacoes,
             anexos: (window._ocndsAnexos||[]).slice(),
@@ -6992,6 +7456,8 @@ function openOcNdsDetalhe(id){
     <div class="dtl-grid">
       <div class="dtl-tile"><div class="dtl-tile-lbl">Setor</div><div class="dtl-tile-val">${esc(x.setor||'—')}</div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">Coordenação</div><div class="dtl-tile-val">${esc(x.coordenacao||'—')}</div></div>
+      <div class="dtl-tile"><div class="dtl-tile-lbl">Zona</div><div class="dtl-tile-val">${zonaBadge(x.zona)}</div></div>
+      <div class="dtl-tile"><div class="dtl-tile-lbl">Nº Reserva/PEP</div><div class="dtl-tile-val">${esc(x.numeroReserva||'—')}</div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">Tipo</div><div class="dtl-tile-val"><span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">OC</span></div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">PTP</div><div class="dtl-tile-val mono">${esc(x.ptp||'—')}</div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">SI</div><div class="dtl-tile-val mono">${esc(x.si||'—')}</div></div>
@@ -7001,6 +7467,8 @@ function openOcNdsDetalhe(id){
     <div class="dtl-grid">
       <div class="dtl-tile"><div class="dtl-tile-lbl">Setor</div><div class="dtl-tile-val">${esc(x.setor||'—')}</div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">Coordenação</div><div class="dtl-tile-val">${esc(x.coordenacao||'—')}</div></div>
+      <div class="dtl-tile"><div class="dtl-tile-lbl">Zona</div><div class="dtl-tile-val">${zonaBadge(x.zona)}</div></div>
+      <div class="dtl-tile"><div class="dtl-tile-lbl">Nº Reserva/PEP</div><div class="dtl-tile-val">${esc(x.numeroReserva||'—')}</div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">Tipo</div><div class="dtl-tile-val"><span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);">NDS</span></div></div>
       <div class="dtl-tile"><div class="dtl-tile-lbl">Ocorrência</div><div class="dtl-tile-val mono">${esc(x.ocorrencia||'—')}</div></div>
     </div>`;
@@ -7035,7 +7503,7 @@ function openOcNdsDetalhe(id){
         <div><span class="badge" style="color:${stColor};background:${bgFromVar(stColor)};font-size:13px;padding:6px 14px;"><span class="badge-dot"></span>${esc(x.status)}</span></div>
       </div>
 
-      <div class="dtl-tile" style="grid-column:1/-1;"><div class="dtl-tile-lbl">Equipe</div><div class="dtl-tile-val"><span class="badge-prefix">${esc(equipeLabel(eq))}</span><div class="admin-field-meta" style="margin-top:4px;">Supervisor: ${esc(eq?.supervisor||'—')} · Encarregado: ${esc(eq?.encarregado||'—')}</div></div></div>
+      <div class="dtl-tile" style="grid-column:1/-1;"><div class="dtl-tile-lbl">Equipe</div><div class="dtl-tile-val"><span class="badge-prefix">${esc(equipeLabel(eq))}</span><div class="admin-field-meta" style="margin-top:4px;">Supervisor: ${esc(eq?.supervisor||'—')} · Encarregado: ${esc(eq?.encarregado||'—')}</div><div class="admin-field-meta" style="margin-top:4px;">Motorista: ${esc(eq?.motorista||'—')} · Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</div></div></div>
 
       ${detalhesHtml}
 
@@ -7141,7 +7609,7 @@ function encaminharWhatsOcNds(id){
   const detalhes = x.tipo==='OC'
     ? `PTP: ${x.ptp||'—'} | SI: ${x.si||'—'} | OSE: ${x.ose||'—'}`
     : `Ocorrência: ${x.ocorrencia||'—'}`;
-  const texto = `🔔 *OC/NDS ${x.tipo} — ${x.gid||'G26-'+String(x.id).padStart(7,'0')}*\n\nSetor: ${x.setor||'—'}\nCoordenação: ${x.coordenacao||'—'}\nStatus: ${x.status}\nData: ${fmtDate(x.data)}\n${detalhes}\n\nAcesse os detalhes e preencha as informações:\n${link}`;
+  const texto = `🔔 *OC/NDS ${x.tipo} — ${x.gid||'G26-'+String(x.id).padStart(7,'0')}*\n\nSetor: ${x.setor||'—'}\nCoordenação: ${x.coordenacao||'—'}\nZona: ${x.zona||'—'}\nNº Reserva/PEP: ${x.numeroReserva||'—'}\nStatus: ${x.status}\nData: ${fmtDate(x.data)}\n${detalhes}\n\nAcesse os detalhes e preencha as informações:\n${link}`;
   window.open(waLink(eq.whatsapp, texto), '_blank');
 }
 
@@ -7176,8 +7644,475 @@ function renderMediçãoOC(){
 function renderMediçãoNDSOSE(){
   renderModuloEmDesenvolvimento('Medição – NDS/OSE');
 }
+function medicaoPodaRegistros(){
+  return flatPodaAtribuicoes().filter(rdoTemExecucao);
+}
 function renderMediçãoPoda(){
-  renderModuloEmDesenvolvimento('Medição – PODA');
+  const el = document.getElementById('content');
+  let registros = medicaoPodaRegistros();
+  registros.sort((a,b)=> String(b.atribuicao.dataProgramada||'').localeCompare(String(a.atribuicao.dataProgramada||'')));
+
+  const pode = appvMedicaoPoda();
+  const aprovadas = registros.filter(x=> findMedicaoPoda(x.atribuicao.id)?.aprovado===true);
+  const reprovadas = registros.filter(x=> findMedicaoPoda(x.atribuicao.id)?.aprovado===false);
+  const pendentes = registros.filter(x=> !findMedicaoPoda(x.atribuicao.id));
+
+  const stats = `
+    <div class="grid-stats">
+      <div class="stat-card"><div class="lbl">RDOs de PODA</div><div class="val">${registros.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--accent);"><div class="lbl">Pendentes de aprovação</div><div class="val">${pendentes.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--green);"><div class="lbl">Aprovadas</div><div class="val">${aprovadas.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--red);"><div class="lbl">Reprovadas</div><div class="val">${reprovadas.length}</div></div>
+    </div>`;
+
+  const equipes = [...new Set(registros.map(x=>x.atribuicao.equipeId))].map(id=>findEquipe(id)).filter(Boolean);
+
+  const filters = `
+    <div class="panel" style="padding:14px 16px;margin-bottom:16px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+        <input type="search" id="med-poda-f-busca" placeholder="Buscar por OSI, equipe, data, status..." style="flex:1;">
+        <button class="btn btn-sm" id="med-poda-f-busca-aplicar">${icon('search',13)} Buscar</button>
+      </div>
+      <div class="filters">
+        <label style="font-weight:600;">Equipe</label>
+        <select id="med-poda-f-equipe"><option value="">Todas</option>${equipes.map(e=>`<option value="${e.id}">${esc(equipeLabel(e))}</option>`).join('')}</select>
+        <label style="font-weight:600;">Situação</label>
+        <select id="med-poda-f-situacao"><option value="">Todas</option><option value="pendente">Pendente</option><option value="aprovada">Aprovada</option><option value="reprovada">Reprovada</option></select>
+        <label style="font-weight:600;">De</label>
+        <input type="date" id="med-poda-f-de">
+        <label style="font-weight:600;">Até</label>
+        <input type="date" id="med-poda-f-ate">
+        <button class="btn btn-sm" id="med-poda-f-aplicar">${icon('grid',13)} Filtrar</button>
+        <button class="btn btn-sm btn-ghost" id="med-poda-f-limpar">Limpar</button>
+      </div>
+    </div>`;
+
+  const isAprovada = x=> findMedicaoPoda(x.atribuicao.id)?.aprovado===true;
+  const isReprovada = x=> findMedicaoPoda(x.atribuicao.id)?.aprovado===false;
+  const med = x=> findMedicaoPoda(x.atribuicao.id);
+
+  const tabela = `
+    <div class="panel" style="padding:0;overflow:hidden;">
+      <div class="panel-head" style="padding:14px 16px;">
+        <div><h3>Medição de PODA</h3><div class="admin-field-meta">Dados do RDO de poda para aprovação e medição. Aprove para liberar os campos de medição.</div></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1250px;">
+          <thead>
+            <tr>
+              <th style="width:30px;">#</th>
+              <th>Programação</th>
+              <th>Equipe</th>
+              <th style="text-align:center;">Data</th>
+              <th style="text-align:center;">Status</th>
+              <th style="text-align:center;">Prev.</th>
+              <th style="text-align:center;">Exec.</th>
+              <th style="text-align:center;width:110px;">Progresso</th>
+              <th style="text-align:center;">Status Validação</th>
+              <th style="text-align:center;">EQTL</th>
+              <th style="text-align:center;">Recolha</th>
+              <th style="text-align:center;">Valor Faturado</th>
+              <th style="text-align:center;width:120px;">Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${registros.map((x,i)=>{
+              const eq = findEquipe(x.atribuicao.equipeId);
+              const res = rdoResumo(x);
+              const m = med(x);
+              const rowStyle = m?.aprovado===false
+                ? 'border-left:3px solid var(--red);background:rgba(224,97,91,.06);'
+                : m?.aprovado===true
+                  ? 'border-left:3px solid var(--green);background:rgba(34,139,34,.05);'
+                  : '';
+              const acao = m?.aprovado===false
+                ? (pode? `<button type="button" class="btn btn-sm btn-primary" data-med-poda-reaprovar="${x.atribuicao.id}">${icon('check',12)} Reaprovar</button>` : `<span class="badge" style="color:var(--red);background:rgba(224,97,91,.14);">REPROVADO</span>`)
+                : m?.aprovado===true
+                  ? (pode? `<button type="button" class="btn btn-sm btn-danger-solid" data-med-poda-reprovar="${x.atribuicao.id}">${icon('x',12)} Reprovado?</button>` : '<span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);">Aprovado</span>')
+                  : (pode? `<button type="button" class="btn btn-sm btn-primary" data-med-poda-aprovar="${x.atribuicao.id}">${icon('check',12)} Aprovar</button>` : '<span style="color:var(--muted-2);">—</span>');
+              return `
+                <tr data-med-poda-prog="${x.programacao.id}" data-med-poda-atrib="${x.atribuicao.id}" style="cursor:pointer;${rowStyle}">
+                  <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
+                  <td><strong>${podaProgLabel(x.programacao)}</strong><div class="admin-field-meta">OSI ${esc(x.programacao.osi||'—')} · ${esc(x.programacao.subestacao||'—')}</div>${m?.aprovado===false&&m?.motivoReprovacao? `<div style="font-size:11px;color:var(--red);margin-top:2px;">${icon('alert',10)} ${esc(m.motivoReprovacao)}</div>`:''}</td>
+                  <td>${esc(equipeLabel(eq))}<div class="admin-field-meta">${esc(eq?.supervisor||'')}</div></td>
+                  <td style="text-align:center;" class="mono">${fmtDate(x.atribuicao.dataProgramada)}</td>
+                  <td style="text-align:center;">${rdoStatusBadge(x.atribuicao.status)}</td>
+                  <td style="text-align:center;" class="mono">${fmtNum(res.prev)}</td>
+                  <td style="text-align:center;" class="mono"><strong>${fmtNum(res.exec)}</strong></td>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                      <div style="flex:1;height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${Math.min(100,res.pct)}%;background:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};border-radius:3px;"></div></div>
+                      <span class="mono" style="font-size:11px;min-width:34px;text-align:right;">${res.pct}%</span>
+                    </div>
+                  </td>
+                  <td style="text-align:center;">${medicaoPodaValidacaoBadge(m?.statusValidacao)}</td>
+                  <td style="text-align:center;">${simNaoBadge(m?.enviadoEqtl)}</td>
+                  <td style="text-align:center;">${simNaoBadge(m?.recolha)}</td>
+                  <td style="text-align:center;" class="mono">${m?.valorFaturado!=null && m?.valorFaturado!==''? '<strong>'+fmtMoney(m.valorFaturado)+'</strong>' : '—'}</td>
+                  <td style="text-align:center;white-space:nowrap;">${acao}</td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  if(!registros.length){
+    el.innerHTML = `<div class="section-gap">${stats}<div class="panel"><div class="empty-state">${icon('ruler',36)}<h3 style="margin-bottom:6px;">Nenhuma execução de poda para medir</h3><p>Quando as equipes responderem o RDO de poda, os dados aparecerão aqui para aprovação e medição.</p></div></div></div>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="section-gap">${stats}${filters}${tabela}</div>`;
+
+  const fEq = document.getElementById('med-poda-f-equipe');
+  const fSit = document.getElementById('med-poda-f-situacao');
+  const fDe = document.getElementById('med-poda-f-de');
+  const fAte = document.getElementById('med-poda-f-ate');
+  const fBusca = document.getElementById('med-poda-f-busca');
+  const norm = s=> String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const aplicar = ()=>{
+    const q = norm(fBusca.value.trim());
+    registros.forEach(x=>{
+      const eq = findEquipe(x.atribuicao.equipeId);
+      const m = med(x);
+      const situacao = m?.aprovado===true?'aprovada':m?.aprovado===false?'reprovada':'pendente';
+      const okEq = !fEq.value || String(x.atribuicao.equipeId)===String(fEq.value);
+      const okSit = !fSit.value || situacao===fSit.value;
+      const data = x.atribuicao.dataProgramada||'';
+      const okDe = !fDe.value || data >= fDe.value;
+      const okAte = !fAte.value || data <= fAte.value;
+      const hay = norm([
+        podaProgLabel(x.programacao), x.programacao.osi, x.programacao.subestacao,
+        equipeLabel(eq), eq?.supervisor, data, x.atribuicao.status,
+        String(x.programacao.id), String(x.atribuicao.id)
+      ].join(' '));
+      const okBusca = !q || hay.indexOf(q)!==-1;
+      const tr = document.querySelector(`tr[data-med-poda-prog="${x.programacao.id}"][data-med-poda-atrib="${x.atribuicao.id}"]`);
+      if(tr) tr.style.display = (okEq&&okSit&&okDe&&okAte&&okBusca)? '' : 'none';
+    });
+  };
+  fBusca.addEventListener('input', aplicar);
+  document.getElementById('med-poda-f-busca-aplicar').addEventListener('click', aplicar);
+  document.getElementById('med-poda-f-aplicar').addEventListener('click', aplicar);
+  document.getElementById('med-poda-f-limpar').addEventListener('click', ()=>{
+    fEq.value=''; fSit.value=''; fDe.value=''; fAte.value=''; fBusca.value=''; aplicar();
+  });
+
+  registros.forEach(x=>{
+    const tr = document.querySelector(`tr[data-med-poda-prog="${x.programacao.id}"][data-med-poda-atrib="${x.atribuicao.id}"]`);
+    if(!tr) return;
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('[data-med-poda-aprovar]') || e.target.closest('[data-med-poda-reprovar]') || e.target.closest('[data-med-poda-reaprovar]')) return;
+      openMedicaoPodaModal(Number(x.atribuicao.id));
+    });
+    const ap = tr.querySelector(`[data-med-poda-aprovar="${x.atribuicao.id}"]`);
+    if(ap) ap.addEventListener('click', (e)=>{ e.stopPropagation(); aprovarMedicaoPoda(Number(x.atribuicao.id)); });
+    const rp = tr.querySelector(`[data-med-poda-reprovar="${x.atribuicao.id}"]`);
+    if(rp) rp.addEventListener('click', (e)=>{ e.stopPropagation(); reprovarMedicaoPodaModal(Number(x.atribuicao.id)); });
+    const rp2 = tr.querySelector(`[data-med-poda-reaprovar="${x.atribuicao.id}"]`);
+    if(rp2) rp2.addEventListener('click', (e)=>{ e.stopPropagation(); reaprovarMedicaoPoda(Number(x.atribuicao.id)); });
+  });
+}
+
+function aprovarMedicaoPoda(atribId){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoPoda()){ toast('Apenas administradores podem aprovar a medição.', 'error'); return; }
+  const r = podaAtribGlobal(atribId);
+  if(!r) return;
+  if(findMedicaoPoda(atribId)){ toast('Este RDO já possui registro de medição.', 'error'); return; }
+  modalComMotivo({
+    title:'Aprovar RDO para medição',
+    texto:'Confirma a aprovação deste RDO de <strong>'+esc(podaProgLabel(r.programacao))+'</strong> para a medição de poda? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Aprovar',
+    onConfirm:(motivo)=>{
+      DB.medicaoPoda.push({
+        id: nextId(),
+        programacaoId: r.programacao.id,
+        atribuicaoId: r.atribuicao.id,
+        rdoData: structuredClone(r.atribuicao),
+        statusValidacao: '',
+        enviadoEqtl: '',
+        recolha: '',
+        valorFaturado: '',
+        aprovado: true,
+        motivoReprovacao: '',
+        motivoAprovacao: motivo,
+        totalReprovacoes: 0,
+        historicoReprovacoes: [],
+        aprovadoPor: currentAutor(),
+        aprovadoEm: Date.now(),
+        custom: {}
+      });
+      r.atribuicao.historico = r.atribuicao.historico||[];
+      r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+      registrarEvento('medicao','atribuicao',r.atribuicao.id,podaProgLabel(r.programacao),'RDO aprovado para medição de poda · '+motivo);
+      saveData();
+      toast('RDO aprovado para medição.');
+      renderMediçãoPoda();
+    }
+  });
+}
+
+function reaprovarMedicaoPoda(atribId){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoPoda()){ toast('Apenas administradores podem reaprovar a medição.', 'error'); return; }
+  const m = findMedicaoPoda(atribId);
+  if(!m){ toast('Registro não encontrado na medição.', 'error'); return; }
+  const r = podaAtribGlobal(atribId);
+  modalComMotivo({
+    title:'Reaprovar RDO na medição',
+    texto:'Confirma a REAPROVAÇÃO deste RDO de <strong>'+esc(podaProgLabel(r.programacao))+'</strong> na medição, após revisão? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Reaprovar',
+    onConfirm:(motivo)=>{
+      m.aprovado = true;
+      m.motivoReprovacao = '';
+      m.motivoAprovacao = motivo;
+      m.aprovadoPor = currentAutor();
+      m.aprovadoEm = Date.now();
+      r.atribuicao.historico = r.atribuicao.historico||[];
+      r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+      registrarEvento('medicao','atribuicao',atribId,podaProgLabel(r.programacao),'RDO reaprovado na medição · '+motivo);
+      saveData();
+      toast('Medição reaprovada.');
+      renderMediçãoPoda();
+    }
+  });
+}
+
+function reprovarMedicaoPodaModal(atribId){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoPoda()){ toast('Apenas administradores podem reprovar a medição.', 'error'); return; }
+  const m = findMedicaoPoda(atribId);
+  if(!m){ toast('Registro não encontrado na medição.', 'error'); return; }
+  const r = podaAtribGlobal(atribId);
+  const q = r? findEquipe(r.atribuicao.equipeId) : null;
+  const body = `
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Reprovar a medição de <strong>${esc(podaProgLabel(r.programacao))}</strong>${q? ' — '+esc(equipeLabel(q)):''}. Isso marcará como pendência para o responsável pelo RDO anexar mais evidências ou editar o registro.</div>
+    <div class="field"><label>Motivo da reprovação <span class="req">*</span></label><textarea name="motivo" required rows="3" maxlength="500" placeholder="Descreva o motivo da reprovação."></textarea></div>`;
+  openModal({
+    title:'Reprovar medição de PODA', bodyHtml: body, submitLabel:'Reprovar',
+    onSubmit:(fd)=>{
+      const motivo = String(fd.get('motivo')||'').trim();
+      if(!motivo){ toast('Informe o motivo da reprovação.', 'error'); return false; }
+      m.aprovado = false;
+      m.motivoReprovacao = motivo;
+      m.reprovadoPor = currentAutor();
+      m.reprovadoEm = Date.now();
+      m.totalReprovacoes = (m.totalReprovacoes||0)+1;
+      m.historicoReprovacoes = m.historicoReprovacoes||[];
+      m.historicoReprovacoes.push({ motivo, por: currentAutor(), em: Date.now() });
+      r.atribuicao.historico = r.atribuicao.historico||[];
+      r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Reprovado', motivo});
+      registrarEvento('medicao','atribuicao',r.atribuicao.id,podaProgLabel(r.programacao),'RDO reprovado na medição: '+motivo);
+      saveData();
+      toast('Medição reprovada.');
+      renderMediçãoPoda();
+      return true;
+    }
+  });
+}
+
+function medicaoPodaFormHtml(m){
+  const isReprovada = m?.aprovado===false;
+  const mostrarValor = m?.statusValidacao==='FATURADA';
+  return `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px;">
+      <div class="field" style="margin:0;">
+        <label>STATUS DA VALIDAÇÃO</label>
+        <select name="statusValidacao" id="med-val-status" ${isReprovada?'disabled':''}>
+          <option value="">Selecione...</option>
+          ${STATUS_VALIDACAO_OPCOES.map(o=>`<option value="${o}" ${m?.statusValidacao===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+        ${isReprovada? '<div class="field-hint" style="color:var(--red);">Reprovado — edite o RDO e anexe evidências para reenviar.</div>':''}
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ENVIADO EQTL</label>
+        <select name="enviadoEqtl" ${isReprovada?'disabled':''}>
+          <option value="">Selecione...</option>
+          ${SIM_NAO_OPCOES.map(o=>`<option value="${o}" ${m?.enviadoEqtl===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>RECOLHA</label>
+        <select name="recolha" ${isReprovada?'disabled':''}>
+          <option value="">Selecione...</option>
+          ${SIM_NAO_OPCOES.map(o=>`<option value="${o}" ${m?.recolha===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" id="med-val-valor-wrap" style="margin:0;${mostrarValor?'':'display:none;'}" data-valor-faturado>
+        <label>VALOR FATURADO (R$)</label>
+        <input type="number" step="0.01" min="0" name="valorFaturado" id="med-val-valor" placeholder="0,00" value="${m?.valorFaturado!=null && m?.valorFaturado!==''? m.valorFaturado:''}" ${isReprovada?'disabled':''}>
+        <div class="field-hint">Campo liberado quando o status de validação for FATURADA.</div>
+      </div>
+    </div>`;
+}
+
+function openMedicaoPodaModal(atribId){
+  const x = flatPodaAtribuicoes().find(y=> y.atribuicao.id===Number(atribId));
+  if(!x) return;
+  const m = findMedicaoPoda(atribId);
+  const eq = findEquipe(x.atribuicao.equipeId);
+  const rdo = x.atribuicao.rdoRespostas||{};
+  const res = rdoResumo(x);
+  const imped = rdoImpedimentos(x.atribuicao);
+  const pode = appvMedicaoPoda();
+  const estaAprovada = m?.aprovado===true;
+  const estaReprovada = m?.aprovado===false;
+  const atRdo = m?.rdoData || x.atribuicao;
+  const horarios = RDO_HORARIOS.map(h=> `
+    <tr><td style="font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;">${h.label}</td>
+    <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${atRdo[h.k]||'—'}</td></tr>`).join('');
+  const kms = RDO_KM.map(h=> `
+    <tr><td style="font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;">${h.label}</td>
+    <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${atRdo[h.k]||'—'}</td></tr>`).join('');
+  const condicoes = RDO_QUESTIONS.map(q=> `
+    <tr><td style="font-weight:600;padding:3px 12px 3px 0;">${q.label}</td>
+    <td style="padding:3px 10px;">${String((atRdo.rdoRespostas||{})[q.id]||'')||'—'}</td></tr>`).join('');
+  const observacao = atRdo.observacao||'';
+
+  const banner = estaReprovada
+    ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(224,97,91,.35);background:rgba(224,97,91,.08);border-radius:10px;margin-bottom:16px;">
+        <span style="color:var(--red);flex-shrink:0;margin-top:2px;">${icon('alert',18)}</span>
+        <div>
+          <strong style="color:var(--red);">Medição REPROVADA</strong>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Motivo: <strong>${esc(m?.motivoReprovacao||'—')}</strong><br>Reprovado por <strong>${esc(m?.reprovadoPor?.usuarioNome||'—')}</strong> em <span class="mono">${fmtDateTime(m?.reprovadoEm)}</span>. O responsável pelo RDO deve anexar mais evidências ou editar o registro para reenvio.</div>
+          <button type="button" class="btn btn-sm" data-editar-rdo-med style="margin-top:8px;">${icon('edit',13)} Editar registro RDO</button>
+        </div>
+      </div>`
+    : estaAprovada
+      ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(34,139,34,.35);background:rgba(34,139,34,.07);border-radius:10px;margin-bottom:16px;">
+          <span style="color:var(--green);flex-shrink:0;margin-top:2px;">${icon('check',18)}</span>
+          <div><strong style="color:var(--green);">Medição APROVADA</strong><div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Aprovado por <strong>${esc(m?.aprovadoPor?.usuarioNome||'—')}</strong> em <span class="mono">${fmtDateTime(m?.aprovadoEm)}</span>${m?.motivoAprovacao? ' — Motivo: <strong style="color:#1c7d1c;">'+esc(m.motivoAprovacao)+'</strong>':''}. Preencha os campos de medição abaixo.</div></div>
+        </div>`
+      : (m? '' : `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Este RDO ainda não foi enviado para medição. Utilize o botão "Aprovar" no RDO de PODA.</div>`);
+
+  const body = `
+    ${banner}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div>
+        <h4 style="margin-bottom:8px;">Programação ${podaProgLabel(x.programacao)}</h4>
+        <p class="admin-field-meta" style="margin:2px 0;">OSI: ${esc(x.programacao.osi||'—')} ${zonaBadge(x.programacao.zona)}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Subestação: ${esc(x.programacao.subestacao||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Tipo Rede: ${esc(x.programacao.tipoRede||'—')} · Chave: ${esc(x.programacao.chave||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Data: ${fmtDate(x.atribuicao.dataProgramada)}</p>
+        <div style="margin-top:8px;">${rdoStatusBadge(x.atribuicao.status)}</div>
+      </div>
+      <div>
+        <h4 style="margin-bottom:8px;">Equipe</h4>
+        <p class="admin-field-meta" style="margin:2px 0;"><strong>${esc(equipeLabel(eq))}</strong></p>
+        <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div>
+        <h4 style="margin-bottom:8px;">Dados complementares</h4>
+        <p class="admin-field-meta" style="margin:2px 0;">Nº da Reserva/PEP: ${esc(x.programacao.numeroReserva||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">ASI: ${esc(x.programacao.asi||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">qtdAnomalia: ${esc(x.programacao.qtdAnomalia||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">idSiprog: ${esc(x.programacao.idSiprog||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">OSE: ${esc(x.programacao.ose||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Status Doc.: ${esc(x.programacao.statusDocumentacao||'—')}</p>
+      </div>
+      <div>
+        <h4 style="margin-bottom:8px;">Local de execução</h4>
+        <p class="admin-field-meta" style="margin:2px 0;">${esc(x.programacao.local||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Zona: ${zonaBadge(x.programacao.zona)}</p>
+        ${(x.programacao.local||x.programacao.localLat!=null)? `<a href="${esc(localMapsHref(x.programacao.local,x.programacao.localLat,x.programacao.localLng))}" target="_blank" rel="noopener" style="font-size:12px;color:var(--blue);font-weight:600;">${icon('pin',11)} Abrir no Google Maps</a>`:''}
+      </div>
+    </div>
+    ${String(x.programacao.observacoes||'').trim()? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:6px;">Observações</h4><p style="font-size:12.5px;white-space:pre-wrap;line-height:1.55;">${esc(x.programacao.observacoes)}</p></div>`:''}
+    ${(x.programacao.anexos&&x.programacao.anexos.length)? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:8px;">Anexos do programador</h4>${anexosDisplayHtml(x.programacao.anexos)}</div>`:''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div>
+        <h4 style="margin-bottom:8px;">Horários do RDO</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${horarios}</table>
+      </div>
+      <div>
+        <h4 style="margin-bottom:8px;">KM do Veículo</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${kms}</table>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:8px;">Condições do RDO</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${condicoes}</table>
+      ${imped.length? `<div style="margin-top:10px;">${imped.map(i=>`<span class="badge" style="color:var(--red);background:rgba(224,97,91,.12);margin-right:4px;">${esc(i)}</span>`).join('')}</div>`:''}
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:6px;">Quantidades executadas</h4>
+      <div style="display:flex;gap:14px;margin-bottom:10px;">
+        <span class="badge-prefix">Prev. ${fmtNum(res.prev)}</span>
+        <span class="badge-prefix alt">Exec. ${fmtNum(res.exec)}</span>
+        <span class="badge-prefix" style="color:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};">${res.pct}%</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;">Fotos</th></tr></thead>
+        <tbody>
+          ${((m?.rdoData?.atividades||x.atribuicao.atividades)||[]).map((a,idx)=>{
+            const at = findAtividade(a.atividadeId);
+            const p = parseFloat(a.quantidadePrevista)||0;
+            const e = a.quantidadeExecutada==null? null : parseFloat(a.quantidadeExecutada);
+            const pct = p? Math.round((e||0)/p*100) : 0;
+            const fotos = String(a.fotos||'').split(';;').filter(Boolean);
+            return `<tr style="border-top:1px solid var(--border-soft);">
+              <td style="padding:4px 6px;color:var(--muted-2);">${idx+1}</td>
+              <td class="mono" style="padding:4px 6px;">${esc(at?.codigo||'?')}</td>
+              <td style="padding:4px 6px;">${esc(at?.descricao||'')}</td>
+              <td style="text-align:center;">${esc(at?.unidade||'')}</td>
+              <td style="text-align:center;" class="mono">${p? fmtNum(p):'—'}</td>
+              <td style="text-align:center;" class="mono"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
+              <td style="text-align:center;color:${pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--red)'};font-weight:700;">${p? pct+'%':'—'}</td>
+              <td style="text-align:center;">${fotos.length? `<div class="rdo-fotos" style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">${fotos.map(u=>`<img class="rdo-foto" src="${esc(u)}" alt="foto" title="Ampliar" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:zoom-in;">`).join('')}</div>`:'<span style="color:var(--muted-2);">—</span>'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${String(observacao||'').trim()? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:6px;">Observação da execução</h4><p style="font-size:12.5px;white-space:pre-wrap;line-height:1.55;">${esc(observacao)}</p></div>`:''}
+    ${(m && !estaReprovada)? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);">
+      <h4 style="margin-bottom:4px;">Campos de medição</h4>
+      ${medicaoPodaFormHtml(m)}
+    </div>`:(m === undefined? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);font-size:12.5px;color:var(--muted);">Aprovando este RDO, os campos de medição (Status da Validação, Enviado EQTL e Recolha) ficarão disponíveis para preenchimento.</div>`:'')}
+    <div class="admin-field-meta" style="margin-top:16px;">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
+
+  openModal({
+    title:'Medição PODA — '+podaProgLabel(x.programacao),
+    bodyHtml: body,
+    submitLabel: pode? 'Salvar medição' : 'Fechar',
+    wide:true, maxW:760,
+    footerBtns:[
+      { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'poda') }
+    ],
+    onSubmit:(fd)=>{
+      if(!pode) return true;
+      if(!m || estaReprovada) return true;
+      m.statusValidacao = fd.get('statusValidacao');
+      m.enviadoEqtl = fd.get('enviadoEqtl');
+      m.recolha = fd.get('recolha');
+      m.valorFaturado = String(fd.get('valorFaturado')||'').trim();
+      saveData();
+      toast('Medição salva.');
+      return true;
+    },
+    onMount:(root)=>{
+      root.querySelector('[data-editar-rdo-med]')?.addEventListener('click', ()=>{
+        document.getElementById('modal-root').innerHTML='';
+        editRdoModal(x, podaProgLabel);
+        renderMediçãoPoda();
+      });
+      const stSel = root.querySelector('#med-val-status');
+      if(stSel){
+        const toggleValor = ()=>{
+          const wrap = root.querySelector('[data-valor-faturado]');
+          if(!wrap) return;
+          wrap.style.display = (stSel.value==='FATURADA')? '' : 'none';
+        };
+        stSel.addEventListener('change', toggleValor);
+      }
+    }
+  });
 }
 function renderModuloEmDesenvolvimento(titulo){
   const el = document.getElementById('content');
@@ -7817,7 +8752,7 @@ DB_REF.on('value', snap=>{
   try{ serverData = exists? JSON.parse(snap.val()) : null; }catch(err){ console.error('Falha ao ler dados do Firebase', err); }
   const serverRev = serverData? (serverData.rev||0) : 0;
   const localRev = DB.rev||0;
-  if(serverData && serverRev > localRev){
+  if(serverData && serverRev > localRev && !forceSave){
     try{ localStorage.removeItem('g26_admin_pending'); }catch(e){}
     try{
       DB = mergeData(serverData);
@@ -8141,8 +9076,8 @@ function renderRdoOcNds(){
                   ? `<span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">OC</span>`
                   : `<span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);">NDS</span>`;
                 const detalhes = x.tipo==='OC'
-                  ? [x.ptp&&'PTP: '+x.ptp, x.si&&'SI: '+x.si, x.ose&&'OSE: '+x.ose, x.numeroOC&&'OC: '+x.numeroOC].filter(Boolean).join(' · ')||'—'
-                  : [x.ocorrencia&&'Ocorrência: '+x.ocorrencia].filter(Boolean).join('')||'—';
+                  ? [x.ptp&&'PTP: '+x.ptp, x.si&&'SI: '+x.si, x.ose&&'OSE: '+x.ose, x.numeroOC&&'OC: '+x.numeroOC, x.zona&&'Zona: '+x.zona, x.numeroReserva&&'Reserva/PEP: '+x.numeroReserva].filter(Boolean).join(' · ')||'—'
+                  : [x.ocorrencia&&'Ocorrência: '+x.ocorrencia, x.zona&&'Zona: '+x.zona, x.numeroReserva&&'Reserva/PEP: '+x.numeroReserva].filter(Boolean).join(' · ')||'—';
                 return `
                   <tr data-ocnds-rdo="${x.id}" style="cursor:pointer;" title="Ver detalhes">
                     <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
@@ -8186,7 +9121,8 @@ function openRDOModal(progId, attribId){
         <h4 style="margin-bottom:8px;">Programação ${progGid(x.programacao)}</h4>
         <p class="admin-field-meta" style="margin:2px 0;">${esc(pr?.nome||'—')} <strong>(${esc(pr?.codigo||'—')})</strong></p>
         <p class="admin-field-meta" style="margin:2px 0;">Setor ${esc(pr?.setor||'—')} · Coordenação ${esc(pr?.coordenacao||'—')}</p>
-        <p class="admin-field-meta" style="margin:2px 0;">Ciclo ${esc(x.programacao.ciclo||'—')} · Data ${fmtDate(x.atribuicao.dataProgramada)}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Ciclo ${esc(x.programacao.ciclo||'—')} · Data ${fmtDate(x.atribuicao.dataProgramada)} ${zonaBadge(x.programacao.zona)}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Nº da Reserva/PEP: ${esc(x.programacao.numeroReserva||'—')}</p>
         <div style="margin-top:8px;">${rdoStatusBadge(x.atribuicao.status)}</div>
       </div>
       <div>
@@ -8195,6 +9131,7 @@ function openRDOModal(progId, attribId){
         <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
         <p class="admin-field-meta" style="margin:2px 0;">Eletricistas: ${esc((eq?.eletricistas||[]).filter(Boolean).join(', ')||'—')}</p>
       </div>
     </div>
@@ -8231,7 +9168,7 @@ function openRDOModal(progId, attribId){
         <span class="badge-prefix" style="color:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};">${res.pct}%</span>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;">Fotos</th></tr></thead>
+        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:left;">Estrutura</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;">Fotos</th></tr></thead>
         <tbody>
           ${(x.atribuicao.atividades||[]).map((a,idx)=>{
             const at = findAtividade(a.atividadeId);
@@ -8244,6 +9181,7 @@ function openRDOModal(progId, attribId){
               <td class="mono" style="padding:4px 6px;">${esc(at?.codigo||'?')}</td>
               <td style="padding:4px 6px;">${esc(at?.descricao||'')}</td>
               <td style="text-align:center;">${esc(at?.unidade||'')}</td>
+              <td style="padding:4px 6px;">${esc(a.tipoEstrutura||'—')}</td>
               <td style="text-align:center;" class="mono">${p? fmtNum(p):'—'}</td>
               <td style="text-align:center;" class="mono"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
               <td style="text-align:center;color:${pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--red)'};font-weight:700;">${p? pct+'%':'—'}</td>
@@ -8259,7 +9197,8 @@ function openRDOModal(progId, attribId){
     </div>
     <div class="admin-field-meta">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
 
-  openModal({ title:'RDO — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, footerBtns:[
+  openModal({ title:'RDO — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, maxW:760, footerBtns:[
+    { label: icon('download',14)+' Baixar fotos', cls:'btn', style:'background:var(--green);border-color:var(--green);color:#fff;', onClick: ()=> baixarFotosRdo(x.atribuicao.atividades) },
     { label: icon('edit',14)+' Editar registro', cls:'btn', onClick: ()=> editRdoModal(x) },
     { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOCompleto(x) }
   ] });
@@ -8269,6 +9208,17 @@ function rdoOptionsHtml(q, atual){
   const opts = q.id==='rdo_condicoes'? ['Bom','Nublado','Chuvoso','Impraticável'] : ['Não','Sim'];
   return `<option value="">—</option>${opts.map(o=>`<option ${String(atual||'').trim()===o? 'selected':''}>${o}</option>`).join('')}`;
 }
+async function rdoFotoUpload(files){
+  const urls = [];
+  for(const f of files){
+    try{
+      const blob = await comprimirImagem(f);
+      const u = await uploadToImgbb(blob);
+      if(u) urls.push(u);
+    }catch(e){ /* ignora foto com falha */ }
+  }
+  return urls;
+}
 function editRdoModal(x, gidOf){
   if(!requerEscrita()) return;
   const gidLabel = gidOf || (p=>progGid(p));
@@ -8276,10 +9226,68 @@ function editRdoModal(x, gidOf){
   const horarios = RDO_HORARIOS.map(h=>`<div class="field" style="flex:1;"><label>${h.label}</label><input type="time" name="${h.k}" value="${at[h.k]||''}"></div>`).join('');
   const kmFields = RDO_KM.map(h=>`<div class="field" style="flex:1;"><label>${h.label}</label><input type="number" name="${h.k}" value="${at[h.k]||''}" placeholder="0"></div>`).join('');
   const condicoes = RDO_QUESTIONS.map(q=>`<div class="field"><label>${q.label}</label><select name="${q.id}">${rdoOptionsHtml(q, at.rdoRespostas?.[q.id])}</select></div>`).join('');
-  const ativs = (at.atividades||[]).map((a,idx)=>{
+
+  const novasAtivs = [];
+  const novaAtrib = [{ atividades: novasAtivs }];
+  const fotosExtras = {};
+
+  const fotosThumbsHtml = (urls)=> (urls&&urls.length)? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${urls.map(u=>`<img src="${esc(u)}" alt="foto" style="width:34px;height:34px;object-fit:cover;border-radius:5px;border:1px solid var(--border);">`).join('')}</div>` : '';
+
+  const ativsRows = (at.atividades||[]).map((a,idx)=>{
     const atDef = findAtividade(a.atividadeId);
-    return `<div class="field" style="display:flex;gap:8px;align-items:center;"><span style="flex:1;font-size:12px;"><strong>${esc(atDef?.codigo||'?')}</strong> · ${esc(atDef?.descricao||'')}</span><input type="number" step="0.01" min="0" name="exec_${idx}" value="${a.quantidadeExecutada!=null? a.quantidadeExecutada:''}" style="max-width:110px;" placeholder="Exec."></div>`;
+    const existentes = String(a.fotos||'').split(';;').filter(Boolean);
+    return `
+      <div class="field" data-rdo-exist-row="${idx}" style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--border-soft);">
+        <div style="flex:1;min-width:180px;font-size:12px;"><strong>${esc(atDef?.codigo||'?')}</strong> · ${esc(atDef?.descricao||'')}
+          ${existentes.length? `<div class="admin-field-meta" style="margin-top:2px;">${existentes.length} foto(s) existente(s)</div>`:''}
+          <div class="rdo-edit-fotos-nov" data-fotos-nov="${idx}"></div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="number" step="0.01" min="0" name="exec_${idx}" value="${a.quantidadeExecutada!=null? a.quantidadeExecutada:''}" style="max-width:110px;" placeholder="Exec.">
+          <button type="button" class="btn btn-sm" data-rdo-add-foto="${idx}">${icon('photo',13)} Fotos</button>
+        </div>
+      </div>`;
   }).join('') || '<p class="admin-field-meta">Sem atividades neste registro.</p>';
+
+  function novasRowsHtml(){
+    if(!novasAtivs.length) return '<p class="admin-field-meta" style="margin:8px 0 0;">Nenhuma atividade adicionada ainda.</p>';
+    return novasAtivs.map((n,jdx)=>{
+      const atDef = n.atividadeId? findAtividade(n.atividadeId) : null;
+      return `<div class="activity-row act-ac-row" data-rdo-nova-row="${jdx}" style="padding:8px 0;border-bottom:1px solid var(--border-soft);">
+        <div class="act-ac" data-idx="0" data-jdx="${jdx}">
+          <input type="text" class="act-ac-input" data-idx="0" data-jdx="${jdx}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+          <div class="act-ac-list" data-idx="0" data-jdx="${jdx}" style="display:none;"></div>
+        </div>
+        <input type="number" step="0.01" min="0" class="nov-qty-prev" data-jdx="${jdx}" placeholder="Prev." style="max-width:90px;" value="${n.quantidadePrevista??''}">
+        <input type="number" step="0.01" min="0" class="nov-qty-exec" data-jdx="${jdx}" placeholder="Exec." style="max-width:90px;" value="${n.quantidadeExecutada??''}">
+        <button type="button" class="btn btn-sm" data-nova-add-foto="${jdx}">${icon('photo',13)} Fotos</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-nova-rm="${jdx}" title="Remover">${icon('x',13)}</button>
+        <div class="rdo-edit-fotos-nov" data-nova-fotos="${jdx}" style="flex-basis:100%;">${fotosThumbsHtml(n.fotos)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function paintNovas(root){
+    const el = document.getElementById('rdo-novas-list');
+    if(!el) return;
+    el.innerHTML = novasRowsHtml();
+    bindActAutocomplete(root, novaAtrib, ()=>{}, null);
+  }
+
+  async function pickFotos(onUrls, max){
+    const inp = document.createElement('input');
+    inp.type='file'; inp.accept='image/*'; inp.multiple=true; inp.style.display='none';
+    inp.onchange = async ()=>{
+      if(!inp.files || !inp.files.length){ inp.remove(); return; }
+      const files = Array.from(inp.files).slice(0, max||10);
+      const urls = await rdoFotoUpload(files);
+      if(urls.length){ onUrls(urls); }
+      inp.remove();
+    };
+    document.body.appendChild(inp);
+    inp.click();
+  }
+
   const body = `
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Editando o registro RDO de <strong>${esc(equipeLabel(findEquipe(at.equipeId)))}</strong> — ${esc(gidLabel(x.programacao))}</div>
     <div class="field"><label>Motivo da edição <span class="req">*</span></label><input type="text" name="motivo" required maxlength="200" placeholder="Por que você está editando este registro RDO?"></div>
@@ -8296,12 +9304,57 @@ function editRdoModal(x, gidOf){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px;">${condicoes}</div>
     </div>
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);">
-      <h4 style="font-size:12.5px;margin:0 0 10px;">Quantidades executadas</h4>
-      ${ativs}
+      <h4 style="font-size:12.5px;margin:0 0 10px;">Quantidades executadas (existentes)</h4>
+      ${ativsRows}
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);">
+      <h4 style="font-size:12.5px;margin:0 0 10px;">Adicionar novas atividades</h4>
+      <div id="rdo-novas-list">${novasRowsHtml()}</div>
+      <button type="button" class="btn btn-sm" id="rdo-nova-add" style="margin-top:8px;">${icon('plus',13)} Adicionar atividade</button>
     </div>
     <div class="field" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);"><label>Observação da execução</label><textarea name="obs" rows="3" placeholder="Observação registrada pela equipe">${esc(at.observacao||'')}</textarea></div>`;
   openModal({
-    title:'Editar registro RDO', bodyHtml: body, wide:true, submitLabel:'Salvar alterações',
+    title:'Editar registro RDO', bodyHtml: body, wide:true, maxW:780, submitLabel:'Salvar alterações',
+    onMount:(root)=>{
+      paintNovas(root);
+      root.addEventListener('click', (e)=>{
+        const addF = e.target.closest('[data-rdo-add-foto]');
+        if(addF){
+          const idx = Number(addF.dataset.rdoAddFoto);
+          pickFotos(async urls=>{
+            fotosExtras[idx] = (fotosExtras[idx]||[]).concat(urls);
+            const el = root.querySelector(`[data-fotos-nov="${idx}"]`);
+            if(el) el.innerHTML = fotosThumbsHtml(fotosExtras[idx]);
+          });
+          return;
+        }
+        const nFoto = e.target.closest('[data-nova-add-foto]');
+        if(nFoto){
+          const jdx = Number(nFoto.dataset.novaAddFoto);
+          pickFotos(async urls=>{
+            const n = novasAtivs[jdx];
+            if(n){ n.fotos = (n.fotos||[]).concat(urls); const el = root.querySelector(`[data-nova-fotos="${jdx}"]`); if(el) el.innerHTML = fotosThumbsHtml(n.fotos); }
+          });
+          return;
+        }
+        const rm = e.target.closest('[data-nova-rm]');
+        if(rm){
+          const jdx = Number(rm.dataset.novaRm);
+          if(jdx>-1 && jdx<novasAtivs.length){ novasAtivs.splice(jdx,1); paintNovas(root); }
+          return;
+        }
+        if(e.target.closest('#rdo-nova-add')){
+          novasAtivs.push({ atividadeId:'', quantidadePrevista:'', quantidadeExecutada:'', fotos:[] });
+          paintNovas(root);
+        }
+      });
+      root.addEventListener('input', (e)=>{
+        const prev = e.target.closest('.nov-qty-prev');
+        if(prev){ const n = novasAtivs[Number(prev.dataset.jdx)]; if(n) n.quantidadePrevista = prev.value; return; }
+        const exec = e.target.closest('.nov-qty-exec');
+        if(exec){ const n = novasAtivs[Number(exec.dataset.jdx)]; if(n) n.quantidadeExecutada = exec.value; }
+      });
+    },
     onSubmit:(fd)=>{
       const motivo = String(fd.get('motivo')||'').trim();
       if(!motivo){ toast('Informe o motivo da edição do registro.', 'error'); return false; }
@@ -8314,11 +9367,31 @@ function editRdoModal(x, gidOf){
       (at.atividades||[]).forEach((a,idx)=>{
         const v = fd.get('exec_'+idx);
         a.quantidadeExecutada = (v!==null && String(v).trim()!=='')? parseFloat(v) : null;
+        if(fotosExtras[idx] && fotosExtras[idx].length){
+          const atuais = String(a.fotos||'').split(';;').filter(Boolean);
+          a.fotos = atuais.concat(fotosExtras[idx]).join(';;');
+        }
+      });
+      let addDesc = '';
+      novasAtivs.forEach(n=>{
+        if(!n.atividadeId) return;
+        const atDef = findAtividade(n.atividadeId);
+        const qtdPrev = (n.quantidadePrevista!=='' && n.quantidadePrevista!=null)? parseFloat(n.quantidadePrevista) : null;
+        const qtdExec = (n.quantidadeExecutada!=='' && n.quantidadeExecutada!=null)? parseFloat(n.quantidadeExecutada) : null;
+        at.atividades = at.atividades||[];
+        at.atividades.push({
+          atividadeId: Number(n.atividadeId),
+          quantidadePrevista: qtdPrev,
+          quantidadeExecutada: qtdExec,
+          tipoEstrutura: '',
+          fotos: (n.fotos||[]).join(';;')
+        });
+        addDesc += (addDesc? ', ':'') + (atDef? atDef.codigo+' · '+atDef.descricao : 'atividade');
       });
       at.observacao = obs;
       at.historico = at.historico||[];
-      at.historico.push({...currentAutor(), ts:Date.now(), tipo:'rdo_edicao', de:null, para:'RDO', motivo, obs});
-      registrarEvento('rdo','atribuicao',at.id, gidLabel(x.programacao)+' · '+equipeLabel(findEquipe(at.equipeId)), 'Registro RDO editado · '+motivo+(obs? ' · '+obs:''));
+      at.historico.push({...currentAutor(), ts:Date.now(), tipo:'rdo_edicao', de:null, para:'RDO', motivo, obs, adicionadas: addDesc||undefined});
+      registrarEvento('rdo','atribuicao',at.id, gidLabel(x.programacao)+' · '+equipeLabel(findEquipe(at.equipeId)), 'Registro RDO editado · '+motivo+(addDesc? ' · +'+addDesc:'')+(obs? ' · '+obs:''));
       saveData(); renderContent(); toast('Registro RDO atualizado.');
     }
   });
@@ -8350,12 +9423,13 @@ function printRDOCompleto(x){
       <td style="border:1px solid #999;padding:4px 8px;" class="mono">${esc(at?.codigo||'?')}</td>
       <td style="border:1px solid #999;padding:4px 8px;">${esc(at?.descricao||'')}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;">${esc(at?.unidade||'')}</td>
+      <td style="border:1px solid #999;padding:4px 8px;">${esc(a.tipoEstrutura||'—')}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;">${p? fmtNum(p):'—'}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;font-weight:700;color:${pct>=100?'#1c7d1c':pct>=50?'#b8860b':'#b33'};">${p? pct+'%':'—'}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:right;">${fmtMoney(execVal)}</td>
-    </tr><tr><td colspan="8" style="border:1px solid #999;padding:8px;background:#fafafa;">${fotosHtml}</td></tr>`;
-  }).join('') || '<tr><td colspan="8" style="border:1px solid #999;padding:4px 8px;">Sem atividades registradas.</td></tr>';
+    </tr><tr><td colspan="9" style="border:1px solid #999;padding:8px;background:#fafafa;">${fotosHtml}</td></tr>`;
+  }).join('') || '<tr><td colspan="9" style="border:1px solid #999;padding:4px 8px;">Sem atividades registradas.</td></tr>';
   const hist = x.atribuicao.historico||[];
   const histRows = hist.length? hist.slice().reverse().map(h=>`<tr>
       <td style="border:1px solid #999;padding:4px 8px;">${fmtDateTime(h.ts)}</td>
@@ -8390,7 +9464,7 @@ function printRDOCompleto(x){
     .badge-print{display:inline-block;border:1px solid #999;border-radius:4px;padding:2px 8px;font-size:11px;}
   </style></head><body>
     <h1>Relatório de RDO — Detalhes da Execução</h1>
-    <p class="meta">Programação ${progGid(x.programacao)} · Ciclo ${esc(x.programacao.ciclo||'—')} · Data programada ${fmtDate(x.atribuicao.dataProgramada)}</p>
+    <p class="meta">Programação ${progGid(x.programacao)} · Ciclo ${esc(x.programacao.ciclo||'—')} · Data programada ${fmtDate(x.atribuicao.dataProgramada)} · Zona: ${esc(x.programacao.zona||'—')} · Nº Reserva/PEP: ${esc(x.programacao.numeroReserva||'—')}</p>
     <p class="meta">Gerado por: <strong>${esc(geradoPor)}</strong> em ${fmtDateTime(Date.now())} · Status: ${esc(x.atribuicao.status||'Programado')}</p>
 
     <h2>Dados gerais do projeto</h2>
@@ -8421,6 +9495,7 @@ function printRDOCompleto(x){
       </div>
       <div>
         <p class="meta">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="meta">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
         <p class="meta">Eletricistas: ${esc((eq?.eletricistas||[]).filter(Boolean).join(', ')||'—')}</p>
         <p class="meta">WhatsApp: ${esc(eq?.whatsapp||'—')}</p>
       </div>
@@ -8439,7 +9514,7 @@ function printRDOCompleto(x){
     <h2>Atividades executadas</h2>
     <p class="meta">Previsto: ${fmtNum(res.prev)} · Executado: <strong>${fmtNum(res.exec)}</strong> · Percentual: <strong>${res.pct}%</strong></p>
     <table>
-      <thead><tr><th style="text-align:center;">#</th><th>Código</th><th>Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:right;">Valor exec.</th></tr></thead>
+      <thead><tr><th style="text-align:center;">#</th><th>Código</th><th>Descrição</th><th style="text-align:center;">Un.</th><th>Estrutura</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:right;">Valor exec.</th></tr></thead>
       <tbody>${ativRows}</tbody>
     </table>
 
@@ -8489,19 +9564,20 @@ function printRDOTipoCompleto(x, tipo){
     const fotos = String(a.fotos||'').split(';;').filter(Boolean);
     const fotosHtml = fotos.length? `<div class="fotos">${fotos.map(u=>`<figure><img src="${esc(u)}" alt="Foto da execução da atividade ${idx+1}"><figcaption>Atividade ${at?.codigo||idx+1} — foto ${idx+1}</figcaption></figure>`).join('')}</div>` : '<div style="color:#999;">Sem fotos registradas.</div>';
     const anomCell = tipo==='ose'? `<td style="border:1px solid #999;padding:4px 8px;text-align:center;">${esc(String(a.qtdAnomalia??'—')+' → '+String(a.qtdAnomaliaExecutada??'—'))}</td>` : '';
-    const nCols = tipo==='ose'? 9 : 8;
+    const nCols = tipo==='ose'? 10 : 9;
     return `<tr>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;">${idx+1}</td>
       <td style="border:1px solid #999;padding:4px 8px;" class="mono">${esc(at?.codigo||'?')}</td>
       <td style="border:1px solid #999;padding:4px 8px;">${esc(at?.descricao||'')}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;">${esc(at?.unidade||'')}</td>
+      <td style="border:1px solid #999;padding:4px 8px;">${esc(a.tipoEstrutura||'—')}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;">${pv? fmtNum(pv):'—'}</td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
       <td style="border:1px solid #999;padding:4px 8px;text-align:center;font-weight:700;color:${pct>=100?'#1c7d1c':pct>=50?'#b8860b':'#b33'};">${pv? pct+'%':'—'}</td>
       ${anomCell}
       <td style="border:1px solid #999;padding:4px 8px;text-align:right;">${fmtMoney(execVal)}</td>
     </tr><tr><td colspan="${nCols}" style="border:1px solid #999;padding:8px;background:#fafafa;">${fotosHtml}</td></tr>`;
-  }).join('') || `<tr><td colspan="${tipo==='ose'? 9:8}" style="border:1px solid #999;padding:4px 8px;">Sem atividades registradas.</td></tr>`;
+  }).join('') || `<tr><td colspan="${tipo==='ose'? 10:9}" style="border:1px solid #999;padding:4px 8px;">Sem atividades registradas.</td></tr>`;
   const hist = x.atribuicao.historico||[];
   const histRows = hist.length? hist.slice().reverse().map(h=>`<tr>
       <td style="border:1px solid #999;padding:4px 8px;">${fmtDateTime(h.ts)}</td>
@@ -8517,7 +9593,7 @@ function printRDOTipoCompleto(x, tipo){
     <div class="grid">
       <div>
         <p class="meta"><strong>${esc(gidLabel)}</strong></p>
-        <p class="meta">OSI: ${esc(p.osi||'—')} · Subestação: ${esc(p.subestacao||'—')}</p>
+        <p class="meta">OSI: ${esc(p.osi||'—')} · Subestação: ${esc(p.subestacao||'—')} · Zona: ${esc(p.zona||'—')} · Nº Reserva/PEP: ${esc(p.numeroReserva||'—')}</p>
         <p class="meta">Tipo Rede: ${esc(p.tipoRede||'—')} · Chave: ${esc(p.chave||'—')}</p>
         <p class="meta">ID-SIPROG: ${esc(p.idSiprog||'—')} · OSE: ${esc(p.ose||'—')}</p>
       </div>
@@ -8531,7 +9607,7 @@ function printRDOTipoCompleto(x, tipo){
     <div class="grid">
       <div>
         <p class="meta"><strong>${esc(gidLabel)}</strong></p>
-        <p class="meta">Município: ${esc(p.municipio||'—')} · Subestação: ${esc(p.subestacao||'—')}</p>
+        <p class="meta">Município: ${esc(p.municipio||'—')} · Subestação: ${esc(p.subestacao||'—')} · Zona: ${esc(p.zona||'—')} · Nº Reserva/PEP: ${esc(p.numeroReserva||'—')}</p>
         <p class="meta">Tipo Intervenção: ${esc(p.tipoIntervencao||'—')}</p>
         <p class="meta">Observações: ${esc(p.observacoes||'—')}</p>
       </div>
@@ -8579,6 +9655,7 @@ function printRDOTipoCompleto(x, tipo){
       </div>
       <div>
         <p class="meta">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="meta">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
         <p class="meta">Eletricistas: ${esc((eq?.eletricistas||[]).filter(Boolean).join(', ')||'—')}</p>
         <p class="meta">WhatsApp: ${esc(eq?.whatsapp||'—')}</p>
       </div>
@@ -8597,7 +9674,7 @@ function printRDOTipoCompleto(x, tipo){
     <h2>Atividades executadas</h2>
     <p class="meta">Previsto: ${fmtNum(res.prev)} · Executado: <strong>${fmtNum(res.exec)}</strong> · Percentual: <strong>${res.pct}%</strong></p>
     <table>
-      <thead><tr><th style="text-align:center;">#</th><th>Código</th><th>Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th>${tipo==='ose'? '<th style="text-align:center;" title="Anomalias programadas → executadas">Anom.</th>':''}<th style="text-align:right;">Valor exec.</th></tr></thead>
+      <thead><tr><th style="text-align:center;">#</th><th>Código</th><th>Descrição</th><th style="text-align:center;">Un.</th><th>Estrutura</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th>${tipo==='ose'? '<th style="text-align:center;" title="Anomalias programadas → executadas">Anom.</th>':''}<th style="text-align:right;">Valor exec.</th></tr></thead>
       <tbody>${ativRows}</tbody>
     </table>
 
@@ -8668,6 +9745,7 @@ function exportRDOTipo(registros, tipo){
         'Código Atividade': at?.codigo||'—',
         'Descrição Atividade': at?.descricao||'',
         'Unidade': at?.unidade||'',
+        'Tipo Estrutura Atividade': a.tipoEstrutura||'',
         'Qtd Prevista Atividade': a.quantidadePrevista||'',
         'Qtd Executada Atividade': e!=null? e:'',
         'Percentual Atividade': pv? Math.round((e||0)/pv*100)+'%':'',
@@ -8783,6 +9861,7 @@ function exportRDOExcel(registros){
         'Código Atividade': at?.codigo||'—',
         'Descrição Atividade': at?.descricao||'',
         'Unidade': at?.unidade||'',
+        'Tipo Estrutura Atividade': a.tipoEstrutura||'',
         'Qtd Prevista Atividade': a.quantidadePrevista||'',
         'Qtd Executada Atividade': e!=null? e:'',
         'Percentual Atividade': p? Math.round((e||0)/p*100)+'%':'',
