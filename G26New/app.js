@@ -215,7 +215,8 @@ const TELAS = [
   { id:'alertas',         label:'Alertas' },
   { id:'medição',         label:'Medição' },
   { id:'medição-projetos',label:'Medição - Projetos' },
-  { id:'medição-ocnds',   label:'Medição - OC/NDS' },
+  { id:'medição-nds',      label:'Medição - NDS' },
+  { id:'medição-ose',      label:'Medição - OSE' },
   { id:'medição-poda',    label:'Medição - PODA' },
   { id:'equipes',         label:'Equipes' },
   { id:'atividades',      label:'Atividades' },
@@ -267,7 +268,8 @@ const NAV_ITEMS = [
   { id:'medição',     label:'Medição',       sub:'Medição de quantidades e aferições', icon:'ruler', children:[
     { id:'medição-projetos', label:'Projetos', sub:'Medição por projetos', icon:'folder' },
     { id:'medição-oc',       label:'OC',         sub:'Medição OC', icon:'siren' },
-    { id:'medição-ndsose',   label:'NDS/OSE',    sub:'Medição NDS e OSE', icon:'siren' },
+    { id:'medição-nds',      label:'NDS',    sub:'Medição NDS', icon:'siren' },
+    { id:'medição-ose',      label:'OSE',    sub:'Medição OSE', icon:'siren' },
     { id:'medição-poda',     label:'PODA', sub:'Medição de poda', icon:'tree' },
   ]},
   { id:'equipes',     label:'Equipes',       sub:'Cadastro de equipes de campo', icon:'users' },
@@ -4293,7 +4295,7 @@ function renderContent(){
     currentView = 'dashboard';
     renderNav();
   }
-  const map = { dashboard: renderDashboard, alertas: renderAlertas, 'medição': renderMedição, 'medição-projetos': renderMediçãoProjetos, 'medição-oc': renderMediçãoOC, 'medição-ndsose': renderMediçãoNDSOSE, 'medição-poda': renderMediçãoPoda, equipes: renderEquipes, atividades: renderAtividades, projetos: renderProjetos, 'projetos-cadastro': renderProjetos, osepoda: renderOsePoda, ose: renderOse, 'ose-programacoes': renderOseProgramacoes, 'ose-rdo': renderOseRdo, poda: renderPoda, 'poda-programacoes': renderPodaProgramacoes, 'poda-rdo': renderPodaRdo, ocnds: renderOcNds, avanco: renderAvanco, programacoes: renderProgramacoes, historico: renderHistorico, admin: renderAdmin, 'rdo-projetos': renderRdoProjetos, 'rdo-ocnds': renderRdoOcNds };
+  const map = { dashboard: renderDashboard, alertas: renderAlertas, 'medição': renderMedição, 'medição-projetos': renderMediçãoProjetos, 'medição-oc': renderMediçãoOC, 'medição-nds': renderMediçãoNDS, 'medição-ose': renderMediçãoOSE, 'medição-poda': renderMediçãoPoda, equipes: renderEquipes, atividades: renderAtividades, projetos: renderProjetos, 'projetos-cadastro': renderProjetos, osepoda: renderOsePoda, ose: renderOse, 'ose-programacoes': renderOseProgramacoes, 'ose-rdo': renderOseRdo, poda: renderPoda, 'poda-programacoes': renderPodaProgramacoes, 'poda-rdo': renderPodaRdo, ocnds: renderOcNds, avanco: renderAvanco, programacoes: renderProgramacoes, historico: renderHistorico, admin: renderAdmin, 'rdo-projetos': renderRdoProjetos, 'rdo-ocnds': renderRdoOcNds };
   (map[currentView]||renderDashboard)();
 }
 
@@ -5759,7 +5761,7 @@ function renderPoda(){ setView('poda-programacoes'); }
 const STATUS_DOC_OPCOES = ['Confirmado','Em elaboração','Elaborado','Validado'];
 const TIPO_REDE_OPCOES = ['MT','BT'];
 const STATUS_PODA = ['Programado','Em Execução','Concluído','Reprogramado','Cancelado'];
-const STATUS_VALIDACAO_OPCOES = ['ENVIADA','REJEITADA','FATURADA','ERP SISTÊMICO'];
+const STATUS_VALIDACAO_OPCOES = ['ENVIADA','REJEITADA','FATURADA','ERRO SISTÊMICO'];
 const SIM_NAO_OPCOES = ['SIM','NÃO'];
 let podaFilters = (()=>{ const r=monthRangeISO(); return { busca:'', equipe:'', status:'', dataDe:r.de, dataAte:r.ate, modo:'lista', calView:'mes', calDay:todayISO() }; })();
 let podaCalRef = new Date();
@@ -5788,8 +5790,8 @@ function findMedicaoPoda(atribId){
 }
 function medicaoPodaValidacaoBadge(status){
   const s = status||'';
-  const cor = { 'ENVIADA':'var(--blue)','REJEITADA':'var(--red)','FATURADA':'var(--green)','ERP SISTÊMICO':'var(--accent)' }[s]||'var(--muted)';
-  const bg = { 'ENVIADA':'rgba(78,140,235,.14)','REJEITADA':'rgba(224,97,91,.14)','FATURADA':'rgba(34,139,34,.14)','ERP SISTÊMICO':'rgba(224,164,88,.14)' }[s]||'rgba(128,128,128,.14)';
+  const cor = { 'ENVIADA':'var(--blue)','REJEITADA':'var(--red)','FATURADA':'var(--green)','ERRO SISTÊMICO':'var(--accent)' }[s]||'var(--muted)';
+  const bg = { 'ENVIADA':'rgba(78,140,235,.14)','REJEITADA':'rgba(224,97,91,.14)','FATURADA':'rgba(34,139,34,.14)','ERRO SISTÊMICO':'rgba(224,164,88,.14)' }[s]||'rgba(128,128,128,.14)';
   return s? `<span class="badge" style="color:${cor};background:${bg};">${esc(s)}</span>` : '<span style="color:var(--muted-2);">—</span>';
 }
 function simNaoBadge(v){
@@ -5848,6 +5850,7 @@ function aprovarRdoParaMedicao(x){
           atribuicaoId: atribId,
           rdoData: structuredClone(x.atribuicao),
           statusValidacao: '',
+          cicloFaturamento: '',
           enviadoEqtl: '',
           recolha: '',
           valorFaturado: '',
@@ -7641,8 +7644,11 @@ function renderMediçãoProjetos(){
 function renderMediçãoOC(){
   renderModuloEmDesenvolvimento('Medição – OC');
 }
-function renderMediçãoNDSOSE(){
-  renderModuloEmDesenvolvimento('Medição – NDS/OSE');
+function renderMediçãoNDS(){
+  renderModuloEmDesenvolvimento('Medição – NDS');
+}
+function renderMediçãoOSE(){
+  renderModuloEmDesenvolvimento('Medição – OSE');
 }
 function medicaoPodaRegistros(){
   return flatPodaAtribuicoes().filter(rdoTemExecucao);
@@ -7712,6 +7718,7 @@ function renderMediçãoPoda(){
               <th style="text-align:center;">EQTL</th>
               <th style="text-align:center;">Recolha</th>
               <th style="text-align:center;">Valor Faturado</th>
+              <th style="text-align:center;">Ciclo Fat.</th>
               <th style="text-align:center;width:120px;">Ação</th>
             </tr>
           </thead>
@@ -7749,6 +7756,7 @@ function renderMediçãoPoda(){
                   <td style="text-align:center;">${simNaoBadge(m?.enviadoEqtl)}</td>
                   <td style="text-align:center;">${simNaoBadge(m?.recolha)}</td>
                   <td style="text-align:center;" class="mono">${m?.valorFaturado!=null && m?.valorFaturado!==''? '<strong>'+fmtMoney(m.valorFaturado)+'</strong>' : '—'}</td>
+                  <td style="text-align:center;" class="mono">${m?.cicloFaturamento? '<span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">'+esc(m.cicloFaturamento)+'</span>' : '—'}</td>
                   <td style="text-align:center;white-space:nowrap;">${acao}</td>
                 </tr>`;
             }).join('')}
@@ -7831,6 +7839,7 @@ function aprovarMedicaoPoda(atribId){
         atribuicaoId: r.atribuicao.id,
         rdoData: structuredClone(r.atribuicao),
         statusValidacao: '',
+        cicloFaturamento: '',
         enviadoEqtl: '',
         recolha: '',
         valorFaturado: '',
@@ -7918,6 +7927,11 @@ function medicaoPodaFormHtml(m){
   return `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px;">
       <div class="field" style="margin:0;">
+        <label>CICLO FATURAMENTO</label>
+        <input type="text" name="cicloFaturamento" class="ciclo-input" maxlength="13" placeholder="CICLO-XX/XXXX" value="${esc(m?.cicloFaturamento||'')}" ${isReprovada?'disabled':''}>
+        <div class="field-hint">💡 Digite apenas o mês e o ano (ex.: 01/2026). O prefixo "CICLO-" é automático.</div>
+      </div>
+      <div class="field" style="margin:0;">
         <label>STATUS DA VALIDAÇÃO</label>
         <select name="statusValidacao" id="med-val-status" ${isReprovada?'disabled':''}>
           <option value="">Selecione...</option>
@@ -7974,15 +7988,15 @@ function openMedicaoPodaModal(atribId){
     ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(224,97,91,.35);background:rgba(224,97,91,.08);border-radius:10px;margin-bottom:16px;">
         <span style="color:var(--red);flex-shrink:0;margin-top:2px;">${icon('alert',18)}</span>
         <div>
-          <strong style="color:var(--red);">Medição REPROVADA</strong>
-          <div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Motivo: <strong>${esc(m?.motivoReprovacao||'—')}</strong><br>Reprovado por <strong>${esc(m?.reprovadoPor?.usuarioNome||'—')}</strong> em <span class="mono">${fmtDateTime(m?.reprovadoEm)}</span>. O responsável pelo RDO deve anexar mais evidências ou editar o registro para reenvio.</div>
+          <strong style="color:var(--red);">Medição REPROVADA pelo usuário ${esc(m?.reprovadoPor?.usuarioNome||'—')}</strong>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Motivo: <strong>${esc(m?.motivoReprovacao||'—')}</strong><br>Em <span class="mono">${fmtDateTime(m?.reprovadoEm)}</span>. O responsável pelo RDO deve anexar mais evidências ou editar o registro para reenvio.</div>
           <button type="button" class="btn btn-sm" data-editar-rdo-med style="margin-top:8px;">${icon('edit',13)} Editar registro RDO</button>
         </div>
       </div>`
     : estaAprovada
       ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(34,139,34,.35);background:rgba(34,139,34,.07);border-radius:10px;margin-bottom:16px;">
           <span style="color:var(--green);flex-shrink:0;margin-top:2px;">${icon('check',18)}</span>
-          <div><strong style="color:var(--green);">Medição APROVADA</strong><div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Aprovado por <strong>${esc(m?.aprovadoPor?.usuarioNome||'—')}</strong> em <span class="mono">${fmtDateTime(m?.aprovadoEm)}</span>${m?.motivoAprovacao? ' — Motivo: <strong style="color:#1c7d1c;">'+esc(m.motivoAprovacao)+'</strong>':''}. Preencha os campos de medição abaixo.</div></div>
+          <div><strong style="color:var(--green);">Medição APROVADA pelo usuário ${esc(m?.aprovadoPor?.usuarioNome||'—')}</strong><div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Em <span class="mono">${fmtDateTime(m?.aprovadoEm)}</span>${m?.motivoAprovacao? ' — Motivo: <strong style="color:#1c7d1c;">'+esc(m.motivoAprovacao)+'</strong>':''}. Preencha os campos de medição abaixo.</div></div>
         </div>`
       : (m? '' : `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Este RDO ainda não foi enviado para medição. Utilize o botão "Aprovar" no RDO de PODA.</div>`);
 
@@ -8088,6 +8102,12 @@ function openMedicaoPodaModal(atribId){
     onSubmit:(fd)=>{
       if(!pode) return true;
       if(!m || estaReprovada) return true;
+      const ciclo = cicloMask(fd.get('cicloFaturamento'));
+      if(ciclo && !isCicloValido(ciclo)){
+        toast('Informe o ciclo de faturamento no formato CICLO-XX/XXXX (ex.: CICLO-01/2026).', 'error');
+        return false;
+      }
+      m.cicloFaturamento = ciclo;
       m.statusValidacao = fd.get('statusValidacao');
       m.enviadoEqtl = fd.get('enviadoEqtl');
       m.recolha = fd.get('recolha');
@@ -8097,6 +8117,7 @@ function openMedicaoPodaModal(atribId){
       return true;
     },
     onMount:(root)=>{
+      bindCicloMasks(root);
       root.querySelector('[data-editar-rdo-med]')?.addEventListener('click', ()=>{
         document.getElementById('modal-root').innerHTML='';
         editRdoModal(x, podaProgLabel);

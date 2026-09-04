@@ -72,6 +72,20 @@ function saveQueue(q){ try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); 
 function loadCache(){ try{ return JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); }catch(e){ return null; } }
 function saveCache(db){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(db)); }catch(e){} }
 
+/* Rascunho das atividades/editores da equipe: sobrevive ao recarregar a página,
+   de modo que atividades adicionadas e quantidades informadas pela equipe NÃO somem
+   antes do envio. Só é apagado após o envio/sincronização bem-sucedido. */
+function draftKey(){ return 'g26_equipe_draft_' + teamKey(); }
+function loadEditorsDraft(){
+  try{ return JSON.parse(localStorage.getItem(draftKey())||'null'); }catch(e){ return null; }
+}
+function saveEditorsDraft(){
+  try{ localStorage.setItem(draftKey(), JSON.stringify(editors)); }catch(e){ /* quota: mantém em memória */ }
+}
+function clearEditorsDraft(){
+  try{ localStorage.removeItem(draftKey()); }catch(e){}
+}
+
 /* --- helpers --- */
 function esc(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function fmtDate(iso){ if(!iso) return '—'; const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; }
@@ -277,6 +291,7 @@ function dbToEditors(db){
     if(!editors[item.equipeId] || !editors[item.equipeId].length){
       editors[item.equipeId] = [{atividadeId:'',quantidadePrevista:'',quantidadeExecutada:'',tipoEstrutura:''}];
     }
+    mergeEditorsDraft();
     return item;
   }
 
@@ -289,7 +304,29 @@ function dbToEditors(db){
   atrs.forEach(at=>{
     editors[at.equipeId] = (at.atividades||[]).map(a=>({ atividadeId:String(a.atividadeId), quantidadePrevista: a.quantidadePrevista??'', quantidadeExecutada: a.quantidadeExecutada??'', qtdAnomalia: a.qtdAnomalia??'', qtdAnomaliaExecutada: a.qtdAnomaliaExecutada??'', tipoEstrutura: a.tipoEstrutura||'' }));
   });
+  mergeEditorsDraft();
   return pg;
+}
+
+/* Mescla o rascunho salvo no aparelho com os dados vindos do banco/servidor.
+   O rascunho preserva as atividades adicionadas pela equipe e suas quantidades
+   para que não sumam ao recarregar a página (antes do envio). */
+function mergeEditorsDraft(){
+  const draft = loadEditorsDraft();
+  if(!draft || typeof draft !== 'object') return;
+  Object.keys(draft).forEach(eqId=>{
+    const rows = draft[eqId];
+    if(!Array.isArray(rows) || !rows.length) return;
+    if(!editors[eqId]) editors[eqId] = [];
+    editors[eqId] = rows.map(r=>({
+      atividadeId: String(r.atividadeId||''),
+      quantidadePrevista: (r.quantidadePrevista!=null)? r.quantidadePrevista : '',
+      quantidadeExecutada: (r.quantidadeExecutada!=null)? r.quantidadeExecutada : '',
+      qtdAnomalia: (r.qtdAnomalia!=null)? r.qtdAnomalia : '',
+      qtdAnomaliaExecutada: (r.qtdAnomaliaExecutada!=null)? r.qtdAnomaliaExecutada : '',
+      tipoEstrutura: r.tipoEstrutura||''
+    }));
+  });
 }
 
 /* --- RDO QUESTIONNAIRE --- */
@@ -630,11 +667,11 @@ function render(){
       </div>`;
     document.getElementById('team-obs').addEventListener('input', e=>{ observacao = e.target.value; });
     bindTeamActAutocomplete(root);
-    root.querySelectorAll('.te-qty').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.teq.split('|'); editors[eid][Number(idx)].quantidadePrevista = e.target.value; }));
-    root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; }));
-    root.querySelectorAll('.te-tipo-estrutura').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tte.split('|'); editors[eid][Number(idx)].tipoEstrutura = e.target.value; }));
-    root.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', e=>{ const [eid,idx]=e.currentTarget.dataset.eqRm.split('|'); editors[eid].splice(Number(idx),1); resetFotos(); render(); }));
-    root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',quantidadeExecutada:'',tipoEstrutura:''}); resetFotos(); render(); }));
+    root.querySelectorAll('.te-qty').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.teq.split('|'); editors[eid][Number(idx)].quantidadePrevista = e.target.value; saveEditorsDraft(); }));
+    root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; saveEditorsDraft(); }));
+    root.querySelectorAll('.te-tipo-estrutura').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tte.split('|'); editors[eid][Number(idx)].tipoEstrutura = e.target.value; saveEditorsDraft(); }));
+    root.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', e=>{ const [eid,idx]=e.currentTarget.dataset.eqRm.split('|'); editors[eid].splice(Number(idx),1); divergeFotosOnRemove(eid,Number(idx)); render(); }));
+    root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',quantidadeExecutada:'',tipoEstrutura:''}); saveEditorsDraft(); render(); }));
     root.querySelectorAll('.te-camera').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.tec.split('|'); openPhotoPicker(eid, Number(idx), 'camera'); }));
     root.querySelectorAll('.te-gallery').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.teg.split('|'); openPhotoPicker(eid, Number(idx), 'gallery'); }));
     root.querySelectorAll('.te-photo-hint').forEach(h=>{
@@ -726,12 +763,12 @@ function render(){
     </div>`;
   document.getElementById('team-obs').addEventListener('input', e=>{ observacao = e.target.value; });
   bindTeamActAutocomplete(root);
-  root.querySelectorAll('.te-qty').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.teq.split('|'); editors[eid][Number(idx)].quantidadePrevista = e.target.value; }));
-  root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; }));
-  root.querySelectorAll('.te-tipo-estrutura').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tte.split('|'); editors[eid][Number(idx)].tipoEstrutura = e.target.value; }));
-  root.querySelectorAll('.te-anom').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tea.split('|'); editors[eid][Number(idx)].qtdAnomaliaExecutada = e.target.value; }));
-  root.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', e=>{ const [eid,idx]=e.currentTarget.dataset.eqRm.split('|'); editors[eid].splice(Number(idx),1); resetFotos(); render(); }));
-  root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',qtdAnomaliaExecutada:'',tipoEstrutura:''}); resetFotos(); render(); }));
+  root.querySelectorAll('.te-qty').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.teq.split('|'); editors[eid][Number(idx)].quantidadePrevista = e.target.value; saveEditorsDraft(); }));
+  root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; saveEditorsDraft(); }));
+  root.querySelectorAll('.te-tipo-estrutura').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tte.split('|'); editors[eid][Number(idx)].tipoEstrutura = e.target.value; saveEditorsDraft(); }));
+  root.querySelectorAll('.te-anom').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tea.split('|'); editors[eid][Number(idx)].qtdAnomaliaExecutada = e.target.value; saveEditorsDraft(); }));
+  root.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', e=>{ const [eid,idx]=e.currentTarget.dataset.eqRm.split('|'); editors[eid].splice(Number(idx),1); divergeFotosOnRemove(eid,Number(idx)); render(); }));
+  root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',qtdAnomaliaExecutada:'',tipoEstrutura:''}); saveEditorsDraft(); render(); }));
   root.querySelectorAll('.te-camera').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.tec.split('|'); openPhotoPicker(eid, Number(idx), 'camera'); }));
   root.querySelectorAll('.te-gallery').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.teg.split('|'); openPhotoPicker(eid, Number(idx), 'gallery'); }));
   root.querySelectorAll('.te-photo-hint').forEach(h=>{
@@ -925,6 +962,7 @@ function bindTeamActAutocomplete(root){
       const r = row();
       if(r) r.atividadeId = id;
       syncInput();
+      saveEditorsDraft();
       const rowEl = ac.closest('.activity-row');
       if(rowEl){
         const qty = rowEl.querySelector('.te-qty');
@@ -1005,14 +1043,28 @@ function atualizarFotosUI(eqId, idx){
 }
 function resetFotos(){
   const persisted = loadFotosPersist() || {};
-  _fotos = {};
   Object.keys(editors).forEach(eqId=>{
+    const inMem = _fotos[eqId] || [];
     const saved = persisted[eqId] || [];
-    _fotos[eqId] = editors[eqId].map((_a, i)=> (saved[i]||[]).slice());
+    _fotos[eqId] = editors[eqId].map((_a, i)=> {
+      const mem = (inMem[i]||[]).slice();
+      const per = (saved[i]||[]).slice();
+      if(mem.length) return mem;
+      return per;
+    });
   });
 }
 function fotosCount(eqId, idx){
   return ((_fotos[eqId]||[])[idx]||[]).length;
+}
+/* Ao remover uma atividade, remove também as fotos daquela linha e
+   desloca as linhas seguintes, mantendo o alinhamento fotos <-> atividades. */
+function divergeFotosOnRemove(eqId, idx){
+  const arr = _fotos[eqId] || [];
+  arr.splice(Number(idx), 1);
+  _fotos[eqId] = arr;
+  persistFotos();
+  saveEditorsDraft();
 }
 async function uploadToImGbb(f){
   const fd = new FormData();
@@ -1136,6 +1188,7 @@ async function syncNowOcNds(){
     }
     saveQueue([]);
     try{ localStorage.removeItem(fotosLocalKey()); }catch(e){}
+    clearEditorsDraft();
     setStatus('Alterações enviadas ✓', 'ok');
     toast('Alterações enviadas ao escritório.');
   }catch(err){
@@ -1320,6 +1373,7 @@ async function syncNow(){
       DB = db; saveCache(db); dbToEditors(db);
     }
     saveQueue([]);
+    clearEditorsDraft();
     setStatus('Alterações enviadas ✓', 'ok');
     toast('Alterações enviadas ao escritório.');
     render();

@@ -382,6 +382,9 @@ a.anexo-thumb{text-decoration:none;}
 .te-qty{text-align:right;}
 .team-atividade{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;}
 .team-atividade .activity-row{margin-bottom:8px;}
+#team-body .act-ac-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%;box-sizing:border-box;}
+#team-body .act-ac-row .act-ac{flex:1 1 100%;min-width:0;position:relative;}
+#team-body .act-ac-row .act-qty,#team-body .act-ac-row .act-anom{flex:1 1 88px;max-width:120px;width:auto;}
 .activity-fotos{display:flex;flex-direction:column;gap:8px;}
 .te-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .te-estrutura{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
