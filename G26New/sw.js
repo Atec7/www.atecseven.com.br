@@ -1,7 +1,7 @@
 /* G26 New · Service Worker
    Network-first para a origem e para os SDKs do Firebase;
    quando offline, usa o cache salvo na última visita. */
-const CACHE = 'g26-new-v6';
+const CACHE = 'g26-new-v8';
 
 self.addEventListener('install', ()=>{
   self.skipWaiting();

@@ -4183,8 +4183,9 @@ function paintAdminUsersList(){
           <label style="display:flex;align-items:center;gap:4px;cursor:pointer;justify-content:center;"><input type="radio" name="perm_${t.id}" value="leitura" ${val==='leitura'?'checked':''} style="margin:0;"> Ver</label>
           <label style="display:flex;align-items:center;gap:4px;cursor:pointer;justify-content:center;"><input type="radio" name="perm_${t.id}" value="edicao" ${val==='edicao'?'checked':''} style="margin:0;"> Editar</label>
         </div>`;
-      }).join('');
-      const body = `
+}).join('');
+
+  const body = `
       <div class="field"><label>Nome <span class="req">*</span></label><input type="text" name="nome" required value="${esc(u?.nome||'')}" placeholder="Nome do usuário"></div>
       <div class="field"><label>Login <span class="req">*</span></label><input type="text" name="login" required value="${esc(u?.login||'')}" placeholder="Ex: jose.silva"></div>
       <div class="field"><label>Senha <span class="req">*</span></label><input type="password" name="senha" ${u? '': 'required'} value="" placeholder="${u? 'Deixe em branco para manter a atual':'Defina uma senha'}"></div>
@@ -7674,10 +7675,18 @@ function openOcNdsDetalhe(id){
           ${STATUS_OC_NDS.filter(s=>s!==x.status).map(s=>`<button type="button" class="btn btn-sm" data-ocnds-set-status="${x.id}|${s}">→ ${s}</button>`).join('')}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-sm" data-ocnds-whats-detail="${x.id}">${icon('whatsapp',13)} WhatsApp</button>
           <button type="button" class="btn btn-sm" data-ocnds-edit-detail="${x.id}">${icon('edit',13)} Editar</button>
           <button type="button" class="btn btn-sm" data-ocnds-hist-detail="${x.id}">${icon('history',13)} Histórico</button>
         </div>
-      </div>` : `<div class="dtl-actions"><div style="font-size:13px;color:var(--green);font-weight:600;">${icon('check',14)} Ocorrência concluída e registrada no RDO.</div></div>`}
+      </div>` : `<div class="dtl-actions">
+        <div style="font-size:13px;color:var(--green);font-weight:600;">${icon('check',14)} Ocorrência concluída e registrada no RDO.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-sm" data-ocnds-whats-detail="${x.id}">${icon('whatsapp',13)} Enviar WhatsApp</button>
+          <button type="button" class="btn btn-sm" data-ocnds-rdo-editar-dtl="${x.id}">${icon('edit',13)} Editar RDO</button>
+          <button type="button" class="btn btn-sm" data-ocnds-print-dtl="${x.id}">${icon('print',13)} Gerar PDF</button>
+        </div>
+      </div>`}
     </div>`;
 
   openModal({
@@ -7687,6 +7696,11 @@ function openOcNdsDetalhe(id){
     submitLabel: 'Fechar',
     onSubmit: ()=>{},
     onMount: (root) => {
+      root.querySelectorAll('[data-ocnds-whats-detail]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          encaminharWhatsOcNds(Number(btn.dataset.ocndsWhatsDetail));
+        });
+      });
       root.querySelectorAll('[data-ocnds-set-status]').forEach(btn=>{
         btn.addEventListener('click', ()=>{
           const [itemId, novoStatus] = btn.dataset.ocndsSetStatus.split('|');
@@ -7701,6 +7715,18 @@ function openOcNdsDetalhe(id){
       root.querySelectorAll('.dtl-exec-foto').forEach(div=>{
         div.addEventListener('click', ()=>{
           try{ openLightbox(JSON.parse(div.dataset.fotos), Number(div.dataset.idx)); }catch(e){}
+        });
+      });
+      root.querySelectorAll('[data-ocnds-rdo-editar-dtl]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const it = (DB.ocnds||[]).find(y=>y.id===Number(btn.dataset.ocndsRdoEditarDtl));
+          editRdoOcNdsModal(it);
+        });
+      });
+      root.querySelectorAll('[data-ocnds-print-dtl]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const it = (DB.ocnds||[]).find(y=>y.id===Number(btn.dataset.ocndsPrintDtl));
+          if(it) printOcNdsCompleto(it);
         });
       });
     }
@@ -7744,6 +7770,42 @@ function encaminharWhatsOcNds(id){
     : `Ocorrência: ${x.ocorrencia||'—'}`;
   const texto = `🔔 *OC/NDS ${x.tipo} — ${x.gid||'G26-'+String(x.id).padStart(7,'0')}*\n\nSetor: ${x.setor||'—'}\nCoordenação: ${x.coordenacao||'—'}\nZona: ${x.zona||'—'}\nNº Reserva/PEP: ${x.numeroReserva||'—'}\nStatus: ${x.status}\nData: ${fmtDate(x.data)}\n${detalhes}\n\nAcesse os detalhes e preencha as informações:\n${link}`;
   window.open(waLink(eq.whatsapp, texto), '_blank');
+}
+
+function encaminharWhatsRdoOcNds(id){
+  const x = (DB.ocnds||[]).find(y=>y.id===Number(id));
+  if(!x) return;
+  const eq = findEquipe(x.equipeId);
+  if(!eq || !eq.whatsapp){ toast('Equipe sem WhatsApp cadastrado.', 'error'); return; }
+  const rdo = x.rdoRespostas||{};
+  const res = ocndsResumo(x);
+  const imped = ocndsRdoImpedimentos(x);
+  const horarios = [x.rdoHorarioChegada, x.rdoHorarioInicio, x.rdoHorarioFinalizacao, x.rdoHorarioSaidaObra].filter(Boolean).join(' → ')||'—';
+  const ativs = (x.atividades||[]).map((a,idx)=>{
+    const at = findAtividade(a.atividadeId);
+    const e = a.quantidadeExecutada==null? null : parseFloat(a.quantidadeExecutada);
+    const vu = at?.valorUnitario||0;
+    return `${idx+1}. ${at?.codigo||'?'} · ${at?.descricao||''} — Exec: ${e!=null? fmtNum(e):'—'} ${at?.unidade||''}${e!=null&&vu? ' · Valor R$ '+fmtMoney(e*vu):''}`;
+  }).join('\n') || '—';
+  const texto = [
+    `📋 *RDO ${x.tipo} — ${ocndsGid(x)}*`,
+    ``,
+    `Equipe: ${equipeLabel(eq)}${eq?.supervisor? ' · '+eq.supervisor:''}`,
+    `Data: ${fmtDate(x.data)}`,
+    `Horários: ${horarios}`,
+    `Clima: ${rdo.rdo_condicoes|| x.rdoCondicoes|| '—'}`,
+    imped.length? `Impedimentos: ${imped.join(', ')}` : null,
+    ``,
+    `*Atividades executadas:*`,
+    ativs,
+    ``,
+    `Total executado: ${fmtNum(res.exec)} · Valor: ${fmtMoney(ocndsTotalValor(x))}`,
+    ``,
+    `Confirmado pela equipe em ${ocndsRdoConfData(x)}`
+  ].filter(l=> l!==null && String(l).trim()!=='').join('\n');
+  window.open(waLink(eq.whatsapp, texto), '_blank');
+  toast('RDO '+x.tipo+' encaminhado para '+equipeLabel(eq)+' via WhatsApp.');
+  registrarEvento('compartilhamento','ocnds',x.id,ocndsGid(x),'RDO '+x.tipo+' encaminhado via WhatsApp para '+equipeLabel(eq));
 }
 
 function equipePageUrlOcNds(id){
@@ -7969,7 +8031,7 @@ function renderMedicaoOcNds(tipo){
   });
 }
 
-function aprovarMedicaoOcNds(id, tipo){
+function aprovarMedicaoOcNds(id, tipo, depois){
   if(!requerEscrita()) return;
   if(!appvMedicaoOcNds()){ toast('Apenas administradores podem aprovar a medição.', 'error'); return; }
   const x = (DB.ocnds||[]).find(r=> r.id===Number(id));
@@ -8003,12 +8065,12 @@ function aprovarMedicaoOcNds(id, tipo){
       registrarEvento('medicao','ocnds',x.id,ocndsGid(x),'Ocorrência '+tipo+' aprovada para medição · '+motivo);
       saveData();
       toast('Ocorrência aprovada para medição.');
-      renderMedicaoOcNds(tipo);
+      if(typeof depois==='function'){ depois(); } else { renderMedicaoOcNds(tipo); }
     }
   });
 }
 
-function reaprovarMedicaoOcNds(id, tipo){
+function reaprovarMedicaoOcNds(id, tipo, depois){
   if(!requerEscrita()) return;
   if(!appvMedicaoOcNds()){ toast('Apenas administradores podem reaprovar a medição.', 'error'); return; }
   const m = ocndsMedicaoFind(tipo, id);
@@ -8029,12 +8091,12 @@ function reaprovarMedicaoOcNds(id, tipo){
       registrarEvento('medicao','ocnds',id,ocndsGid(x),'Ocorrência '+tipo+' reaprovada na medição · '+motivo);
       saveData();
       toast('Medição reaprovada.');
-      renderMedicaoOcNds(tipo);
+      if(typeof depois==='function'){ depois(); } else { renderMedicaoOcNds(tipo); }
     }
   });
 }
 
-function reprovarMedicaoOcNdsModal(id, tipo){
+function reprovarMedicaoOcNdsModal(id, tipo, depois){
   if(!requerEscrita()) return;
   if(!appvMedicaoOcNds()){ toast('Apenas administradores podem reprovar a medição.', 'error'); return; }
   const m = ocndsMedicaoFind(tipo, id);
@@ -8061,7 +8123,7 @@ function reprovarMedicaoOcNdsModal(id, tipo){
       registrarEvento('medicao','ocnds',x.id,ocndsGid(x),'Ocorrência '+tipo+' reprovada na medição: '+motivo);
       saveData();
       toast('Medição reprovada.');
-      renderMedicaoOcNds(tipo);
+      if(typeof depois==='function'){ depois(); } else { renderMedicaoOcNds(tipo); }
       return true;
     }
   });
@@ -10322,94 +10384,572 @@ function renderRdoProjetos(){
   document.getElementById('rdo-print').addEventListener('click', ()=> printRDOReport(registros));
 }
 
+function editRdoOcNdsModal(x, apos){
+  if(!requerEscrita()) return;
+  if(!x) return;
+  const gidLabel = x.gid || 'G26-'+String(x.id).padStart(7,'0');
+  const eq = findEquipe(x.equipeId);
+  const horarios = RDO_HORARIOS.map(h=>`<div class="field" style="flex:1;"><label>${h.label}</label><input type="time" name="${h.k}" value="${x[h.k]||''}"></div>`).join('');
+  const kmFields = RDO_KM.map(h=>`<div class="field" style="flex:1;"><label>${h.label}</label><input type="number" name="${h.k}" value="${x[h.k]||''}" placeholder="0"></div>`).join('');
+  const condicoes = RDO_QUESTIONS.map(q=>`<div class="field"><label>${q.label}</label><select name="${q.id}">${rdoOptionsHtml(q, x.rdoRespostas?.[q.id])}</select></div>`).join('');
+
+  const novasAtivs = [];
+  const novaAtrib = [{ atividades: novasAtivs }];
+  const fotosExtras = {};
+
+  const fotosThumbsHtml = (urls)=> (urls&&urls.length)? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${urls.map(u=>`<img src="${esc(u)}" alt="foto" style="width:34px;height:34px;object-fit:cover;border-radius:5px;border:1px solid var(--border);">`).join('')}</div>` : '';
+
+  const ativsRows = (x.atividades||[]).map((a,idx)=>{
+    const atDef = findAtividade(a.atividadeId);
+    const existentes = String(a.fotos||'').split(';;').filter(Boolean);
+    return `
+      <div class="field" data-rdo-exist-row="${idx}" style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--border-soft);">
+        <div style="flex:1;min-width:180px;font-size:12px;"><strong>${esc(atDef?.codigo||'?')}</strong> · ${esc(atDef?.descricao||'')}
+          ${existentes.length? `<div class="admin-field-meta" style="margin-top:2px;">${existentes.length} foto(s) existente(s)</div>`:''}
+          <div class="rdo-edit-fotos-nov" data-fotos-nov="${idx}"></div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="number" step="0.01" min="0" name="exec_${idx}" value="${a.quantidadeExecutada!=null? a.quantidadeExecutada:''}" style="max-width:110px;" placeholder="Exec.">
+          <button type="button" class="btn btn-sm" data-rdo-add-foto="${idx}">${icon('photo',13)} Fotos</button>
+        </div>
+      </div>`;
+  }).join('') || '<p class="admin-field-meta">Sem atividades neste registro.</p>';
+
+  function novasRowsHtml(){
+    if(!novasAtivs.length) return '<p class="admin-field-meta" style="margin:8px 0 0;">Nenhuma atividade adicionada ainda.</p>';
+    return novasAtivs.map((n,jdx)=>{
+      const atDef = n.atividadeId? findAtividade(n.atividadeId) : null;
+      return `<div class="activity-row act-ac-row" data-rdo-nova-row="${jdx}" style="padding:8px 0;border-bottom:1px solid var(--border-soft);">
+        <div class="act-ac" data-idx="0" data-jdx="${jdx}">
+          <input type="text" class="act-ac-input" data-idx="0" data-jdx="${jdx}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+          <div class="act-ac-list" data-idx="0" data-jdx="${jdx}" style="display:none;"></div>
+        </div>
+        <input type="number" step="0.01" min="0" class="nov-qty-prev" data-jdx="${jdx}" placeholder="Prev." style="max-width:90px;" value="${n.quantidadePrevista??''}">
+        <input type="number" step="0.01" min="0" class="nov-qty-exec" data-jdx="${jdx}" placeholder="Exec." style="max-width:90px;" value="${n.quantidadeExecutada??''}">
+        <button type="button" class="btn btn-sm" data-nova-add-foto="${jdx}">${icon('photo',13)} Fotos</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-nova-rm="${jdx}" title="Remover">${icon('x',13)}</button>
+        <div class="rdo-edit-fotos-nov" data-nova-fotos="${jdx}" style="flex-basis:100%;">${fotosThumbsHtml(n.fotos)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function paintNovas(root){
+    const el = document.getElementById('rdo-novas-list');
+    if(!el) return;
+    el.innerHTML = novasRowsHtml();
+    bindActAutocomplete(root, novaAtrib, ()=>{}, null);
+  }
+
+  async function pickFotos(onUrls, max){
+    const inp = document.createElement('input');
+    inp.type='file'; inp.accept='image/*'; inp.multiple=true; inp.style.display='none';
+    inp.onchange = async ()=>{
+      if(!inp.files || !inp.files.length){ inp.remove(); return; }
+      const files = Array.from(inp.files).slice(0, max||10);
+      const urls = await rdoFotoUpload(files);
+      if(urls.length){ onUrls(urls); }
+      inp.remove();
+    };
+    document.body.appendChild(inp);
+    inp.click();
+  }
+
+  const body = `
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Editando o registro RDO da ocorrência <strong>${esc(gidLabel)}</strong>${eq? ' — '+esc(equipeLabel(eq)):''} <span class="badge" style="color:${x.tipo==='OC'?'var(--blue)':'var(--accent)'};background:${x.tipo==='OC'?'rgba(78,140,235,.14)':'rgba(224,164,88,.14)'};">${x.tipo}</span></div>
+    <div class="field"><label>Motivo da edição <span class="req">*</span></label><input type="text" name="motivo" required maxlength="200" placeholder="Por que você está editando este registro RDO?"></div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);">
+      <h4 style="font-size:12.5px;margin:0 0 10px;">Horários do RDO</h4>
+      <div class="field-row" style="grid-template-columns:1fr 1fr;">${horarios}</div>
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);">
+      <h4 style="font-size:12.5px;margin:0 0 10px;">KM do Veículo</h4>
+      <div class="field-row" style="grid-template-columns:1fr 1fr;">${kmFields}</div>
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);">
+      <h4 style="font-size:12.5px;margin:0 0 10px;">Condições do RDO</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px;">${condicoes}</div>
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);">
+      <h4 style="font-size:12.5px;margin:0 0 10px;">Quantidades executadas (existentes)</h4>
+      ${ativsRows}
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);">
+      <h4 style="font-size:12.5px;margin:0 0 10px;">Adicionar novas atividades</h4>
+      <div id="rdo-novas-list">${novasRowsHtml()}</div>
+      <button type="button" class="btn btn-sm" id="rdo-nova-add" style="margin-top:8px;">${icon('plus',13)} Adicionar atividade</button>
+    </div>
+    <div class="field" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);"><label>Observação da execução</label><textarea name="obs" rows="3" placeholder="Observação registrada pela equipe">${esc(x.observacaoEquipe||'')}</textarea></div>`;
+  openModal({
+    title:'Editar registro RDO — '+gidLabel, bodyHtml: body, wide:true, maxW:780, submitLabel:'Salvar alterações',
+    onMount:(root)=>{
+      paintNovas(root);
+      root.addEventListener('click', (e)=>{
+        const addF = e.target.closest('[data-rdo-add-foto]');
+        if(addF){
+          const idx = Number(addF.dataset.rdoAddFoto);
+          pickFotos(async urls=>{
+            fotosExtras[idx] = (fotosExtras[idx]||[]).concat(urls);
+            const el = root.querySelector(`[data-fotos-nov="${idx}"]`);
+            if(el) el.innerHTML = fotosThumbsHtml(fotosExtras[idx]);
+          });
+          return;
+        }
+        const nFoto = e.target.closest('[data-nova-add-foto]');
+        if(nFoto){
+          const jdx = Number(nFoto.dataset.novaAddFoto);
+          pickFotos(async urls=>{
+            const n = novasAtivs[jdx];
+            if(n){ n.fotos = (n.fotos||[]).concat(urls); const el = root.querySelector(`[data-nova-fotos="${jdx}"]`); if(el) el.innerHTML = fotosThumbsHtml(n.fotos); }
+          });
+          return;
+        }
+        const rm = e.target.closest('[data-nova-rm]');
+        if(rm){
+          const jdx = Number(rm.dataset.novaRm);
+          if(jdx>-1 && jdx<novasAtivs.length){ novasAtivs.splice(jdx,1); paintNovas(root); }
+          return;
+        }
+        if(e.target.closest('#rdo-nova-add')){
+          novasAtivs.push({ atividadeId:'', quantidadePrevista:'', quantidadeExecutada:'', fotos:[] });
+          paintNovas(root);
+        }
+      });
+      root.addEventListener('input', (e)=>{
+        const prev = e.target.closest('.nov-qty-prev');
+        if(prev){ const n = novasAtivs[Number(prev.dataset.jdx)]; if(n) n.quantidadePrevista = prev.value; return; }
+        const exec = e.target.closest('.nov-qty-exec');
+        if(exec){ const n = novasAtivs[Number(exec.dataset.jdx)]; if(n) n.quantidadeExecutada = exec.value; }
+      });
+    },
+    onSubmit:(fd)=>{
+      const motivo = String(fd.get('motivo')||'').trim();
+      if(!motivo){ toast('Informe o motivo da edição do registro.', 'error'); return false; }
+      const obs = String(fd.get('obs')||'').trim();
+      x.rdoRespostas = x.rdoRespostas||{};
+      RDO_HORARIOS.forEach(h=>{ x[h.k] = String(fd.get(h.k)||'').trim(); });
+      RDO_KM.forEach(h=>{ x[h.k] = String(fd.get(h.k)||'').trim(); });
+      RDO_QUESTIONS.forEach(q=>{ x.rdoRespostas[q.id] = String(fd.get(q.id)||'').trim(); });
+      x.rdoCondicoes = x.rdoRespostas.rdo_condicoes||'';
+      (x.atividades||[]).forEach((a,idx)=>{
+        const v = fd.get('exec_'+idx);
+        a.quantidadeExecutada = (v!==null && String(v).trim()!=='')? parseFloat(v) : null;
+        if(fotosExtras[idx] && fotosExtras[idx].length){
+          const atuais = String(a.fotos||'').split(';;').filter(Boolean);
+          a.fotos = atuais.concat(fotosExtras[idx]).join(';;');
+        }
+      });
+      let addDesc = '';
+      novasAtivs.forEach(n=>{
+        if(!n.atividadeId) return;
+        const atDef = findAtividade(n.atividadeId);
+        const qtdPrev = (n.quantidadePrevista!=='' && n.quantidadePrevista!=null)? parseFloat(n.quantidadePrevista) : null;
+        const qtdExec = (n.quantidadeExecutada!=='' && n.quantidadeExecutada!=null)? parseFloat(n.quantidadeExecutada) : null;
+        x.atividades = x.atividades||[];
+        x.atividades.push({
+          atividadeId: Number(n.atividadeId),
+          quantidadePrevista: qtdPrev,
+          quantidadeExecutada: qtdExec,
+          tipoEstrutura: '',
+          fotos: (n.fotos||[]).join(';;')
+        });
+        addDesc += (addDesc? ', ':'') + (atDef? atDef.codigo+' · '+atDef.descricao : 'atividade');
+      });
+      x.observacaoEquipe = obs;
+      x.historico = x.historico||[];
+      x.historico.push({...currentAutor(), ts:Date.now(), tipo:'rdo_edicao', de:null, para:'RDO', motivo, obs, adicionadas: addDesc||undefined});
+      const nota = `[${fmtDateTime(Date.now())}] Edição do registro RDO: ${motivo}${obs? ' — '+obs:''}${addDesc? ' — Atividades adicionadas: '+addDesc:''}`;
+      x.observacoes = [x.observacoes||'', nota].filter(Boolean).join('\n');
+      registrarEvento('rdo','ocnds',x.id,gidLabel, 'Registro RDO editado · '+motivo+(addDesc? ' · +'+addDesc:'')+(obs? ' · '+obs:''));
+      saveData(); renderContent(); toast('Registro RDO atualizado.');
+      if(typeof apos==='function'){ apos(); } else { openOcNdsDetalhe(x.id); }
+    }
+  });
+}
+
 function renderRdoOcNds(){
   const el = document.getElementById('content');
-  const ocndsConcluidas = ocndsVisiveis().filter(x=>x.status==='Concluída').sort((a,b)=> String(b.data||'').localeCompare(String(a.data||'')));
-  const pode = appvMedicaoOcNds();
+  const registros = ocndsVisiveis().filter(x=>x.status==='Concluída').sort((a,b)=> String(b.data||'').localeCompare(String(a.data||'')));
 
-  if(!ocndsConcluidas.length){
-    el.innerHTML = `<div class="section-gap"><div class="panel"><div class="empty-state">${icon('check',36)}<h3 style="margin-bottom:6px;">Nenhuma ocorrência OC/NDS concluída</h3><p>Quando as equipes concluiram uma ocorrência OC/NDS, os dados aparecerão aqui.</p><button class="btn btn-primary" id="rdo-oc-back" style="margin-top:16px;">Voltar ao Painel</button></div></div></div>`;
+  if(!registros.length){
+    el.innerHTML = `<div class="section-gap"><div class="panel"><div class="empty-state">${icon('check',36)}<h3 style="margin-bottom:6px;">Nenhuma ocorrência OC/NDS concluída</h3><p>Quando as equipes concluírem uma ocorrência OC/NDS, os dados de execução aparecerão aqui para conferência. A aprovação e os campos de medição são feitos em Medição → OC/NDS.</p><button class="btn btn-primary" id="rdo-oc-back" style="margin-top:16px;">Voltar ao Painel</button></div></div></div>`;
     const b = document.getElementById('rdo-oc-back');
     if(b) b.addEventListener('click', ()=> setView('dashboard'));
     return;
   }
 
-  el.innerHTML = `
-    <div class="section-gap">
-      <div class="panel" style="padding:0;overflow:hidden;">
-        <div class="panel-head" style="padding:14px 16px;">
-          <div><h3>Ocorrências OC/NDS Concluídas</h3><div class="admin-field-meta">${ocndsConcluidas.length} ocorrência(s) concluída(s) e registrada(s) no RDO. Aprovando, a ocorrência sobe para a medição (OC ou NDS) com os campos de medição.</div></div>
-        </div>
-        <div style="overflow-x:auto;">
-          <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1200px;">
-            <thead>
-              <tr>
-                <th style="width:30px;">#</th>
-                <th>ID</th>
-                <th>Tipo</th>
-                <th>Setor</th>
-                <th>Coord.</th>
-                <th>Detalhes</th>
-                <th>Equipe</th>
-                <th style="text-align:center;">Data</th>
-                <th style="text-align:center;">Status</th>
-                <th style="text-align:center;">Status Medição</th>
-                <th style="text-align:center;width:130px;">Ação</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${ocndsConcluidas.map((x,i)=>{
-                const eq = findEquipe(x.equipeId);
-                const m = ocndsMedicaoFind(x.tipo, x.id);
-                const rowStyle = m?.aprovado===false
-                  ? 'border-left:3px solid var(--red);background:rgba(224,97,91,.06);'
-                  : m
-                    ? 'border-left:3px solid var(--teal);background:rgba(87,199,199,.04);'
-                    : '';
-                const badge = x.tipo==='OC'
-                  ? `<span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">OC</span>`
-                  : `<span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);">NDS</span>`;
-                const detalhes = x.tipo==='OC'
-                  ? [x.ptp&&'PTP: '+x.ptp, x.si&&'SI: '+x.si, x.ose&&'OSE: '+x.ose, x.numeroOC&&'OC: '+x.numeroOC, x.zona&&'Zona: '+x.zona, x.numeroReserva&&'Reserva/PEP: '+x.numeroReserva].filter(Boolean).join(' · ')||'—'
-                  : [x.ocorrencia&&'Ocorrência: '+x.ocorrencia, x.zona&&'Zona: '+x.zona, x.numeroReserva&&'Reserva/PEP: '+x.numeroReserva].filter(Boolean).join(' · ')||'—';
-                const acao = m?.aprovado===false
-                  ? (pode? `<button type="button" class="btn btn-sm btn-primary" data-ocnds-reaprovar="${x.id}">${icon('check',12)} Reaprovar</button>` : `<span class="badge" style="color:var(--red);background:rgba(224,97,91,.14);">REPROVADO</span>`)
-                  : m?.aprovado===true
-                    ? (pode? `<button type="button" class="btn btn-sm btn-danger-solid" data-ocnds-reprovar="${x.id}">${icon('x',12)} Reprovado?</button>` : '<span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">Medido</span>')
-                    : (pode? `<button type="button" class="btn btn-sm btn-primary" data-ocnds-aprovar="${x.id}">${icon('check',12)} Aprovar</button>` : '<span style="color:var(--muted-2);">—</span>');
-                return `
-                  <tr data-ocnds-rdo="${x.id}" style="cursor:pointer;${rowStyle}" title="Ver detalhes">
-                    <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
-                    <td class="mono">${esc(x.gid||'G26-'+String(x.id).padStart(7,'0'))}${m?.aprovado===false&&m?.motivoReprovacao? `<div style="font-size:11px;color:var(--red);margin-top:2px;">${icon('alert',10)} ${esc(m.motivoReprovacao)}</div>`:''}</td>
-                    <td>${badge}</td>
-                    <td style="font-size:12px;">${esc(x.setor||'—')}</td>
-                    <td style="font-size:12px;">${esc(x.coordenacao||'—')}</td>
-                    <td style="font-size:12px;color:var(--muted);">${esc(detalhes)}</td>
-                    <td>${esc(equipeLabel(eq))}<div class="admin-field-meta">${esc(eq?.supervisor||'')}</div></td>
-                    <td style="text-align:center;" class="mono">${fmtDate(x.data)}</td>
-                    <td style="text-align:center;"><span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);"><span class="badge-dot"></span>Concluída</span></td>
-                    <td style="text-align:center;">${medicaoOcNdsStatusBadge(m?.status)}</td>
-                    <td style="text-align:center;white-space:nowrap;">${acao}</td>
-                  </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
+  const stats = (()=>{
+    const total = registros.length;
+    const totalExec = registros.reduce((s,x)=> s+ocndsResumo(x).exec, 0);
+    const totalValor = registros.reduce((s,x)=> s+ocndsTotalValor(x), 0);
+    const imped = registros.filter(x=> ocndsRdoImpedimentos(x).length>0).length;
+    return `
+      <div class="grid-stats">
+        <div class="stat-card"><div class="lbl">RDOs concluídos</div><div class="val">${total}</div></div>
+        <div class="stat-card" style="--accent-c:var(--blue);"><div class="lbl">Qtd. executada</div><div class="val">${fmtNum(totalExec)}</div></div>
+        <div class="stat-card" style="--accent-c:var(--green);"><div class="lbl">Valor total</div><div class="val">${fmtMoney(totalValor)}</div></div>
+        <div class="stat-card" style="--accent-c:var(--red);"><div class="lbl">Com impedimentos</div><div class="val">${imped}</div></div>
+      </div>`;
+  })();
+
+  const equipes = [...new Set(registros.map(x=>x.equipeId))].map(id=> findEquipe(id)).filter(Boolean);
+
+  const filters = `
+    <div class="panel" style="padding:14px 16px;margin-bottom:16px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+        <input type="search" id="ocnds-rdo-f-busca" placeholder="Buscar por ocorrência, setor, equipe, data, status..." style="flex:1;">
+        <button class="btn btn-sm" id="ocnds-rdo-f-busca-aplicar">${icon('search',13)} Buscar</button>
+      </div>
+      <div class="filters">
+        <label style="font-weight:600;">Equipe</label>
+        <select id="ocnds-rdo-f-equipe"><option value="">Todas</option>${equipes.map(e=>`<option value="${e.id}">${esc(equipeLabel(e))}</option>`).join('')}</select>
+        <label style="font-weight:600;">De</label>
+        <input type="date" id="ocnds-rdo-f-de">
+        <label style="font-weight:600;">Até</label>
+        <input type="date" id="ocnds-rdo-f-ate">
+        <button class="btn btn-sm" id="ocnds-rdo-f-aplicar">${icon('grid',13)} Filtrar</button>
+        <button class="btn btn-sm btn-ghost" id="ocnds-rdo-f-limpar">Limpar</button>
       </div>
     </div>`;
 
-  el.querySelectorAll('tr[data-ocnds-rdo]').forEach(tr=>{
-    const id = Number(tr.dataset.ocndsRdo);
-    tr.addEventListener('click', (e)=>{
-      if(e.target.closest('[data-ocnds-aprovar]') || e.target.closest('[data-ocnds-reprovar]') || e.target.closest('[data-ocnds-reaprovar]')) return;
-      openOcNdsDetalhe(id);
+  const tabela = `
+    <div class="panel" style="padding:0;overflow:hidden;">
+      <div class="panel-head" style="padding:14px 16px;">
+        <div><h3>Execuções OC/NDS</h3><div class="admin-field-meta">Dados de execução OC/NDS registrados pelas equipes no RDO. A aprovação e os campos de medição são feitos em Medição → OC / Medição → NDS.</div></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1200px;">
+          <thead>
+            <tr>
+              <th style="width:30px;">#</th>
+              <th>Ocorrência</th>
+              <th>Tipo</th>
+              <th>Equipe</th>
+              <th style="text-align:center;">Data</th>
+              <th style="text-align:center;">Status</th>
+              <th style="text-align:center;">Horários</th>
+              <th style="text-align:center;">Clima</th>
+              <th style="text-align:center;">Impedimentos</th>
+              <th style="text-align:center;">Exec.</th>
+              <th style="text-align:center;">Valor</th>
+              <th style="text-align:center;">Confirmação</th>
+              <th style="width:40px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${registros.map((x,i)=>{
+              const eq = findEquipe(x.equipeId);
+              const res = ocndsResumo(x);
+              const imped = ocndsRdoImpedimentos(x);
+              const horarios = [x.rdoHorarioChegada, x.rdoHorarioSaidaObra].filter(Boolean).join(' → ')||'—';
+              const badge = x.tipo==='OC'
+                ? `<span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">OC</span>`
+                : `<span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);">NDS</span>`;
+              return `
+                <tr data-ocnds-rdo="${x.id}" style="cursor:pointer;" title="Ver detalhes">
+                  <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
+                  <td><strong>${ocndsGid(x)}</strong><div class="admin-field-meta">${esc(ocndsDesc(x))}</div></td>
+                  <td>${badge}</td>
+                  <td>${esc(equipeLabel(eq))}<div class="admin-field-meta">${esc(eq?.supervisor||'')}</div></td>
+                  <td style="text-align:center;" class="mono">${fmtDate(x.data)}</td>
+                  <td style="text-align:center;"><span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);"><span class="badge-dot"></span>Concluída</span></td>
+                  <td style="text-align:center;" class="mono">${esc(horarios)}</td>
+                  <td style="text-align:center;">${esc(x.rdoCondicoes || (x.rdoRespostas&&x.rdoRespostas.rdo_condicoes) || '—')}</td>
+                  <td style="text-align:center;">${imped.length? `<span class="badge" style="color:var(--red);background:rgba(224,97,91,.12);">${imped.length}</span>` : '—'}</td>
+                  <td style="text-align:center;" class="mono"><strong>${fmtNum(res.exec)}</strong></td>
+                  <td style="text-align:center;" class="mono">${fmtMoney(ocndsTotalValor(x))}</td>
+                  <td style="text-align:center;" class="mono"><span style="font-size:11px;">${ocndsRdoConfData(x)}</span></td>
+                  <td style="text-align:center;"><div class="row-actions">
+                    <button class="icon-btn" title="Enviar WhatsApp" data-ocnds-rdo-whats="${x.id}">${icon('whatsapp',14)}</button>
+                    <span class="icon-btn" title="Ver detalhes">${icon('search',13)}</span>
+                  </div></td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  el.innerHTML = `<div class="section-gap">${stats}${filters}${tabela}</div>`;
+
+  const fEq = document.getElementById('ocnds-rdo-f-equipe');
+  const fDe = document.getElementById('ocnds-rdo-f-de');
+  const fAte = document.getElementById('ocnds-rdo-f-ate');
+  const fBusca = document.getElementById('ocnds-rdo-f-busca');
+  const norm = s=> String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const aplicar = ()=>{
+    const q = norm(fBusca.value.trim());
+    registros.forEach(x=>{
+      const eq = findEquipe(x.equipeId);
+      const okEq = !fEq.value || String(x.equipeId)===String(fEq.value);
+      const data = x.data||'';
+      const okDe = !fDe.value || data >= fDe.value;
+      const okAte = !fAte.value || data <= fAte.value;
+      const hay = norm([
+        ocndsGid(x), ocndsDesc(x), x.setor, x.coordenacao,
+        equipeLabel(eq), eq?.supervisor, data, x.status, x.tipo,
+        ocndsRdoImpedimentos(x).join(' ')
+      ].join(' '));
+      const okBusca = !q || hay.indexOf(q)!==-1;
+      const tr = document.querySelector(`tr[data-ocnds-rdo="${x.id}"]`);
+      if(tr) tr.style.display = (okEq&&okDe&&okAte&&okBusca)? '' : 'none';
     });
-    const ap = tr.querySelector(`[data-ocnds-aprovar="${id}"]`);
-    if(ap) ap.addEventListener('click', (e)=>{ e.stopPropagation(); aprovarMedicaoOcNds(id, (DB.ocnds||[]).find(y=>y.id===id)?.tipo||'OC'); });
-    const rp = tr.querySelector(`[data-ocnds-reprovar="${id}"]`);
-    if(rp) rp.addEventListener('click', (e)=>{ e.stopPropagation(); reprovarMedicaoOcNdsModal(id, (DB.ocnds||[]).find(y=>y.id===id)?.tipo||'OC'); });
-    const rp2 = tr.querySelector(`[data-ocnds-reaprovar="${id}"]`);
-    if(rp2) rp2.addEventListener('click', (e)=>{ e.stopPropagation(); reaprovarMedicaoOcNds(id, (DB.ocnds||[]).find(y=>y.id===id)?.tipo||'OC'); });
+  };
+  fBusca.addEventListener('input', aplicar);
+  document.getElementById('ocnds-rdo-f-busca-aplicar').addEventListener('click', aplicar);
+  document.getElementById('ocnds-rdo-f-aplicar').addEventListener('click', aplicar);
+  document.getElementById('ocnds-rdo-f-limpar').addEventListener('click', ()=>{
+    fEq.value=''; fDe.value=''; fAte.value=''; fBusca.value=''; aplicar();
+  });
+
+  document.querySelectorAll('tr[data-ocnds-rdo]').forEach(tr=>{
+    tr.addEventListener('click', ()=> openOcNdsRDOModal(Number(tr.dataset.ocndsRdo)));
+  });
+
+  document.querySelectorAll('[data-ocnds-rdo-whats]').forEach(b=>{
+    b.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      encaminharWhatsRdoOcNds(Number(b.dataset.ocndsRdoWhats));
+    });
+  });
+}
+
+function ocndsSnakeKey(k){
+  if(k==='rdoHorarioChegada') return 'rdo_horario_chegada';
+  if(k==='rdoHorarioInicio') return 'rdo_horario_inicio';
+  if(k==='rdoHorarioFinalizacao') return 'rdo_horario_finalizacao';
+  if(k==='rdoHorarioSaidaObra') return 'rdo_horario_saida_obra';
+  if(k==='rdoHorarioChegadaBase') return 'rdo_horario_chegada_base';
+  if(k==='rdoKmInicial') return 'rdo_km_inicial';
+  if(k==='rdoKmFinal') return 'rdo_km_final';
+  return k;
+}
+function ocndsRdoImpedimentos(x){
+  const itens=[];
+  const map = [
+    ['rdo_impedimento','Impedimento de execução'],
+    ['rdo_falta_material','Falta de material'],
+    ['rdo_projeto_incoerente','Projeto incoerente'],
+    ['rdo_equipe_incompleta','Equipe incompleta'],
+    ['rdo_falta_veiculo','Falta de veículo'],
+    ['rdo_impedimento_acesso','Impedimento de acesso'],
+    ['rdo_licenca_ambiental','Licença ambiental'],
+    ['rdo_autorizacao_embargo','Autorização/embargo']
+  ];
+  const r = x.rdoRespostas||{};
+  map.forEach(([k,l])=>{ if(r[k]==='Sim') itens.push(l); });
+  if(r.rdo_desligamento==='Não') itens.push('Desligamento não programado');
+  return itens;
+}
+function ocndsRdoConfData(x){
+  const hist = (x.historico||[]).filter(h=> (h.para==='Concluída') || (h.tipo==='equipe'));
+  const h = hist[hist.length-1];
+  return h ? fmtDateTime(h.ts) : '—';
+}
+function openOcNdsRDOModal(id){
+  const x = (DB.ocnds||[]).find(y=>y.id===Number(id));
+  if(!x) return;
+  const eq = findEquipe(x.equipeId);
+  const rdo = x.rdoRespostas||{};
+  const res = ocndsResumo(x);
+  const imped = ocndsRdoImpedimentos(x);
+  const isOC = x.tipo==='OC';
+  const badgeTipo = isOC
+    ? `<span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">OC</span>`
+    : `<span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);">NDS</span>`;
+  const tipo = x.tipo;
+  const m = ocndsMedicaoFind(tipo, x.id);
+  const pode = appvMedicaoOcNds();
+  const hora = (top)=> x[top] || rdo[ocndsSnakeKey(top)] || '—';
+  const horarios = RDO_HORARIOS.map(h=> `
+    <tr><td style="font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;">${h.label}</td>
+    <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${hora(h.k)}</td></tr>`).join('');
+  const kms = RDO_KM.map(k2=> `
+    <tr><td style="font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;">${k2.label}</td>
+    <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${hora(k2.k)}</td></tr>`).join('');
+
+  const bannerMedicao = (()=>{
+    if(m?.aprovado===false){
+      const total = m.totalReprovacoes||0;
+      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(224,97,91,.45);background:rgba(224,97,91,.10);border-radius:10px;margin-bottom:16px;">
+        <span style="color:var(--red);flex-shrink:0;margin-top:2px;">${icon('alert',18)}</span>
+        <div style="font-size:12.5px;">
+          <strong style="color:var(--red);">${esc(tipo)} REPROVADO NA MEDIÇÃO</strong> <span class="med-poda-reprov-count" style="margin-left:4px;">${total} reprovação${total===1?'':'ões'}</span>
+          <div style="color:var(--muted);margin-top:2px;">Motivo: <strong style="color:#7a2b26;">${esc(m.motivoReprovacao||'—')}</strong><br>Reprovado por <strong>${esc(m.reprovadoPor?.usuarioNome||'Medição')}</strong> em <span class="mono">${fmtDateTime(m.reprovadoEm)}</span>. Edite o registro ou anexe evidências para reenvio à medição.</div>
+        </div>
+      </div>`;
+    }
+    if(m){
+      return `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid rgba(87,199,199,.45);background:rgba(87,199,199,.08);border-radius:10px;margin-bottom:16px;">
+        <span style="color:var(--teal);flex-shrink:0;">${icon('check',18)}</span>
+        <div style="font-size:12.5px;"><strong style="color:var(--teal);">${esc(tipo)} aprovado para medição</strong> <span style="color:var(--muted);">por ${esc(m.aprovadoPor?.usuarioNome||'—')} em <span class="mono">${fmtDateTime(m.aprovadoEm)}</span></span></div>
+      </div>`;
+    }
+    return `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid rgba(224,164,88,.4);background:rgba(224,164,88,.08);border-radius:10px;margin-bottom:16px;">
+      <span style="color:var(--accent);flex-shrink:0;">${icon('clock',18)}</span>
+      <div style="font-size:12.5px;"><strong style="color:var(--accent);">Pendente de aprovação na medição</strong> <span style="color:var(--muted);">— acesse Medição → ${esc(tipo)} para aprovar.</span></div>
+    </div>`;
+  })();
+
+  const body = `
+    ${bannerMedicao}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div>
+        <h4 style="margin-bottom:8px;">Ocorrência ${ocndsGid(x)} ${badgeTipo}</h4>
+        <p class="admin-field-meta" style="margin:2px 0;">Setor: ${esc(x.setor||'—')} · Coordenação: ${esc(x.coordenacao||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Zona: ${zonaBadge(x.zona)}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">${isOC? `PTP ${esc(x.ptp||'—')} · SI ${esc(x.si||'—')} · OSE ${esc(x.ose||'—')}${x.numeroOC? ' · Nº OC '+esc(x.numeroOC):''}` : `Ocorrência ${esc(x.ocorrencia||'—')}`}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Nº Reserva/PEP: ${esc(x.numeroReserva||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Data: ${fmtDate(x.data)}</p>
+        <div style="margin-top:8px;"><span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);">Concluída</span></div>
+      </div>
+      <div>
+        <h4 style="margin-bottom:8px;">Equipe</h4>
+        <p class="admin-field-meta" style="margin:2px 0;"><strong>${esc(equipeLabel(eq))}</strong></p>
+        <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
+      </div>
+    </div>
+    ${(x.anexos&&x.anexos.length)? `<div style="margin-bottom:20px;">
+      <h4 style="margin-bottom:8px;">Anexos da ocorrência</h4>
+      ${anexosDisplayHtml(x.anexos)}
+    </div>`:''}
+    <div style="margin-bottom:20px;">
+      <h4 style="margin-bottom:8px;">Horários do RDO</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${horarios}</table>
+    </div>
+    <div style="margin-bottom:20px;">
+      <h4 style="margin-bottom:8px;">KM do Veículo</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${kms}</table>
+    </div>
+    <div style="margin-bottom:20px;">
+      <h4 style="margin-bottom:8px;">Condições do RDO</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+        ${RDO_QUESTIONS.map(q=>`
+          <tr><td style="font-weight:600;padding:3px 12px 3px 0;">${q.label}</td>
+          <td style="padding:3px 10px;">${String(rdo[q.id]||'')||'—'}</td></tr>`).join('')}
+      </table>
+      ${imped.length? `<div style="margin-top:10px;">${imped.map(i=>`<span class="badge" style="color:var(--red);background:rgba(224,97,91,.12);margin-right:4px;">${esc(i)}</span>`).join('')}</div>`:''}
+    </div>
+    <div style="margin-bottom:20px;">
+      <h4 style="margin-bottom:8px;">Atividades e quantidades executadas</h4>
+      <p class="admin-field-meta" style="margin:0 0 10px;">Selecione ou substitua as atividades usando o seletor (mesmo estilo da página das equipes) e ajuste as quantidades executadas.</p>
+      <div style="display:flex;gap:14px;margin-bottom:12px;">
+        <span class="badge-prefix alt" id="rdo-dtl-exec-val">Exec. ${fmtNum(res.exec)}</span>
+        <span class="badge-prefix" id="rdo-dtl-valor-val">Valor total ${fmtMoney(ocndsTotalValor(x))}</span>
+      </div>
+      <div id="rdo-dtl-ativs"></div>
+      <button type="button" class="btn btn-sm" id="rdo-dtl-add-ativ" style="margin-top:10px;">${icon('plus',13)} Adicionar atividade</button>
+    </div>
+    <div style="margin-bottom:20px;">
+      <h4 style="margin-bottom:8px;">Observação da execução</h4>
+      <p style="font-size:13px;">${esc(x.observacaoEquipe)||'—'}</p>
+    </div>
+    <div class="admin-field-meta">Confirmado pela equipe em <strong>${ocndsRdoConfData(x)}</strong></div>`;
+
+  const salvarAlteracoes = ()=>{
+    if(!requerEscrita()) return;
+    document.querySelectorAll('[data-rdo-dtl-row]').forEach(row=>{
+      const a = x.atividades[Number(row.dataset.rdoDtlRow)];
+      if(!a) return;
+      const execInp = row.querySelector('.rdo-dtl-exec');
+      if(execInp){
+        const v = String(execInp.value).trim();
+        a.quantidadeExecutada = (v!=='' && v!=null)? parseFloat(v) : null;
+      }
+    });
+    const antes = (x.atividades||[]).length;
+    x.atividades = (x.atividades||[]).filter(a=> a.atividadeId);
+    x.historico = x.historico||[];
+    x.historico.push({...currentAutor(), ts:Date.now(), tipo:'rdo_edicao', de:null, para:'RDO', motivo:'Atividades ajustadas no detalhe da execução'});
+    registrarEvento('edicao','ocnds',x.id,ocndsGid(x),'Atividades do RDO editadas no detalhe · '+antes+' atividade(s)');
+    saveData();
+    toast('Alterações salvas.');
+    openOcNdsRDOModal(x.id);
+    renderRdoOcNds();
+  };
+
+  const footerBtns = [];
+  if(pode){
+    if(!m) footerBtns.push({ label: icon('check',14)+' Aprovar', cls:'btn btn-primary', onClick: ()=> aprovarMedicaoOcNds(x.id, tipo, ()=>{ openOcNdsRDOModal(x.id); renderRdoOcNds(); }) });
+    else if(m.aprovado===false) footerBtns.push({ label: icon('check',14)+' Reaprovar', cls:'btn btn-primary', onClick: ()=> reaprovarMedicaoOcNds(x.id, tipo, ()=>{ openOcNdsRDOModal(x.id); renderRdoOcNds(); }) });
+    else footerBtns.push({ label: icon('x',13)+' Reprovado?', cls:'btn', onClick: ()=> reprovarMedicaoOcNdsModal(x.id, tipo, ()=>{ openOcNdsRDOModal(x.id); renderRdoOcNds(); }) });
+  }
+  footerBtns.push(
+    { label: icon('whatsapp',14)+' Enviar WhatsApp', cls:'btn', onClick: ()=> encaminharWhatsRdoOcNds(x.id) },
+    { label: icon('download',14)+' Baixar fotos', cls:'btn', onClick: ()=> baixarFotosRdo(x.atividades) },
+    { label: icon('edit',14)+' Editar registro', cls:'btn', onClick: ()=> editRdoOcNdsModal(x, ()=> openOcNdsRDOModal(x.id)) },
+    { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printOcNdsCompleto(x) }
+  );
+  if(requerEscrita()) footerBtns.unshift({ label:'Salvar alterações', cls:'btn', onClick: salvarAlteracoes });
+  openModal({ title:'RDO '+esc(x.tipo)+' — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, maxW:760, footerBtns,
+    onMount: (root)=>{
+      const atualizarTotais = ()=>{
+        const r = ocndsResumo(x);
+        const v = ocndsTotalValor(x);
+        const e1 = root.querySelector('#rdo-dtl-exec-val');
+        const e2 = root.querySelector('#rdo-dtl-valor-val');
+        if(e1) e1.textContent = 'Exec. '+fmtNum(r.exec);
+        if(e2) e2.textContent = 'Valor total '+fmtMoney(v);
+      };
+      const bindFotoZoom = ()=>{
+        root.querySelectorAll('.rdo-dtl-foto').forEach(img=> img.addEventListener('click', ()=>{
+          try{ openLightbox(JSON.parse(img.dataset.fotos||'[]'), Number(img.dataset.idx)||0); }catch(e){}
+        }));
+      };
+      const paintAtivs = ()=>{
+        const box = root.querySelector('#rdo-dtl-ativs');
+        if(!box) return;
+        box.innerHTML = (x.atividades||[]).map((a,jdx)=>{
+          const atDef = a.atividadeId? findAtividade(a.atividadeId) : null;
+          const fotos = String(a.fotos||'').split(';;').filter(Boolean);
+          const executada = (a.quantidadeExecutada==null || a.quantidadeExecutada==='')? '' : a.quantidadeExecutada;
+          return `
+          <div class="activity-row act-ac-row" data-rdo-dtl-row="${jdx}" style="padding:8px 0;border-bottom:1px solid var(--border-soft);">
+            <div class="act-ac" data-idx="0" data-jdx="${jdx}">
+              <input type="text" class="act-ac-input" data-idx="0" data-jdx="${jdx}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+              <div class="act-ac-list" data-idx="0" data-jdx="${jdx}" style="display:none;"></div>
+            </div>
+            <input type="number" step="0.01" min="0" class="rdo-dtl-exec" data-jdx="${jdx}" placeholder="Exec." style="max-width:90px;" value="${executada}">
+            <button type="button" class="btn btn-sm btn-ghost" data-rdo-dtl-rm="${jdx}" title="Remover">${icon('x',13)}</button>
+            <div style="flex-basis:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              ${a.tipoEstrutura? `<span class="badge-prefix" style="font-size:10.5px;">Estruturas: ${esc(a.tipoEstrutura)}</span>`:''}
+              ${a.quantidadePrevista!=null && a.quantidadePrevista!==''? `<span class="admin-field-meta" style="font-size:11px;">Prev.: ${esc(fmtNum(a.quantidadePrevista))}</span>`:''}
+              ${fotos.length? fotos.map((u,fi)=>`<img class="rdo-dtl-foto" src="${esc(u)}" alt="foto" title="Ampliar" data-fotos='${esc(JSON.stringify(fotos))}' data-idx="${fi}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:zoom-in;">`).join('') : '<span style="font-size:11px;color:var(--muted-2);">Sem fotos.</span>'}
+            </div>
+          </div>`;
+        }).join('') || '<p class="admin-field-meta" style="margin:8px 0 0;">Nenhuma atividade registrada.</p>';
+        bindActAutocomplete(root, [{atividades: x.atividades}], ()=> atualizarTotais(), null);
+        bindFotoZoom();
+        atualizarTotais();
+      };
+      paintAtivs();
+      root.addEventListener('click', (e)=>{
+        const rm = e.target.closest('[data-rdo-dtl-rm]');
+        if(rm){
+          const jdx = Number(rm.dataset.rdoDtlRm);
+          if(jdx>-1 && jdx<x.atividades.length){ x.atividades.splice(jdx,1); paintAtivs(); }
+          return;
+        }
+        if(e.target.closest('#rdo-dtl-add-ativ')){
+          x.atividades.push({ atividadeId:'', quantidadePrevista:'', quantidadeExecutada:'', tipoEstrutura:'', fotos:'' });
+          paintAtivs();
+        }
+      });
+      root.addEventListener('input', (e)=>{
+        const ex = e.target.closest('.rdo-dtl-exec');
+        if(ex){
+          const a = x.atividades[Number(ex.dataset.jdx)];
+          if(a){
+            const v = String(ex.value).trim();
+            a.quantidadeExecutada = (v!=='' && v!==null)? parseFloat(v) : null;
+            atualizarTotais();
+          }
+          return;
+        }
+      });
+    }
   });
 }
 
