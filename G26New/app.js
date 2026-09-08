@@ -22,7 +22,7 @@ const AUD_REF = rtdb.ref('g26_planner/auditoria');
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js').catch(()=>{}); }
 
 const DEFAULT_DATA = {
-  equipes: [], atividades: [], projetos: [], programacoes: [], ocnds: [], podaProgramacoes: [], oseProgramacoes: [], usuarios: [], medicaoPoda: [],
+  equipes: [], atividades: [], projetos: [], programacoes: [], ocnds: [], podaProgramacoes: [], oseProgramacoes: [], usuarios: [], medicaoPoda: [], medicaoOse: [],
   tiposEstrutura: [],
   customFields: { equipes: [], atividades: [], projetos: [], programacoes: [], podaProgramacoes: [], oseProgramacoes: [] },
   cidades: [], cidadeDistancias: [], cidadeMaxDist: 50,
@@ -7650,8 +7650,510 @@ function renderMediçãoOC(){
 function renderMediçãoNDS(){
   renderModuloEmDesenvolvimento('Medição – NDS');
 }
+const MED_OSE_STATUSES = ['APROVAR ORÇAMENTO','ATEC','CONC','COMISSIONADA','CRIAR NOTA','AS-BUILT','ERRO SISTEMICO','FATURADO','AGUARDANDO BAIXA MATERIAL','AGUARDANDO TÁTICO','REPROVA','AGUARDANDO CADASTRO','CANCELADO'];
+function medicaoOseStatusBadge(s){
+  const cor = { 'COMISSIONADA':'var(--green)','FATURADO':'var(--green)','AS-BUILT':'var(--teal)','APROVAR ORÇAMENTO':'var(--accent)','ATEC':'var(--blue)','CONC':'var(--blue)','ERRO SISTEMICO':'var(--red)','REPROVA':'var(--red)','CANCELADO':'var(--red)' }[s]||'var(--muted)';
+  const bg = { 'COMISSIONADA':'rgba(34,139,34,.14)','FATURADO':'rgba(34,139,34,.14)','AS-BUILT':'rgba(87,199,199,.12)','APROVAR ORÇAMENTO':'rgba(224,164,88,.14)','ATEC':'rgba(78,140,235,.14)','CONC':'rgba(78,140,235,.14)','ERRO SISTEMICO':'rgba(224,97,91,.14)','REPROVA':'rgba(224,97,91,.14)','CANCELADO':'rgba(224,97,91,.14)' }[s]||'rgba(128,128,128,.14)';
+  return s? `<span class="badge" style="color:${cor};background:${bg};">${esc(s)}</span>` : '<span style="color:var(--muted-2);">—</span>';
+}
+function appvMedicaoOse(){
+  if(!CURRENT_USER) return true;
+  return ehMestre() || (CURRENT_USER.role==='administrador' && CURRENT_USER.nivel==='total');
+}
+function findMedicaoOse(atribId){
+  return (DB.medicaoOse||[]).find(m=> m.atribuicaoId===Number(atribId));
+}
+function medicaoOseRegistros(){
+  return flatOseAtribuicoes().filter(rdoTemExecucao);
+}
 function renderMediçãoOSE(){
-  renderModuloEmDesenvolvimento('Medição – OSE');
+  const el = document.getElementById('content');
+  let registros = medicaoOseRegistros();
+  registros.sort((a,b)=> String(b.atribuicao.dataProgramada||'').localeCompare(String(a.atribuicao.dataProgramada||'')));
+
+  const pode = appvMedicaoOse();
+  const medicados = registros.filter(x=> !!findMedicaoOse(x.atribuicao.id));
+  const reprovadas = registros.filter(x=> findMedicaoOse(x.atribuicao.id)?.aprovado===false);
+  const pendentes = registros.filter(x=> !findMedicaoOse(x.atribuicao.id));
+
+  const stats = `
+    <div class="grid-stats">
+      <div class="stat-card"><div class="lbl">RDOs de OSE</div><div class="val">${registros.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--accent);"><div class="lbl">Pendentes</div><div class="val">${pendentes.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--teal);"><div class="lbl">Com medição</div><div class="val">${medicados.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--red);"><div class="lbl">Reprovadas</div><div class="val">${reprovadas.length}</div></div>
+    </div>`;
+
+  const equipes = [...new Set(registros.map(x=>x.atribuicao.equipeId))].map(id=>findEquipe(id)).filter(Boolean);
+
+  const filters = `
+    <div class="panel" style="padding:14px 16px;margin-bottom:16px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+        <input type="search" id="med-ose-f-busca" placeholder="Buscar por município, equipe, data, status..." style="flex:1;">
+        <button class="btn btn-sm" id="med-ose-f-busca-aplicar">${icon('search',13)} Buscar</button>
+      </div>
+      <div class="filters">
+        <label style="font-weight:600;">Equipe</label>
+        <select id="med-ose-f-equipe"><option value="">Todas</option>${equipes.map(e=>`<option value="${e.id}">${esc(equipeLabel(e))}</option>`).join('')}</select>
+        <label style="font-weight:600;">Situação</label>
+        <select id="med-ose-f-situacao"><option value="">Todas</option><option value="pendente">Pendente</option><option value="medicada">Com medição</option><option value="reprovada">Reprovada</option></select>
+        <label style="font-weight:600;">Status</label>
+        <select id="med-ose-f-status"><option value="">Todos</option>${MED_OSE_STATUSES.map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
+        <label style="font-weight:600;">De</label>
+        <input type="date" id="med-ose-f-de">
+        <label style="font-weight:600;">Até</label>
+        <input type="date" id="med-ose-f-ate">
+        <button class="btn btn-sm" id="med-ose-f-aplicar">${icon('grid',13)} Filtrar</button>
+        <button class="btn btn-sm btn-ghost" id="med-ose-f-limpar">Limpar</button>
+      </div>
+    </div>`;
+
+  const isMedicada = x=> !!findMedicaoOse(x.atribuicao.id);
+  const isReprovada = x=> findMedicaoOse(x.atribuicao.id)?.aprovado===false;
+  const med = x=> findMedicaoOse(x.atribuicao.id);
+
+  const tabela = `
+    <div class="panel" style="padding:0;overflow:hidden;">
+      <div class="panel-head" style="padding:14px 16px;">
+        <div><h3>Medição de OSE</h3><div class="admin-field-meta">Dados do RDO de OSE para aprovação e medição. Aprove para liberar os campos de medição.</div></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1400px;">
+          <thead>
+            <tr>
+              <th style="width:30px;">#</th>
+              <th>Programação</th>
+              <th>Equipe</th>
+              <th style="text-align:center;">Data</th>
+              <th style="text-align:center;">Status RDO</th>
+              <th style="text-align:center;">Status Medição</th>
+              <th style="text-align:center;">Prev.</th>
+              <th style="text-align:center;">Exec.</th>
+              <th style="text-align:center;width:110px;">Progresso</th>
+              <th style="text-align:center;">Valor Total RDO</th>
+              <th style="text-align:center;">Valor Faturado</th>
+              <th style="text-align:center;">Ciclo Fat.</th>
+              <th style="text-align:center;width:120px;">Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${registros.map((x,i)=>{
+              const eq = findEquipe(x.atribuicao.equipeId);
+              const res = rdoResumo(x);
+              const m = med(x);
+              const rowStyle = m?.aprovado===false
+                ? 'border-left:3px solid var(--red);background:rgba(224,97,91,.06);'
+                : m
+                  ? 'border-left:3px solid var(--teal);background:rgba(87,199,199,.04);'
+                  : '';
+              const acao = m?.aprovado===false
+                ? (pode? `<button type="button" class="btn btn-sm btn-primary" data-med-ose-reaprovar="${x.atribuicao.id}">${icon('check',12)} Reaprovar</button>` : `<span class="badge" style="color:var(--red);background:rgba(224,97,91,.14);">REPROVADO</span>`)
+                : m?.aprovado===true
+                  ? (pode? `<button type="button" class="btn btn-sm btn-danger-solid" data-med-ose-reprovar="${x.atribuicao.id}">${icon('x',12)} Reprovado?</button>` : '<span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">Medido</span>')
+                  : (pode? `<button type="button" class="btn btn-sm btn-primary" data-med-ose-aprovar="${x.atribuicao.id}">${icon('check',12)} Aprovar</button>` : '<span style="color:var(--muted-2);">—</span>');
+              return `
+                <tr data-med-ose-prog="${x.programacao.id}" data-med-ose-atrib="${x.atribuicao.id}" style="cursor:pointer;${rowStyle}">
+                  <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
+                  <td><strong>${oseProgLabel(x.programacao)}</strong><div class="admin-field-meta">${esc(x.programacao.municipio||'—')} · ${esc(x.programacao.subestacao||'—')}</div>${m?.aprovado===false&&m?.motivoReprovacao? `<div style="font-size:11px;color:var(--red);margin-top:2px;">${icon('alert',10)} ${esc(m.motivoReprovacao)}</div>`:''}</td>
+                  <td>${esc(equipeLabel(eq))}<div class="admin-field-meta">${esc(eq?.supervisor||'')}</div></td>
+                  <td style="text-align:center;" class="mono">${fmtDate(x.atribuicao.dataProgramada)}</td>
+                  <td style="text-align:center;">${rdoStatusBadge(x.atribuicao.status)}</td>
+                  <td style="text-align:center;">${medicaoOseStatusBadge(m?.status)}</td>
+                  <td style="text-align:center;" class="mono">${fmtNum(res.prev)}</td>
+                  <td style="text-align:center;" class="mono"><strong>${fmtNum(res.exec)}</strong></td>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                      <div style="flex:1;height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${Math.min(100,res.pct)}%;background:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};border-radius:3px;"></div></div>
+                      <span class="mono" style="font-size:11px;min-width:34px;text-align:right;">${res.pct}%</span>
+                    </div>
+                  </td>
+                  <td style="text-align:center;" class="mono">${fmtMoney(rdoTotalValor(x))}</td>
+                  <td style="text-align:center;" class="mono">${m?.valorFaturado!=null && m?.valorFaturado!==''? '<strong>'+fmtMoney(m.valorFaturado)+'</strong>' : '—'}</td>
+                  <td style="text-align:center;" class="mono">${m?.cicloFaturamento? '<span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">'+esc(m.cicloFaturamento)+'</span>' : '—'}</td>
+                  <td style="text-align:center;white-space:nowrap;">${acao}</td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  if(!registros.length){
+    el.innerHTML = `<div class="section-gap">${stats}<div class="panel"><div class="empty-state">${icon('ruler',36)}<h3 style="margin-bottom:6px;">Nenhuma execução de OSE para medir</h3><p>Quando as equipes responderem o RDO de OSE, os dados aparecerão aqui para aprovação e medição.</p></div></div></div>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="section-gap">${stats}${filters}${tabela}</div>`;
+
+  const fEq = document.getElementById('med-ose-f-equipe');
+  const fSit = document.getElementById('med-ose-f-situacao');
+  const fSt = document.getElementById('med-ose-f-status');
+  const fDe = document.getElementById('med-ose-f-de');
+  const fAte = document.getElementById('med-ose-f-ate');
+  const fBusca = document.getElementById('med-ose-f-busca');
+  const norm = s=> String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const aplicar = ()=>{
+    const q = norm(fBusca.value.trim());
+    registros.forEach(x=>{
+      const eq = findEquipe(x.atribuicao.equipeId);
+      const m = med(x);
+      const situacao = m?.aprovado===false?'reprovada':m?'medicada':'pendente';
+      const okEq = !fEq.value || String(x.atribuicao.equipeId)===String(fEq.value);
+      const okSit = !fSit.value || situacao===fSit.value;
+      const okSt = !fSt.value || (m?.status||'')===fSt.value;
+      const data = x.atribuicao.dataProgramada||'';
+      const okDe = !fDe.value || data >= fDe.value;
+      const okAte = !fAte.value || data <= fAte.value;
+      const hay = norm([
+        oseProgLabel(x.programacao), x.programacao.municipio, x.programacao.subestacao,
+        equipeLabel(eq), eq?.supervisor, data, x.atribuicao.status, m?.status,
+        String(x.programacao.id), String(x.atribuicao.id)
+      ].join(' '));
+      const okBusca = !q || hay.indexOf(q)!==-1;
+      const tr = document.querySelector(`tr[data-med-ose-prog="${x.programacao.id}"][data-med-ose-atrib="${x.atribuicao.id}"]`);
+      if(tr) tr.style.display = (okEq&&okSit&&okSt&&okDe&&okAte&&okBusca)? '' : 'none';
+    });
+  };
+  fBusca.addEventListener('input', aplicar);
+  document.getElementById('med-ose-f-busca-aplicar').addEventListener('click', aplicar);
+  document.getElementById('med-ose-f-aplicar').addEventListener('click', aplicar);
+  document.getElementById('med-ose-f-limpar').addEventListener('click', ()=>{
+    fEq.value=''; fSit.value=''; fSt.value=''; fDe.value=''; fAte.value=''; fBusca.value=''; aplicar();
+  });
+
+  registros.forEach(x=>{
+    const tr = document.querySelector(`tr[data-med-ose-prog="${x.programacao.id}"][data-med-ose-atrib="${x.atribuicao.id}"]`);
+    if(!tr) return;
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('[data-med-ose-aprovar]') || e.target.closest('[data-med-ose-reprovar]') || e.target.closest('[data-med-ose-reaprovar]')) return;
+      openMedicaoOseModal(Number(x.atribuicao.id));
+    });
+    const ap = tr.querySelector(`[data-med-ose-aprovar="${x.atribuicao.id}"]`);
+    if(ap) ap.addEventListener('click', (e)=>{ e.stopPropagation(); aprovarMedicaoOse(Number(x.atribuicao.id)); });
+    const rp = tr.querySelector(`[data-med-ose-reprovar="${x.atribuicao.id}"]`);
+    if(rp) rp.addEventListener('click', (e)=>{ e.stopPropagation(); reprovarMedicaoOseModal(Number(x.atribuicao.id)); });
+    const rp2 = tr.querySelector(`[data-med-ose-reaprovar="${x.atribuicao.id}"]`);
+    if(rp2) rp2.addEventListener('click', (e)=>{ e.stopPropagation(); reaprovarMedicaoOse(Number(x.atribuicao.id)); });
+  });
+}
+
+function aprovarMedicaoOse(atribId){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoOse()){ toast('Apenas administradores podem aprovar a medição.', 'error'); return; }
+  const r = oseAtribGlobal(atribId);
+  if(!r) return;
+  if(findMedicaoOse(atribId)){ toast('Este RDO já possui registro de medição.', 'error'); return; }
+  modalComMotivo({
+    title:'Aprovar RDO para medição',
+    texto:'Confirma a aprovação deste RDO de <strong>'+esc(oseProgLabel(r.programacao))+'</strong> para a medição de OSE? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Aprovar',
+    onConfirm:(motivo)=>{
+      DB.medicaoOse = DB.medicaoOse||[];
+      DB.medicaoOse.push({
+        id: nextId(),
+        programacaoId: r.programacao.id,
+        atribuicaoId: r.atribuicao.id,
+        rdoData: structuredClone(r.atribuicao),
+        status: '',
+        cicloFaturamento: '',
+        valorFaturado: '',
+        aprovado: true,
+        motivoReprovacao: '',
+        motivoAprovacao: motivo,
+        totalReprovacoes: 0,
+        historicoReprovacoes: [],
+        aprovadoPor: currentAutor(),
+        aprovadoEm: Date.now(),
+        custom: {}
+      });
+      r.atribuicao.historico = r.atribuicao.historico||[];
+      r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+      registrarEvento('medicao','atribuicao',r.atribuicao.id,oseProgLabel(r.programacao),'RDO aprovado para medição de OSE · '+motivo);
+      saveData();
+      toast('RDO aprovado para medição.');
+      renderMediçãoOSE();
+    }
+  });
+}
+
+function reaprovarMedicaoOse(atribId){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoOse()){ toast('Apenas administradores podem reaprovar a medição.', 'error'); return; }
+  const m = findMedicaoOse(atribId);
+  if(!m){ toast('Registro não encontrado na medição.', 'error'); return; }
+  const r = oseAtribGlobal(atribId);
+  modalComMotivo({
+    title:'Reaprovar RDO na medição',
+    texto:'Confirma a REAPROVAÇÃO deste RDO de <strong>'+esc(oseProgLabel(r.programacao))+'</strong> na medição, após revisão? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Reaprovar',
+    onConfirm:(motivo)=>{
+      m.aprovado = true;
+      m.motivoReprovacao = '';
+      m.motivoAprovacao = motivo;
+      m.aprovadoPor = currentAutor();
+      m.aprovadoEm = Date.now();
+      r.atribuicao.historico = r.atribuicao.historico||[];
+      r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+      registrarEvento('medicao','atribuicao',atribId,oseProgLabel(r.programacao),'RDO reaprovado na medição OSE · '+motivo);
+      saveData();
+      toast('Medição reaprovada.');
+      renderMediçãoOSE();
+    }
+  });
+}
+
+function reprovarMedicaoOseModal(atribId){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoOse()){ toast('Apenas administradores podem reprovar a medição.', 'error'); return; }
+  const m = findMedicaoOse(atribId);
+  if(!m){ toast('Registro não encontrado na medição.', 'error'); return; }
+  const r = oseAtribGlobal(atribId);
+  const q = r? findEquipe(r.atribuicao.equipeId) : null;
+  const body = `
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Reprovar a medição de <strong>${esc(oseProgLabel(r.programacao))}</strong>${q? ' — '+esc(equipeLabel(q)):''}. Isso marcará como pendência para o responsável pelo RDO anexar mais evidências ou editar o registro.</div>
+    <div class="field"><label>Motivo da reprovação <span class="req">*</span></label><textarea name="motivo" required rows="3" maxlength="500" placeholder="Descreva o motivo da reprovação."></textarea></div>`;
+  openModal({
+    title:'Reprovar medição de OSE', bodyHtml: body, submitLabel:'Reprovar',
+    onSubmit:(fd)=>{
+      const motivo = String(fd.get('motivo')||'').trim();
+      if(!motivo){ toast('Informe o motivo da reprovação.', 'error'); return false; }
+      m.aprovado = false;
+      m.motivoReprovacao = motivo;
+      m.reprovadoPor = currentAutor();
+      m.reprovadoEm = Date.now();
+      m.totalReprovacoes = (m.totalReprovacoes||0)+1;
+      m.historicoReprovacoes = m.historicoReprovacoes||[];
+      m.historicoReprovacoes.push({ motivo, por: currentAutor(), em: Date.now() });
+      r.atribuicao.historico = r.atribuicao.historico||[];
+      r.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Reprovado', motivo});
+      registrarEvento('medicao','atribuicao',r.atribuicao.id,oseProgLabel(r.programacao),'RDO reprovado na medição OSE: '+motivo);
+      saveData();
+      toast('Medição reprovada.');
+      renderMediçãoOSE();
+      return true;
+    }
+  });
+}
+
+function medicaoOseFormHtml(m, totalRdo){
+  const isReprovada = m?.aprovado===false;
+  const mostrarValor = m?.status==='FATURADO';
+  const valFatNum = parseFloat(m?.valorFaturado)||0;
+  const precisaJustificar = mostrarValor && totalRdo > 0 && valFatNum > 0 && valFatNum < totalRdo;
+  return `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px;">
+      <div class="field" style="margin:0;">
+        <label>STATUS</label>
+        <select name="status" id="med-ose-status" ${isReprovada?'disabled':''}>
+          <option value="">Selecione...</option>
+          ${MED_OSE_STATUSES.map(o=>`<option value="${esc(o)}" ${m?.status===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+        ${isReprovada? '<div class="field-hint" style="color:var(--red);">Reprovado — edite o RDO e anexe evidências para reenviar.</div>':''}
+      </div>
+      <div class="field" style="margin:0;">
+        <label>CICLO FATURAMENTO</label>
+        <input type="text" name="cicloFaturamento" class="ciclo-input" maxlength="13" placeholder="CICLO-XX/XXXX" value="${esc(m?.cicloFaturamento||'')}" ${isReprovada?'disabled':''}>
+        <div class="field-hint">💡 Digite apenas o mês e o ano (ex.: 01/2026). O prefixo "CICLO-" é automático.</div>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>VALOR TOTAL RDO (R$)</label>
+        <div style="padding:8px 10px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;font-weight:700;font-size:13px;">${fmtMoney(totalRdo)}</div>
+        <div class="field-hint">Soma de (quantidade executada × valor unitário) de cada atividade.</div>
+      </div>
+      <div class="field" id="med-ose-valor-wrap" style="margin:0;${mostrarValor?'':'display:none;'}" data-ose-valor-faturado>
+        <label>VALOR FATURADO (R$)</label>
+        <input type="number" step="0.01" min="0" name="valorFaturado" id="med-ose-valor" placeholder="0,00" value="${m?.valorFaturado!=null && m?.valorFaturado!==''? m.valorFaturado:''}" ${isReprovada?'disabled':''}>
+        <div class="field-hint">Campo liberado quando o status for FATURADO.</div>
+      </div>
+      <div class="field" style="margin:0;grid-column:1/-1;${precisaJustificar?'':'display:none;'}" id="med-ose-justificativa-wrap" data-ose-justificativa-fat>
+        <label style="color:var(--red);">⚠ JUSTIFICATIVA — Valor faturado menor que o total do RDO</label>
+        <textarea name="justificativaValorMenor" rows="3" placeholder="Informe o motivo do valor faturado (R$ ${fmtMoney(valFatNum)}) ser menor que o valor total do RDO (R$ ${fmtMoney(totalRdo)})..." ${isReprovada?'disabled':''}>${esc(m?.justificativaValorMenor||'')}</textarea>
+        <div class="field-hint" style="color:var(--red);">Obrigatório quando o valor faturado for inferior ao valor total executado no RDO.</div>
+      </div>
+    </div>`;
+}
+
+function openMedicaoOseModal(atribId){
+  const x = flatOseAtribuicoes().find(y=> y.atribuicao.id===Number(atribId));
+  if(!x) return;
+  const m = findMedicaoOse(atribId);
+  const eq = findEquipe(x.atribuicao.equipeId);
+  const rdo = x.atribuicao.rdoRespostas||{};
+  const res = rdoResumo(x);
+  const imped = rdoImpedimentos(x.atribuicao);
+  const pode = appvMedicaoOse();
+  const estaAprovada = m?.aprovado===true;
+  const estaReprovada = m?.aprovado===false;
+  const atRdo = m?.rdoData || x.atribuicao;
+  const horarios = RDO_HORARIOS.map(h=> `
+    <tr><td style="font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;">${h.label}</td>
+    <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${atRdo[h.k]||'—'}</td></tr>`).join('');
+  const kms = RDO_KM.map(h=> `
+    <tr><td style="font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;">${h.label}</td>
+    <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${atRdo[h.k]||'—'}</td></tr>`).join('');
+  const condicoes = RDO_QUESTIONS.map(q=> `
+    <tr><td style="font-weight:600;padding:3px 12px 3px 0;">${q.label}</td>
+    <td style="padding:3px 10px;">${String((atRdo.rdoRespostas||{})[q.id]||'')||'—'}</td></tr>`).join('');
+  const observacao = atRdo.observacao||'';
+
+  const banner = estaReprovada
+    ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(224,97,91,.35);background:rgba(224,97,91,.08);border-radius:10px;margin-bottom:16px;">
+        <span style="color:var(--red);flex-shrink:0;margin-top:2px;">${icon('alert',18)}</span>
+        <div>
+          <strong style="color:var(--red);">Medição REPROVADA pelo usuário ${esc(m?.reprovadoPor?.usuarioNome||'—')}</strong>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Motivo: <strong>${esc(m?.motivoReprovacao||'—')}</strong><br>Em <span class="mono">${fmtDateTime(m?.reprovadoEm)}</span>. O responsável pelo RDO deve anexar mais evidências ou editar o registro para reenvio.</div>
+          <button type="button" class="btn btn-sm" data-editar-rdo-med-ose style="margin-top:8px;">${icon('edit',13)} Editar registro RDO</button>
+        </div>
+      </div>`
+    : estaAprovada
+      ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(87,199,199,.35);background:rgba(87,199,199,.06);border-radius:10px;margin-bottom:16px;">
+          <span style="color:var(--teal);flex-shrink:0;margin-top:2px;">${icon('check',18)}</span>
+          <div><strong style="color:var(--teal);">Medição APROVADA pelo usuário ${esc(m?.aprovadoPor?.usuarioNome||'—')}</strong><div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Em <span class="mono">${fmtDateTime(m?.aprovadoEm)}</span>${m?.motivoAprovacao? ' — Motivo: <strong style="color:#0f8a8a;">'+esc(m.motivoAprovacao)+'</strong>':''}. Preencha os campos de medição abaixo.</div></div>
+        </div>`
+      : (m? '' : `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Este RDO ainda não foi enviado para medição. Utilize o botão "Aprovar" no RDO de OSE.</div>`);
+
+  const body = `
+    ${banner}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div>
+        <h4 style="margin-bottom:8px;">Programação ${oseProgLabel(x.programacao)}</h4>
+        <p class="admin-field-meta" style="margin:2px 0;">Município: ${esc(x.programacao.municipio||'—')} ${zonaBadge(x.programacao.zona)}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Subestação: ${esc(x.programacao.subestacao||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Tipo Intervenção: ${esc(x.programacao.tipoIntervencao||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Nº Reserva/PEP: ${esc(x.programacao.numeroReserva||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Data: ${fmtDate(x.atribuicao.dataProgramada)}</p>
+        <div style="margin-top:8px;">${rdoStatusBadge(x.atribuicao.status)} ${medicaoOseStatusBadge(m?.status)}</div>
+      </div>
+      <div>
+        <h4 style="margin-bottom:8px;">Equipe</h4>
+        <p class="admin-field-meta" style="margin:2px 0;"><strong>${esc(equipeLabel(eq))}</strong></p>
+        <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:8px;">Horários do RDO</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${horarios}</table>
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:8px;">KM do Veículo</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${kms}</table>
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:8px;">Condições do RDO</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${condicoes}</table>
+      ${imped.length? `<div style="margin-top:10px;">${imped.map(i=>`<span class="badge" style="color:var(--red);background:rgba(224,97,91,.12);margin-right:4px;">${esc(i)}</span>`).join('')}</div>`:''}
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:6px;">Quantidades executadas</h4>
+      <div style="display:flex;gap:14px;margin-bottom:10px;">
+        <span class="badge-prefix">Prev. ${fmtNum(res.prev)}</span>
+        <span class="badge-prefix alt">Exec. ${fmtNum(res.exec)}</span>
+        <span class="badge-prefix" style="color:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};">${res.pct}%</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:left;">Estrutura</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;">Fotos</th></tr></thead>
+        <tbody>
+          ${((m?.rdoData?.atividades||x.atribuicao.atividades)||[]).map((a,idx)=>{
+            const at = findAtividade(a.atividadeId);
+            const p = parseFloat(a.quantidadePrevista)||0;
+            const e = a.quantidadeExecutada==null? null : parseFloat(a.quantidadeExecutada);
+            const pct = p? Math.round((e||0)/p*100) : 0;
+            const fotos = String(a.fotos||'').split(';;').filter(Boolean);
+            return `<tr style="border-top:1px solid var(--border-soft);">
+              <td style="padding:4px 6px;color:var(--muted-2);">${idx+1}</td>
+              <td class="mono" style="padding:4px 6px;">${esc(at?.codigo||'?')}</td>
+              <td style="padding:4px 6px;">${esc(at?.descricao||'')}</td>
+              <td style="text-align:center;">${esc(at?.unidade||'')}</td>
+              <td style="padding:4px 6px;">${esc(a.tipoEstrutura||'—')}</td>
+              <td style="text-align:center;" class="mono">${p? fmtNum(p):'—'}</td>
+              <td style="text-align:center;" class="mono"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
+              <td style="text-align:center;color:${pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--red)'};font-weight:700;">${p? pct+'%':'—'}</td>
+              <td style="text-align:center;">${fotos.length? `<div class="rdo-fotos" style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">${fotos.map(u=>`<img class="rdo-foto" src="${esc(u)}" alt="foto" title="Ampliar" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:zoom-in;">`).join('')}</div>`:'<span style="color:var(--muted-2);">—</span>'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${String(observacao||'').trim()? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:6px;">Observação da execução</h4><p style="font-size:12.5px;white-space:pre-wrap;line-height:1.55;">${esc(observacao)}</p></div>`:''}
+    ${(m && !estaReprovada)? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);">
+      <h4 style="margin-bottom:4px;">Campos de medição</h4>
+      ${medicaoOseFormHtml(m, rdoTotalValor(x))}
+    </div>`:(m === undefined? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);font-size:12.5px;color:var(--muted);">Aprovando este RDO, os campos de medição (Status, Ciclo de Faturamento e Valor Faturado) ficarão disponíveis para preenchimento.</div>`:'')}
+    <div class="admin-field-meta" style="margin-top:16px;">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
+
+  openModal({
+    title:'Medição OSE — '+oseProgLabel(x.programacao),
+    bodyHtml: body,
+    submitLabel: pode? 'Salvar medição' : 'Fechar',
+    wide:true, maxW:760,
+    footerBtns:[
+      { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'ose') }
+    ],
+    onSubmit:(fd)=>{
+      if(!pode) return true;
+      if(!m || estaReprovada) return true;
+      const ciclo = cicloMask(fd.get('cicloFaturamento'));
+      if(ciclo && !isCicloValido(ciclo)){
+        toast('Informe o ciclo de faturamento no formato CICLO-XX/XXXX (ex.: CICLO-01/2026).', 'error');
+        return false;
+      }
+      m.cicloFaturamento = ciclo;
+      m.status = fd.get('status');
+      m.valorFaturado = String(fd.get('valorFaturado')||'').trim();
+      const totalRdoVal = rdoTotalValor(x);
+      const valFat = parseFloat(m.valorFaturado)||0;
+      if(m.status==='FATURADO' && totalRdoVal > 0 && valFat > 0 && valFat < totalRdoVal){
+        const just = String(fd.get('justificativaValorMenor')||'').trim();
+        if(!just){
+          toast('Informe a justificativa para o valor faturado ser menor que o valor total do RDO.', 'error');
+          return false;
+        }
+        m.justificativaValorMenor = just;
+      } else {
+        m.justificativaValorMenor = '';
+      }
+      saveData();
+      toast('Medição salva.');
+      return true;
+    },
+    onMount:(root)=>{
+      bindCicloMasks(root);
+      root.querySelector('[data-editar-rdo-med-ose]')?.addEventListener('click', ()=>{
+        document.getElementById('modal-root').innerHTML='';
+        editRdoModal(x, oseProgLabel);
+        renderMediçãoOSE();
+      });
+      const stSel = root.querySelector('#med-ose-status');
+      const totalRdoVal = rdoTotalValor(x);
+      const toggleJustificativa = ()=>{
+        const jWrap = root.querySelector('[data-ose-justificativa-fat]');
+        if(!jWrap) return;
+        const valFat = parseFloat(root.querySelector('#med-ose-valor')?.value)||0;
+        const precisa = stSel?.value==='FATURADO' && totalRdoVal > 0 && valFat > 0 && valFat < totalRdoVal;
+        jWrap.style.display = precisa ? '' : 'none';
+        if(precisa){
+          const ta = jWrap.querySelector('textarea');
+          if(ta) ta.placeholder = `Informe o motivo do valor faturado (R$ ${fmtMoney(valFat)}) ser menor que o valor total do RDO (R$ ${fmtMoney(totalRdoVal)})...`;
+        }
+      };
+      if(stSel){
+        const toggleValor = ()=>{
+          const wrap = root.querySelector('[data-ose-valor-faturado]');
+          if(!wrap) return;
+          wrap.style.display = (stSel.value==='FATURADO')? '' : 'none';
+          toggleJustificativa();
+        };
+        stSel.addEventListener('change', toggleValor);
+        toggleValor();
+      }
+      const valInput = root.querySelector('#med-ose-valor');
+      if(valInput) valInput.addEventListener('input', toggleJustificativa);
+      toggleJustificativa();
+    }
+  });
 }
 function medicaoPodaRegistros(){
   return flatPodaAtribuicoes().filter(rdoTemExecucao);

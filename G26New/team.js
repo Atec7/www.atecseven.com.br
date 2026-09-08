@@ -158,7 +158,8 @@ const ICONS = {
   check:'<path d="M20 6 9 17l-5-5"/>',
   camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
   image:'<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
-  chart:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>'
+  chart:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+  'chevron-down':'<polyline points="6 9 12 15 18 9"/>'
 };
 
 /* ── FOTOS DOS REGISTROS (IMGGB) ── */
@@ -1170,6 +1171,37 @@ function abrirEmergencia(){
           <div id="emg-atividades">${atividadesHtml()}</div>
           <button type="button" class="btn btn-sm btn-ghost" id="emg-add-atv">${icon('plus',13)} Adicionar atividade</button>
         </div>
+        <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+          <button type="button" id="emg-rdo-toggle" style="width:100%;padding:12px 14px;background:var(--panel-2);border:none;font-weight:700;font-size:13px;color:var(--text);display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;">RDO — Questionário ${icon('chevron-down',15)}</button>
+          <div id="emg-rdo" style="display:none;padding:14px;">
+            <p style="font-size:12.5px;color:var(--muted);margin:0 0 14px;">Responda às questões e informe os horários de saída da base. São obrigatórios para o envio da ocorrência.</p>
+            ${RDO_PERGUNTAS.map(p=>`
+              <div style="margin-bottom:12px;">
+                <label style="display:block;font-weight:600;font-size:12.5px;margin-bottom:4px;">${p.label}</label>
+                <select class="rdo-select" data-rdo="${p.id}" style="width:100%;padding:8px;font-size:14px;">
+                  ${p.options.map(v=>`<option value="${v}" ${(p.padrao? v===p.padrao : v===p.options[0])?'selected':''}>${v}</option>`).join('')}
+                </select>
+              </div>`).join('')}
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-soft);">
+              <div style="margin-bottom:12px;">
+                <label style="display:block;font-weight:600;font-size:12.5px;margin-bottom:4px;">KM Inicial</label>
+                <input type="number" class="rdo-input" data-rdo="rdo_km_inicial" inputmode="numeric" autocomplete="off" placeholder="0" style="width:100%;padding:8px;font-size:16px;font-family:'JetBrains Mono',monospace;letter-spacing:.06em;">
+              </div>
+              <div style="margin-bottom:12px;">
+                <label style="display:block;font-weight:600;font-size:12.5px;margin-bottom:4px;">KM Final</label>
+                <input type="number" class="rdo-input" data-rdo="rdo_km_final" inputmode="numeric" autocomplete="off" placeholder="0" style="width:100%;padding:8px;font-size:16px;font-family:'JetBrains Mono',monospace;letter-spacing:.06em;">
+              </div>
+            </div>
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-soft);">
+              <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px;">Os horários de <strong>finalização, saída da obra e chegada na base</strong> serão solicitados ao enviar.</p>
+              ${[['rdo_horario_chegada','Horário Chegada'],['rdo_horario_inicio','Horário Início das atividades']].map(([id,label])=>`
+                <div style="margin-bottom:12px;">
+                  <label style="display:block;font-weight:600;font-size:12.5px;margin-bottom:4px;">${label}</label>
+                  <input type="text" class="rdo-input rdo-hora" data-rdo="${id}" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="HH:MM" style="width:100%;padding:8px;font-size:16px;font-family:'JetBrains Mono',monospace;letter-spacing:.06em;">
+                </div>`).join('')}
+            </div>
+          </div>
+        </div>
         <div class="field" style="margin:0;">
           <label>Observação <span class="req">*</span></label>
           <textarea id="emg-obs" rows="3" placeholder="Descreva o que foi executado / motivo da emergência">${esc(estado.observacoes)}</textarea>
@@ -1188,6 +1220,31 @@ function abrirEmergencia(){
   overlay.querySelector('#emg-equipe').addEventListener('change', e=>{ estado.equipeId=Number(e.target.value); });
   overlay.querySelector('#emg-add-atv').addEventListener('click', ()=>{ estado.atividades.push({atividadeId:'',quantidadeExecutada:'',tipoEstrutura:'',fotos:[]}); paintAtividades(); });
   overlay.querySelector('#emg-obs').addEventListener('input', e=>{ estado.observacoes=e.target.value; });
+  const rdoBox = overlay.querySelector('#emg-rdo');
+  const rdoToggle = overlay.querySelector('#emg-rdo-toggle');
+  rdoToggle.addEventListener('click', ()=>{
+    const aberto = rdoBox.style.display !== 'none';
+    rdoBox.style.display = aberto? 'none' : 'block';
+    rdoToggle.querySelector('svg').style.transform = aberto? '' : 'rotate(180deg)';
+  });
+  overlay.querySelectorAll('.rdo-hora').forEach(inp=>{
+    inp.addEventListener('input', ()=>{ maskHora(inp); });
+    inp.addEventListener('blur', ()=>{ padHora(inp); });
+  });
+  function getEmgRDORespostas(){
+    const respostas = {};
+    const root = overlay;
+    root.querySelectorAll('.rdo-select').forEach(s=>{ respostas[s.dataset.rdo] = s.value; });
+    root.querySelectorAll('.rdo-input').forEach(s=>{ respostas[s.dataset.rdo] = s.value; });
+    return respostas;
+  }
+  function emgRDOPreenchido(){
+    const res = getEmgRDORespostas();
+    const perguntasOk = RDO_PERGUNTAS.every(p=> res[p.id] && res[p.id] !== '');
+    const horarios = ['rdo_horario_chegada','rdo_horario_inicio'];
+    const horariosOk = horarios.every(id=> horaValida(res[id]));
+    return perguntasOk && horariosOk;
+  }
   overlay.querySelector('#emg-submit').addEventListener('click', async ()=>{
     const tipo = estado.tipo;
     const equipeId = estado.equipeId;
@@ -1196,6 +1253,7 @@ function abrirEmergencia(){
     if(!equipeId){ toast('Selecione a equipe (somente 1).','error'); return; }
     if(!ativs.length || ativs.every(a=>!a.atividadeId)){ toast('Selecione ao menos uma atividade.','error'); return; }
     if(!obs){ toast('A observação é obrigatória.','error'); return; }
+    if(!emgRDOPreenchido()){ toast('Responda todas as questões do RDO e preencha os horários (HH:MM) antes de enviar.', 'error'); return; }
     if(navigator.onLine===false){ toast('Conecte-se à internet para enviar a ocorrência de emergência.','error'); return; }
     const btn = document.getElementById('emg-submit');
     btn.disabled=true; btn.textContent='Enviando fotos…';
@@ -1216,37 +1274,54 @@ function abrirEmergencia(){
       db.ocnds = db.ocnds||[];
       const seq = (db.seq||0)+1; db.seq=seq;
       const ativsValidas = ativs.filter(a=>a.atividadeId);
-      const novo = {
-        id: seq,
-        gid: 'G26-'+String(Math.floor(1000000+Math.random()*9000000)),
-        tipo,
-        setor: '',
-        coordenacao: '',
-        ptp:'', si:'', ose:'', ocorrencia:'',
-        data: hojeISO(),
-        zona: '',
-        numeroReserva: '',
-        equipeId: equipeId,
-        observacoes: obs,
-        anexos: [],
-        status: 'Despachada',
-        numeroOC: '',
-        atividades: ativsValidas.map((a,i)=>({
-          atividadeId: Number(a.atividadeId),
-          quantidadePrevista: null,
-          quantidadeExecutada: (a.quantidadeExecutada===''||a.quantidadeExecutada==null)? null : parseFloat(a.quantidadeExecutada),
-          tipoEstrutura: a.tipoEstrutura||'',
-          fotos: fotosPorAtiv[i]||''
-        })),
-        rdoRespostas: {},
-        origem: 'emergencia',
-        historico: [{ usuarioNome:'Equipe (emergência)', usuarioLogin:'', ts:Date.now(), tipo:'emergencia', de:null, para:'Despachada', motivo:obs }]
-      };
-      db.ocnds.push(novo);
-      await DB_REF.set(JSON.stringify(db));
-      DB=db; saveCache(db); dbToEditors(DB);
-      toast('Ocorrência de emergência enviada ao escritório!');
-      close();
+      const rdoRespostas = getEmgRDORespostas();
+      coletarHorariosFinais(async (horariosFinais)=>{
+        try{
+          const respostasFinal = Object.assign({}, rdoRespostas, horariosFinais||{});
+          const novo = {
+            id: seq,
+            gid: 'G26-'+String(Math.floor(1000000+Math.random()*9000000)),
+            tipo,
+            setor: '',
+            coordenacao: '',
+            ptp:'', si:'', ose:'', ocorrencia:'',
+            data: hojeISO(),
+            zona: '',
+            numeroReserva: '',
+            equipeId: equipeId,
+            observacoes: obs,
+            anexos: [],
+            status: 'Despachada',
+            numeroOC: '',
+            atividades: ativsValidas.map((a,i)=>({
+              atividadeId: Number(a.atividadeId),
+              quantidadePrevista: null,
+              quantidadeExecutada: (a.quantidadeExecutada===''||a.quantidadeExecutada==null)? null : parseFloat(a.quantidadeExecutada),
+              tipoEstrutura: a.tipoEstrutura||'',
+              fotos: fotosPorAtiv[i]||''
+            })),
+            rdoRespostas: respostasFinal,
+            rdoHorarioChegada: respostasFinal.rdo_horario_chegada||'',
+            rdoHorarioInicio: respostasFinal.rdo_horario_inicio||'',
+            rdoHorarioFinalizacao: respostasFinal.rdo_horario_finalizacao||'',
+            rdoHorarioSaidaObra: respostasFinal.rdo_horario_saida_obra||'',
+            rdoHorarioChegadaBase: respostasFinal.rdo_horario_chegada_base||'',
+            rdoKmInicial: respostasFinal.rdo_km_inicial||'',
+            rdoKmFinal: respostasFinal.rdo_km_final||'',
+            origem: 'emergencia',
+            historico: [{ usuarioNome:'Equipe (emergência)', usuarioLogin:'', ts:Date.now(), tipo:'emergencia', de:null, para:'Despachada', motivo:obs }]
+          };
+          db.ocnds.push(novo);
+          await DB_REF.set(JSON.stringify(db));
+          DB=db; saveCache(db); dbToEditors(DB);
+          toast('Ocorrência de emergência enviada ao escritório!');
+          close();
+        }catch(err){
+          console.error(err);
+          toast('Falha ao enviar a ocorrência. Tente novamente.','error');
+          btn.disabled=false; btn.textContent=icon('check',15)+' Enviar ocorrência';
+        }
+      });
     }catch(err){
       console.error(err);
       toast('Falha ao enviar a ocorrência. Tente novamente.','error');
