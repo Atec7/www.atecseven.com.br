@@ -10644,14 +10644,21 @@ function renderRdoOcNds(){
               const badge = x.tipo==='OC'
                 ? `<span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">OC</span>`
                 : `<span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);">NDS</span>`;
+              const med = ocndsMedicaoFind(x.tipo, x.id);
+              const reprovada = !!(med && med.aprovado===false);
               return `
-                <tr data-ocnds-rdo="${x.id}" style="cursor:pointer;" title="Ver detalhes">
+                <tr data-ocnds-rdo="${x.id}" style="cursor:pointer;${reprovada? 'background:rgba(224,97,91,.07);box-shadow:inset 3px 0 0 var(--red);':''}" title="Ver detalhes">
                   <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
                   <td><strong>${ocndsGid(x)}</strong><div class="admin-field-meta">${esc(ocndsDesc(x))}</div></td>
                   <td>${badge}</td>
                   <td>${esc(equipeLabel(eq))}<div class="admin-field-meta">${esc(eq?.supervisor||'')}</div></td>
                   <td style="text-align:center;" class="mono">${fmtDate(x.data)}</td>
-                  <td style="text-align:center;"><span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);"><span class="badge-dot"></span>Concluída</span></td>
+                  <td style="text-align:center;">
+                    <div style="display:flex;flex-direction:column;gap:4px;align-items:center;">
+                      <span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);"><span class="badge-dot"></span>Concluída</span>
+                      ${reprovada? `<span class="badge" style="color:var(--red);background:rgba(224,97,91,.13);"><span class="badge-dot" style="background:var(--red);"></span>Reprovado na medição</span>`:''}
+                    </div>
+                  </td>
                   <td style="text-align:center;" class="mono">${esc(horarios)}</td>
                   <td style="text-align:center;">${esc(x.rdoCondicoes || (x.rdoRespostas&&x.rdoRespostas.rdo_condicoes) || '—')}</td>
                   <td style="text-align:center;">${imped.length? `<span class="badge" style="color:var(--red);background:rgba(224,97,91,.12);">${imped.length}</span>` : '—'}</td>
@@ -10784,10 +10791,7 @@ function openOcNdsRDOModal(id){
         <div style="font-size:12.5px;"><strong style="color:var(--teal);">${esc(tipo)} aprovado para medição</strong> <span style="color:var(--muted);">por ${esc(m.aprovadoPor?.usuarioNome||'—')} em <span class="mono">${fmtDateTime(m.aprovadoEm)}</span></span></div>
       </div>`;
     }
-    return `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid rgba(224,164,88,.4);background:rgba(224,164,88,.08);border-radius:10px;margin-bottom:16px;">
-      <span style="color:var(--accent);flex-shrink:0;">${icon('clock',18)}</span>
-      <div style="font-size:12.5px;"><strong style="color:var(--accent);">Pendente de aprovação na medição</strong> <span style="color:var(--muted);">— acesse Medição → ${esc(tipo)} para aprovar.</span></div>
-    </div>`;
+    return '';
   })();
 
   const body = `
@@ -10898,6 +10902,14 @@ function openOcNdsRDOModal(id){
           try{ openLightbox(JSON.parse(img.dataset.fotos||'[]'), Number(img.dataset.idx)||0); }catch(e){}
         }));
       };
+      const paintDescricoes = ()=>{
+        (x.atividades||[]).forEach((a,jdx)=>{
+          const el = root.querySelector(`[data-desc-line="${jdx}"]`);
+          if(!el) return;
+          const d = a.atividadeId? findAtividade(a.atividadeId) : null;
+          el.innerHTML = d? `<span class="mono">${esc(d.codigo)}</span> · ${esc(d.descricao)}` : '<span style="color:var(--muted-2);font-weight:400;">Selecione a atividade acima…</span>';
+        });
+      };
       const paintAtivs = ()=>{
         const box = root.querySelector('#rdo-dtl-ativs');
         if(!box) return;
@@ -10913,14 +10925,15 @@ function openOcNdsRDOModal(id){
             </div>
             <input type="number" step="0.01" min="0" class="rdo-dtl-exec" data-jdx="${jdx}" placeholder="Exec." style="max-width:90px;" value="${executada}">
             <button type="button" class="btn btn-sm btn-ghost" data-rdo-dtl-rm="${jdx}" title="Remover">${icon('x',13)}</button>
-            <div style="flex-basis:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <div style="flex-basis:100%;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+              <span class="rdo-dtl-desc" data-desc-line="${jdx}" style="font-size:12.5px;font-weight:600;color:var(--accent);">${atDef? `<span class="mono">${esc(atDef.codigo)}</span> · ${esc(atDef.descricao)}` : '<span style="color:var(--muted-2);font-weight:400;">Selecione a atividade acima…</span>'}</span>
               ${a.tipoEstrutura? `<span class="badge-prefix" style="font-size:10.5px;">Estruturas: ${esc(a.tipoEstrutura)}</span>`:''}
-              ${a.quantidadePrevista!=null && a.quantidadePrevista!==''? `<span class="admin-field-meta" style="font-size:11px;">Prev.: ${esc(fmtNum(a.quantidadePrevista))}</span>`:''}
+              ${a.quantidadePrevista!=null && a.quantidadePrevista!==''? `<span class="admin-field-meta" style="font-size:10.5px;">Prev.: ${esc(fmtNum(a.quantidadePrevista))}</span>`:''}
               ${fotos.length? fotos.map((u,fi)=>`<img class="rdo-dtl-foto" src="${esc(u)}" alt="foto" title="Ampliar" data-fotos='${esc(JSON.stringify(fotos))}' data-idx="${fi}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:zoom-in;">`).join('') : '<span style="font-size:11px;color:var(--muted-2);">Sem fotos.</span>'}
             </div>
           </div>`;
         }).join('') || '<p class="admin-field-meta" style="margin:8px 0 0;">Nenhuma atividade registrada.</p>';
-        bindActAutocomplete(root, [{atividades: x.atividades}], ()=> atualizarTotais(), null);
+        bindActAutocomplete(root, [{atividades: x.atividades}], ()=>{ atualizarTotais(); paintDescricoes(); }, null);
         bindFotoZoom();
         atualizarTotais();
       };
