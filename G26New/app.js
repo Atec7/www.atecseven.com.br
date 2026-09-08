@@ -143,7 +143,7 @@ function nextId(){ DB.seq = (DB.seq||1)+1; return DB.seq; }
 
 let DB = structuredClone(DEFAULT_DATA);
 let currentView = 'dashboard';
-let progFilters = (()=>{ const r=monthRangeISO(); return { projeto:'', projQ:'', equipe:'', status:'Programado', ciclo:'', dataDe:r.de, dataAte:r.ate, modo:'lista', calView:'mes', calDay:todayISO() }; })();
+let progFilters = (()=>{ const r=monthRangeISO(); return { projeto:'', projQ:'', equipe:'', status:'Programado', ciclo:'', dataDe:r.de, dataAte:r.ate, alteradaEquipe:false, modo:'lista', calView:'mes', calDay:todayISO() }; })();
 let ativFilters = { q:'', fav:'' };
 let equipeFilters = { q:'', status:'' };
 let projFilters = { q:'', status:'', ciclo:'', recebido:'', cidade:'', periodoDe:'', periodoAte:'' };
@@ -2371,6 +2371,7 @@ function programacoesFiltradas(){
     if(progFilters.ciclo && (x.programacao.ciclo||'')!==progFilters.ciclo) return false;
     if(progFilters.dataDe && x.atribuicao.dataProgramada < progFilters.dataDe) return false;
     if(progFilters.dataAte && x.atribuicao.dataProgramada > progFilters.dataAte) return false;
+    if(progFilters.alteradaEquipe && !lastTeamEdit(x.atribuicao)) return false;
     return true;
   }).sort((a,b)=> a.atribuicao.dataProgramada.localeCompare(b.atribuicao.dataProgramada));
 }
@@ -2407,6 +2408,7 @@ function renderProgramacoes(){
         <input type="date" id="f-data-ate" value="${progFilters.dataAte}" title="Data final">
         <button class="btn btn-sm" id="f-mes-atual" title="Filtrar pelo mês vigente">${icon('calendar',12)} Mês atual</button>
         <button class="btn btn-sm btn-ghost" id="f-limpar-datas" title="Remover o filtro de datas">Limpar</button>
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap;"><input type="checkbox" id="f-alterada-equipe" ${progFilters.alteradaEquipe?'checked':''}> Alterada pela equipe</label>
       </div>
       <span style="font-size:12px;color:var(--muted);">${progFilters.projQ? 'Encontradas ':'Total '}<strong style="color:var(--accent);">${list.length}</strong> de ${flatAtribuicoes().length} programações</span>
       <div class="tabs">
@@ -2426,6 +2428,7 @@ function renderProgramacoes(){
   document.getElementById('f-data-ate').addEventListener('change', e=>{progFilters.dataAte=e.target.value; renderContent();});
   document.getElementById('f-mes-atual').addEventListener('click', ()=>{ const r=monthRangeISO(); progFilters.dataDe=r.de; progFilters.dataAte=r.ate; renderContent(); });
   document.getElementById('f-limpar-datas').addEventListener('click', ()=>{ progFilters.dataDe=''; progFilters.dataAte=''; renderContent(); });
+  document.getElementById('f-alterada-equipe').addEventListener('change', e=>{progFilters.alteradaEquipe=e.target.checked; renderContent();});
   el.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>{progFilters.modo=t.dataset.modo; renderContent();}));
 
   const area = document.getElementById('prog-area');
@@ -7703,7 +7706,7 @@ function renderMediçãoPoda(){
         <div><h3>Medição de PODA</h3><div class="admin-field-meta">Dados do RDO de poda para aprovação e medição. Aprove para liberar os campos de medição.</div></div>
       </div>
       <div style="overflow-x:auto;">
-        <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1250px;">
+        <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1400px;">
           <thead>
             <tr>
               <th style="width:30px;">#</th>
@@ -7717,6 +7720,7 @@ function renderMediçãoPoda(){
               <th style="text-align:center;">Status Validação</th>
               <th style="text-align:center;">EQTL</th>
               <th style="text-align:center;">Recolha</th>
+              <th style="text-align:center;">Valor Total RDO</th>
               <th style="text-align:center;">Valor Faturado</th>
               <th style="text-align:center;">Ciclo Fat.</th>
               <th style="text-align:center;width:120px;">Ação</th>
@@ -7755,7 +7759,8 @@ function renderMediçãoPoda(){
                   <td style="text-align:center;">${medicaoPodaValidacaoBadge(m?.statusValidacao)}</td>
                   <td style="text-align:center;">${simNaoBadge(m?.enviadoEqtl)}</td>
                   <td style="text-align:center;">${simNaoBadge(m?.recolha)}</td>
-                  <td style="text-align:center;" class="mono">${m?.valorFaturado!=null && m?.valorFaturado!==''? '<strong>'+fmtMoney(m.valorFaturado)+'</strong>' : '—'}</td>
+                  <td style="text-align:center;" class="mono">${fmtMoney(rdoTotalValor(x))}</td>
+              <td style="text-align:center;" class="mono">${m?.valorFaturado!=null && m?.valorFaturado!==''? '<strong>'+fmtMoney(m.valorFaturado)+'</strong>' : '—'}</td>
                   <td style="text-align:center;" class="mono">${m?.cicloFaturamento? '<span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">'+esc(m.cicloFaturamento)+'</span>' : '—'}</td>
                   <td style="text-align:center;white-space:nowrap;">${acao}</td>
                 </tr>`;
@@ -7921,9 +7926,11 @@ function reprovarMedicaoPodaModal(atribId){
   });
 }
 
-function medicaoPodaFormHtml(m){
+function medicaoPodaFormHtml(m, totalRdo){
   const isReprovada = m?.aprovado===false;
   const mostrarValor = m?.statusValidacao==='FATURADA';
+  const valFatNum = parseFloat(m?.valorFaturado)||0;
+  const precisaJustificar = mostrarValor && totalRdo > 0 && valFatNum > 0 && valFatNum < totalRdo;
   return `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px;">
       <div class="field" style="margin:0;">
@@ -7953,10 +7960,20 @@ function medicaoPodaFormHtml(m){
           ${SIM_NAO_OPCOES.map(o=>`<option value="${o}" ${m?.recolha===o?'selected':''}>${o}</option>`).join('')}
         </select>
       </div>
+      <div class="field" style="margin:0;">
+        <label>VALOR TOTAL RDO (R$)</label>
+        <div style="padding:8px 10px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;font-weight:700;font-size:13px;">${fmtMoney(totalRdo)}</div>
+        <div class="field-hint">Soma de (quantidade executada × valor unitário) de cada atividade.</div>
+      </div>
       <div class="field" id="med-val-valor-wrap" style="margin:0;${mostrarValor?'':'display:none;'}" data-valor-faturado>
         <label>VALOR FATURADO (R$)</label>
         <input type="number" step="0.01" min="0" name="valorFaturado" id="med-val-valor" placeholder="0,00" value="${m?.valorFaturado!=null && m?.valorFaturado!==''? m.valorFaturado:''}" ${isReprovada?'disabled':''}>
         <div class="field-hint">Campo liberado quando o status de validação for FATURADA.</div>
+      </div>
+      <div class="field" style="margin:0;grid-column:1/-1;${precisaJustificar?'':'display:none;'}" id="med-val-justificativa-wrap" data-justificativa-fat>
+        <label style="color:var(--red);">⚠ JUSTIFICATIVA — Valor faturado menor que o total do RDO</label>
+        <textarea name="justificativaValorMenor" rows="3" placeholder="Informe o motivo do valor faturado (R$ ${fmtMoney(valFatNum)}) ser menor que o valor total do RDO (R$ ${fmtMoney(totalRdo)})..." ${isReprovada?'disabled':''}>${esc(m?.justificativaValorMenor||'')}</textarea>
+        <div class="field-hint" style="color:var(--red);">Obrigatório quando o valor faturado for inferior ao valor total executado no RDO.</div>
       </div>
     </div>`;
 }
@@ -8087,7 +8104,7 @@ function openMedicaoPodaModal(atribId){
     ${String(observacao||'').trim()? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:6px;">Observação da execução</h4><p style="font-size:12.5px;white-space:pre-wrap;line-height:1.55;">${esc(observacao)}</p></div>`:''}
     ${(m && !estaReprovada)? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);">
       <h4 style="margin-bottom:4px;">Campos de medição</h4>
-      ${medicaoPodaFormHtml(m)}
+      ${medicaoPodaFormHtml(m, rdoTotalValor(x))}
     </div>`:(m === undefined? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);font-size:12.5px;color:var(--muted);">Aprovando este RDO, os campos de medição (Status da Validação, Enviado EQTL e Recolha) ficarão disponíveis para preenchimento.</div>`:'')}
     <div class="admin-field-meta" style="margin-top:16px;">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
 
@@ -8112,6 +8129,18 @@ function openMedicaoPodaModal(atribId){
       m.enviadoEqtl = fd.get('enviadoEqtl');
       m.recolha = fd.get('recolha');
       m.valorFaturado = String(fd.get('valorFaturado')||'').trim();
+      const totalRdoVal = rdoTotalValor(x);
+      const valFat = parseFloat(m.valorFaturado)||0;
+      if(m.statusValidacao==='FATURADA' && totalRdoVal > 0 && valFat > 0 && valFat < totalRdoVal){
+        const just = String(fd.get('justificativaValorMenor')||'').trim();
+        if(!just){
+          toast('Informe a justificativa para o valor faturado ser menor que o valor total do RDO.', 'error');
+          return false;
+        }
+        m.justificativaValorMenor = just;
+      } else {
+        m.justificativaValorMenor = '';
+      }
       saveData();
       toast('Medição salva.');
       return true;
@@ -8124,14 +8153,31 @@ function openMedicaoPodaModal(atribId){
         renderMediçãoPoda();
       });
       const stSel = root.querySelector('#med-val-status');
+      const totalRdoVal = rdoTotalValor(x);
+      const toggleJustificativa = ()=>{
+        const jWrap = root.querySelector('[data-justificativa-fat]');
+        if(!jWrap) return;
+        const valFat = parseFloat(root.querySelector('#med-val-valor')?.value)||0;
+        const precisa = stSel?.value==='FATURADA' && totalRdoVal > 0 && valFat > 0 && valFat < totalRdoVal;
+        jWrap.style.display = precisa ? '' : 'none';
+        if(precisa){
+          const ta = jWrap.querySelector('textarea');
+          if(ta) ta.placeholder = `Informe o motivo do valor faturado (R$ ${fmtMoney(valFat)}) ser menor que o valor total do RDO (R$ ${fmtMoney(totalRdoVal)})...`;
+        }
+      };
       if(stSel){
         const toggleValor = ()=>{
           const wrap = root.querySelector('[data-valor-faturado]');
           if(!wrap) return;
           wrap.style.display = (stSel.value==='FATURADA')? '' : 'none';
+          toggleJustificativa();
         };
         stSel.addEventListener('change', toggleValor);
+        toggleValor();
       }
+      const valInput = root.querySelector('#med-val-valor');
+      if(valInput) valInput.addEventListener('input', toggleJustificativa);
+      toggleJustificativa();
     }
   });
 }
@@ -8860,6 +8906,14 @@ function rdoResumo(x){
   });
   const pct = prev>0? Math.round(exec/prev*100) : (at.status==='Concluído'? 100 : 0);
   return { prev, exec, pct };
+}
+function rdoTotalValor(x){
+  const at = x.atribuicao;
+  return (at.atividades||[]).reduce((s,a)=>{
+    const e = a.quantidadeExecutada==null? 0 : parseFloat(a.quantidadeExecutada)||0;
+    const vu = findAtividade(a.atividadeId)?.valorUnitario||0;
+    return s + e * vu;
+  }, 0);
 }
 function rdoImpedimentos(at){
   const itens=[];
