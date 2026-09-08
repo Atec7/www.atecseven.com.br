@@ -22,7 +22,7 @@ const AUD_REF = rtdb.ref('g26_planner/auditoria');
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js').catch(()=>{}); }
 
 const DEFAULT_DATA = {
-  equipes: [], atividades: [], projetos: [], programacoes: [], ocnds: [], podaProgramacoes: [], oseProgramacoes: [], usuarios: [], medicaoPoda: [], medicaoOse: [],
+  equipes: [], atividades: [], projetos: [], programacoes: [], ocnds: [], podaProgramacoes: [], oseProgramacoes: [], usuarios: [], medicaoPoda: [], medicaoOse: [], medicaoOc: [], medicaoNds: [],
   tiposEstrutura: [],
   customFields: { equipes: [], atividades: [], projetos: [], programacoes: [], podaProgramacoes: [], oseProgramacoes: [] },
   cidades: [], cidadeDistancias: [], cidadeMaxDist: 50,
@@ -7644,11 +7644,592 @@ function renderMedição(){
 function renderMediçãoProjetos(){
   renderModuloEmDesenvolvimento('Medição – Projetos');
 }
-function renderMediçãoOC(){
-  renderModuloEmDesenvolvimento('Medição – OC');
+function appvMedicaoOcNds(){
+  if(!CURRENT_USER) return true;
+  return ehMestre() || (CURRENT_USER.role==='administrador' && CURRENT_USER.nivel==='total');
 }
-function renderMediçãoNDS(){
-  renderModuloEmDesenvolvimento('Medição – NDS');
+function medicaoOcNdsStatusBadge(s){ return medicaoOseStatusBadge(s); }
+function findMedicaoOc(id){ return (DB.medicaoOc||[]).find(m=> m.ocndsId===Number(id)); }
+function findMedicaoNds(id){ return (DB.medicaoNds||[]).find(m=> m.ocndsId===Number(id)); }
+function ocndsMedicaoFind(tipo, id){ return tipo==='OC'? findMedicaoOc(id) : findMedicaoNds(id); }
+function ocndsMedicaoSet(tipo){ return tipo==='OC'? 'medicaoOc' : 'medicaoNds'; }
+function ocndsMedRegistros(tipo){ return (DB.ocnds||[]).filter(x=> x.tipo===tipo && x.status==='Concluída'); }
+function ocndsGid(x){ return x.gid||'G26-'+String(x.id).padStart(7,'0'); }
+function ocndsDesc(x){
+  if(x.tipo==='OC'){
+    const itens = [];
+    if(x.ptp) itens.push('PTP '+x.ptp);
+    if(x.si) itens.push('SI '+x.si);
+    if(x.ose) itens.push('OSE '+x.ose);
+    if(x.numeroOC) itens.push('OC '+x.numeroOC);
+    return itens.join(' · ') || x.setor||'—';
+  }
+  return (x.ocorrencia? 'Ocorrência '+x.ocorrencia : '') || x.setor||'—';
+}
+function ocndsResumo(x){
+  let exec = 0;
+  (x.atividades||[]).forEach(a=>{ const e = a.quantidadeExecutada==null? 0 : parseFloat(a.quantidadeExecutada)||0; exec += e; });
+  return { exec };
+}
+function ocndsTotalValor(x){
+  return (x.atividades||[]).reduce((s,a)=>{
+    const e = a.quantidadeExecutada==null? 0 : parseFloat(a.quantidadeExecutada)||0;
+    return s + e * (findAtividade(a.atividadeId)?.valorUnitario||0);
+  }, 0);
+}
+function renderMediçãoOC(){ renderMedicaoOcNds('OC'); }
+function renderMediçãoNDS(){ renderMedicaoOcNds('NDS'); }
+function renderMedicaoOcNds(tipo){
+  const el = document.getElementById('content');
+  const nome = tipo==='OC'? 'OC' : 'NDS';
+  const titulo = tipo==='OC'? 'Ocorrências (OC)' : 'Notas de Serviço (NDS)';
+  let registros = ocndsMedRegistros(tipo);
+  registros.sort((a,b)=> String(b.data||'').localeCompare(String(a.data||'')));
+
+  const pode = appvMedicaoOcNds();
+  const findM = (id)=> ocndsMedicaoFind(tipo, id);
+  const medicados = registros.filter(x=> !!findM(x.id));
+  const reprovadas = registros.filter(x=> findM(x.id)?.aprovado===false);
+  const pendentes = registros.filter(x=> !findM(x.id));
+
+  const stats = `
+    <div class="grid-stats">
+      <div class="stat-card"><div class="lbl">RDOs ${tipo}</div><div class="val">${registros.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--accent);"><div class="lbl">Pendentes</div><div class="val">${pendentes.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--teal);"><div class="lbl">Com medição</div><div class="val">${medicados.length}</div></div>
+      <div class="stat-card" style="--accent-c:var(--red);"><div class="lbl">Reprovadas</div><div class="val">${reprovadas.length}</div></div>
+    </div>`;
+
+  const equipes = [...new Set(registros.map(x=>x.equipeId))].map(id=>findEquipe(id)).filter(Boolean);
+
+  const filters = `
+    <div class="panel" style="padding:14px 16px;margin-bottom:16px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+        <input type="search" id="med-ocnds-f-busca-${tipo}" placeholder="Buscar por ocorrência, equipe, data, status..." style="flex:1;">
+        <button class="btn btn-sm" id="med-ocnds-f-busca-${tipo}-aplicar">${icon('search',13)} Buscar</button>
+      </div>
+      <div class="filters">
+        <label style="font-weight:600;">Equipe</label>
+        <select id="med-ocnds-f-equipe-${tipo}"><option value="">Todas</option>${equipes.map(e=>`<option value="${e.id}">${esc(equipeLabel(e))}</option>`).join('')}</select>
+        <label style="font-weight:600;">Situação</label>
+        <select id="med-ocnds-f-situacao-${tipo}"><option value="">Todas</option><option value="pendente">Pendente</option><option value="medicada">Com medição</option><option value="reprovada">Reprovada</option></select>
+        <label style="font-weight:600;">Status</label>
+        <select id="med-ocnds-f-status-${tipo}"><option value="">Todos</option>${MED_OSE_STATUSES.map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
+        <label style="font-weight:600;">De</label>
+        <input type="date" id="med-ocnds-f-de-${tipo}">
+        <label style="font-weight:600;">Até</label>
+        <input type="date" id="med-ocnds-f-ate-${tipo}">
+        <button class="btn btn-sm" id="med-ocnds-f-aplicar-${tipo}">${icon('grid',13)} Filtrar</button>
+        <button class="btn btn-sm btn-ghost" id="med-ocnds-f-limpar-${tipo}">Limpar</button>
+      </div>
+    </div>`;
+
+  const med = x=> findM(x.id);
+
+  const tabela = `
+    <div class="panel" style="padding:0;overflow:hidden;">
+      <div class="panel-head" style="padding:14px 16px;">
+        <div><h3>Medição de ${nome}</h3><div class="admin-field-meta">Ocorrências ${nome} concluídas para aprovação e medição. Aprove para liberar os campos de medição.</div></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1250px;">
+          <thead>
+            <tr>
+              <th style="width:30px;">#</th>
+              <th>Ocorrência</th>
+              <th>Equipe</th>
+              <th style="text-align:center;">Data</th>
+              <th style="text-align:center;">Status</th>
+              <th style="text-align:center;">Status Medição</th>
+              <th style="text-align:center;">Exec.</th>
+              <th style="text-align:center;">Valor Total RDO</th>
+              <th style="text-align:center;">Valor Faturado</th>
+              <th style="text-align:center;">Ciclo Fat.</th>
+              <th style="text-align:center;width:120px;">Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${registros.map((x,i)=>{
+              const eq = findEquipe(x.equipeId);
+              const res = ocndsResumo(x);
+              const m = med(x);
+              const rowStyle = m?.aprovado===false
+                ? 'border-left:3px solid var(--red);background:rgba(224,97,91,.06);'
+                : m
+                  ? 'border-left:3px solid var(--teal);background:rgba(87,199,199,.04);'
+                  : '';
+              const acao = m?.aprovado===false
+                ? (pode? `<button type="button" class="btn btn-sm btn-primary" data-med-ocnds-reaprovar="${x.id}">${icon('check',12)} Reaprovar</button>` : `<span class="badge" style="color:var(--red);background:rgba(224,97,91,.14);">REPROVADO</span>`)
+                : m?.aprovado===true
+                  ? (pode? `<button type="button" class="btn btn-sm btn-danger-solid" data-med-ocnds-reprovar="${x.id}">${icon('x',12)} Reprovado?</button>` : '<span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">Medido</span>')
+                  : (pode? `<button type="button" class="btn btn-sm btn-primary" data-med-ocnds-aprovar="${x.id}">${icon('check',12)} Aprovar</button>` : '<span style="color:var(--muted-2);">—</span>');
+              return `
+                <tr data-med-ocnds-id="${x.id}" style="cursor:pointer;${rowStyle}">
+                  <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
+                  <td><strong>${ocndsGid(x)}</strong><div class="admin-field-meta">${esc(ocndsDesc(x))}</div>${m?.aprovado===false&&m?.motivoReprovacao? `<div style="font-size:11px;color:var(--red);margin-top:2px;">${icon('alert',10)} ${esc(m.motivoReprovacao)}</div>`:''}</td>
+                  <td>${esc(equipeLabel(eq))}<div class="admin-field-meta">${esc(eq?.supervisor||'')}</div></td>
+                  <td style="text-align:center;" class="mono">${fmtDate(x.data)}</td>
+                  <td style="text-align:center;"><span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);">Concluída</span></td>
+                  <td style="text-align:center;">${medicaoOcNdsStatusBadge(m?.status)}</td>
+                  <td style="text-align:center;" class="mono"><strong>${fmtNum(res.exec)}</strong></td>
+                  <td style="text-align:center;" class="mono">${fmtMoney(ocndsTotalValor(x))}</td>
+                  <td style="text-align:center;" class="mono">${m?.valorFaturado!=null && m?.valorFaturado!==''? '<strong>'+fmtMoney(m.valorFaturado)+'</strong>' : '—'}</td>
+                  <td style="text-align:center;" class="mono">${m?.cicloFaturamento? '<span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">'+esc(m.cicloFaturamento)+'</span>' : '—'}</td>
+                  <td style="text-align:center;white-space:nowrap;">${acao}</td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  if(!registros.length){
+    el.innerHTML = `<div class="section-gap">${stats}<div class="panel"><div class="empty-state">${icon('ruler',36)}<h3 style="margin-bottom:6px;">Nenhuma ocorrência ${nome} concluída para medir</h3><p>Quando uma ocorrência ${nome} for concluída no RDO Ocorrências, os dados aparecerão aqui para aprovação e medição.</p></div></div></div>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="section-gap">${stats}${filters}${tabela}</div>`;
+
+  const fEq = document.getElementById('med-ocnds-f-equipe-'+tipo);
+  const fSit = document.getElementById('med-ocnds-f-situacao-'+tipo);
+  const fSt = document.getElementById('med-ocnds-f-status-'+tipo);
+  const fDe = document.getElementById('med-ocnds-f-de-'+tipo);
+  const fAte = document.getElementById('med-ocnds-f-ate-'+tipo);
+  const fBusca = document.getElementById('med-ocnds-f-busca-'+tipo);
+  const norm = s=> String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const aplicar = ()=>{
+    const q = norm(fBusca.value.trim());
+    registros.forEach(x=>{
+      const eq = findEquipe(x.equipeId);
+      const m = med(x);
+      const situacao = m?.aprovado===false?'reprovada':m?'medicada':'pendente';
+      const okEq = !fEq.value || String(x.equipeId)===String(fEq.value);
+      const okSit = !fSit.value || situacao===fSit.value;
+      const okSt = !fSt.value || (m?.status||'')===fSt.value;
+      const data = x.data||'';
+      const okDe = !fDe.value || data >= fDe.value;
+      const okAte = !fAte.value || data <= fAte.value;
+      const hay = norm([
+        ocndsGid(x), ocndsDesc(x), x.setor, x.coordenacao,
+        equipeLabel(eq), eq?.supervisor, data, x.status, m?.status,
+        String(x.id)
+      ].join(' '));
+      const okBusca = !q || hay.indexOf(q)!==-1;
+      const tr = document.querySelector(`tr[data-med-ocnds-id="${x.id}"]`);
+      if(tr) tr.style.display = (okEq&&okSit&&okSt&&okDe&&okAte&&okBusca)? '' : 'none';
+    });
+  };
+  fBusca.addEventListener('input', aplicar);
+  document.getElementById('med-ocnds-f-busca-'+tipo+'-aplicar').addEventListener('click', aplicar);
+  document.getElementById('med-ocnds-f-aplicar-'+tipo).addEventListener('click', aplicar);
+  document.getElementById('med-ocnds-f-limpar-'+tipo).addEventListener('click', ()=>{
+    fEq.value=''; fSit.value=''; fSt.value=''; fDe.value=''; fAte.value=''; fBusca.value=''; aplicar();
+  });
+
+  registros.forEach(x=>{
+    const tr = document.querySelector(`tr[data-med-ocnds-id="${x.id}"]`);
+    if(!tr) return;
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('[data-med-ocnds-aprovar]') || e.target.closest('[data-med-ocnds-reprovar]') || e.target.closest('[data-med-ocnds-reaprovar]')) return;
+      openMedicaoOcNdsModal(Number(x.id), tipo);
+    });
+    const ap = tr.querySelector(`[data-med-ocnds-aprovar="${x.id}"]`);
+    if(ap) ap.addEventListener('click', (e)=>{ e.stopPropagation(); aprovarMedicaoOcNds(Number(x.id), tipo); });
+    const rp = tr.querySelector(`[data-med-ocnds-reprovar="${x.id}"]`);
+    if(rp) rp.addEventListener('click', (e)=>{ e.stopPropagation(); reprovarMedicaoOcNdsModal(Number(x.id), tipo); });
+    const rp2 = tr.querySelector(`[data-med-ocnds-reaprovar="${x.id}"]`);
+    if(rp2) rp2.addEventListener('click', (e)=>{ e.stopPropagation(); reaprovarMedicaoOcNds(Number(x.id), tipo); });
+  });
+}
+
+function aprovarMedicaoOcNds(id, tipo){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoOcNds()){ toast('Apenas administradores podem aprovar a medição.', 'error'); return; }
+  const x = (DB.ocnds||[]).find(r=> r.id===Number(id));
+  if(!x) return;
+  if(ocndsMedicaoFind(tipo, id)){ toast('Esta ocorrência já possui registro de medição.', 'error'); return; }
+  modalComMotivo({
+    title:'Aprovar ocorrência para medição',
+    texto:'Confirma a aprovação da ocorrência <strong>'+esc(ocndsGid(x))+'</strong> para a medição de '+tipo+'? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Aprovar',
+    onConfirm:(motivo)=>{
+      const col = ocndsMedicaoSet(tipo);
+      DB[col] = DB[col]||[];
+      DB[col].push({
+        id: nextId(),
+        ocndsId: x.id,
+        rdoData: structuredClone(x),
+        status: '',
+        cicloFaturamento: '',
+        valorFaturado: '',
+        aprovado: true,
+        motivoReprovacao: '',
+        motivoAprovacao: motivo,
+        totalReprovacoes: 0,
+        historicoReprovacoes: [],
+        aprovadoPor: currentAutor(),
+        aprovadoEm: Date.now(),
+        custom: {}
+      });
+      x.historico = x.historico||[];
+      x.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+      registrarEvento('medicao','ocnds',x.id,ocndsGid(x),'Ocorrência '+tipo+' aprovada para medição · '+motivo);
+      saveData();
+      toast('Ocorrência aprovada para medição.');
+      renderMedicaoOcNds(tipo);
+    }
+  });
+}
+
+function reaprovarMedicaoOcNds(id, tipo){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoOcNds()){ toast('Apenas administradores podem reaprovar a medição.', 'error'); return; }
+  const m = ocndsMedicaoFind(tipo, id);
+  if(!m){ toast('Registro não encontrado na medição.', 'error'); return; }
+  const x = (DB.ocnds||[]).find(r=> r.id===Number(id));
+  modalComMotivo({
+    title:'Reaprovar ocorrência na medição',
+    texto:'Confirma a REAPROVAÇÃO da ocorrência <strong>'+esc(ocndsGid(x))+'</strong> na medição de '+tipo+', após revisão? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Reaprovar',
+    onConfirm:(motivo)=>{
+      m.aprovado = true;
+      m.motivoReprovacao = '';
+      m.motivoAprovacao = motivo;
+      m.aprovadoPor = currentAutor();
+      m.aprovadoEm = Date.now();
+      x.historico = x.historico||[];
+      x.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+      registrarEvento('medicao','ocnds',id,ocndsGid(x),'Ocorrência '+tipo+' reaprovada na medição · '+motivo);
+      saveData();
+      toast('Medição reaprovada.');
+      renderMedicaoOcNds(tipo);
+    }
+  });
+}
+
+function reprovarMedicaoOcNdsModal(id, tipo){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoOcNds()){ toast('Apenas administradores podem reprovar a medição.', 'error'); return; }
+  const m = ocndsMedicaoFind(tipo, id);
+  if(!m){ toast('Registro não encontrado na medição.', 'error'); return; }
+  const x = (DB.ocnds||[]).find(r=> r.id===Number(id));
+  const q = x? findEquipe(x.equipeId) : null;
+  const body = `
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Reprovar a medição de <strong>${esc(ocndsGid(x))}</strong>${q? ' — '+esc(equipeLabel(q)):''}. Isso marcará como pendência para o responsável editar o registro ou anexar mais evidências.</div>
+    <div class="field"><label>Motivo da reprovação <span class="req">*</span></label><textarea name="motivo" required rows="3" maxlength="500" placeholder="Descreva o motivo da reprovação."></textarea></div>`;
+  openModal({
+    title:'Reprovar medição de '+tipo, bodyHtml: body, submitLabel:'Reprovar',
+    onSubmit:(fd)=>{
+      const motivo = String(fd.get('motivo')||'').trim();
+      if(!motivo){ toast('Informe o motivo da reprovação.', 'error'); return false; }
+      m.aprovado = false;
+      m.motivoReprovacao = motivo;
+      m.reprovadoPor = currentAutor();
+      m.reprovadoEm = Date.now();
+      m.totalReprovacoes = (m.totalReprovacoes||0)+1;
+      m.historicoReprovacoes = m.historicoReprovacoes||[];
+      m.historicoReprovacoes.push({ motivo, por: currentAutor(), em: Date.now() });
+      x.historico = x.historico||[];
+      x.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Reprovado', motivo});
+      registrarEvento('medicao','ocnds',x.id,ocndsGid(x),'Ocorrência '+tipo+' reprovada na medição: '+motivo);
+      saveData();
+      toast('Medição reprovada.');
+      renderMedicaoOcNds(tipo);
+      return true;
+    }
+  });
+}
+
+function openMedicaoOcNdsModal(id, tipo){
+  const x = (DB.ocnds||[]).find(r=> r.id===Number(id));
+  if(!x) return;
+  const m = ocndsMedicaoFind(tipo, id);
+  const eq = findEquipe(x.equipeId);
+  const rdoRep = x.rdoRespostas||{};
+  const res = ocndsResumo(x);
+  const pode = appvMedicaoOcNds();
+  const estaAprovada = m?.aprovado===true;
+  const estaReprovada = m?.aprovado===false;
+  const at = m?.rdoData || x;
+  const atRdoRep = at.rdoRespostas||rdoRep;
+  const horarioVal = (kTop, kRep)=> at[kTop] || atRdoRep[kRep] || '—';
+  const horarios = [
+    ['rdoHorarioChegada','rdo_horario_chegada','Horário Chegada'],
+    ['rdoHorarioInicio','rdo_horario_inicio','Horário Início das atividades'],
+    ['rdoHorarioFinalizacao','rdo_horario_finalizacao','Horário Finalização'],
+    ['rdoHorarioSaidaObra','rdo_horario_saida_obra','Horário Saída da obra'],
+    ['rdoHorarioChegadaBase','rdo_horario_chegada_base','Horário Chegada na base']
+  ].map(([kTop,kRep,lbl])=> `
+    <tr><td style="font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;">${lbl}</td>
+    <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${esc(horarioVal(kTop,kRep))}</td></tr>`).join('');
+  const kms = [
+    ['rdoKmInicial','rdo_km_inicial','KM Inicial'],
+    ['rdoKmFinal','rdo_km_final','KM Final']
+  ].map(([kTop,kRep,lbl])=> `
+    <tr><td style="font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;">${lbl}</td>
+    <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${esc(horarioVal(kTop,kRep))}</td></tr>`).join('');
+  const condicoes = RDO_QUESTIONS.map(q=> `
+    <tr><td style="font-weight:600;padding:3px 12px 3px 0;">${q.label}</td>
+    <td style="padding:3px 10px;">${String(atRdoRep[q.id]||'')||'—'}</td></tr>`).join('');
+  const observacao = at.observacoes||at.observacao||'';
+  const anexosHtml = (x.anexos&&x.anexos.length)? `
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:8px;">Anexos do escritório</h4>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">${x.anexos.map(a=>`<a href="${esc(a.url)}" target="_blank" rel="noopener"><img src="${esc(a.url)}" alt="anexo" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:zoom-in;"></a>`).join('')}</div>
+    </div>`:'';
+
+  const banner = estaReprovada
+    ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(224,97,91,.35);background:rgba(224,97,91,.08);border-radius:10px;margin-bottom:16px;">
+        <span style="color:var(--red);flex-shrink:0;margin-top:2px;">${icon('alert',18)}</span>
+        <div>
+          <strong style="color:var(--red);">Medição REPROVADA pelo usuário ${esc(m?.reprovadoPor?.usuarioNome||'—')}</strong>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Motivo: <strong>${esc(m?.motivoReprovacao||'—')}</strong><br>Em <span class="mono">${fmtDateTime(m?.reprovadoEm)}</span>. Edite o registro ou anexe mais evidências para reenvio.</div>
+          <button type="button" class="btn btn-sm" data-editar-rdo-med-ocnds style="margin-top:8px;">${icon('edit',13)} Editar registro</button>
+        </div>
+      </div>`
+    : estaAprovada
+      ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(87,199,199,.35);background:rgba(87,199,199,.06);border-radius:10px;margin-bottom:16px;">
+          <span style="color:var(--teal);flex-shrink:0;margin-top:2px;">${icon('check',18)}</span>
+          <div><strong style="color:var(--teal);">Medição APROVADA pelo usuário ${esc(m?.aprovadoPor?.usuarioNome||'—')}</strong><div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Em <span class="mono">${fmtDateTime(m?.aprovadoEm)}</span>${m?.motivoAprovacao? ' — Motivo: <strong style="color:#0f8a8a;">'+esc(m.motivoAprovacao)+'</strong>':''}. Preencha os campos de medição abaixo.</div></div>
+        </div>`
+      : (m? '' : `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Esta ocorrência ainda não foi enviada para medição. Utilize o botão "Aprovar".</div>`);
+
+  const badgeTipo = x.tipo==='OC'
+    ? `<span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">OC</span>`
+    : `<span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);">NDS</span>`;
+
+  const body = `
+    ${banner}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div>
+        <h4 style="margin-bottom:8px;">Ocorrência ${ocndsGid(x)} ${badgeTipo}</h4>
+        <p class="admin-field-meta" style="margin:2px 0;">Setor: ${esc(x.setor||'—')} · Coordenação: ${esc(x.coordenacao||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Zona: ${zonaBadge(x.zona)}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">${tipo==='OC'? `PTP ${esc(x.ptp||'—')} · SI ${esc(x.si||'—')} · OSE ${esc(x.ose||'—')}` : `Ocorrência ${esc(x.ocorrencia||'—')}`}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Nº Reserva/PEP: ${esc(x.numeroReserva||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Data: ${fmtDate(x.data)}</p>
+        <div style="margin-top:8px;"><span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);">Concluída</span> ${medicaoOcNdsStatusBadge(m?.status)}</div>
+      </div>
+      <div>
+        <h4 style="margin-bottom:8px;">Equipe</h4>
+        <p class="admin-field-meta" style="margin:2px 0;"><strong>${esc(equipeLabel(eq))}</strong></p>
+        <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:8px;">Horários do RDO</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${horarios}</table>
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:8px;">KM do Veículo</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${kms}</table>
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:8px;">Condições do RDO</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${condicoes}</table>
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:6px;">Quantidades executadas</h4>
+      <div style="display:flex;gap:14px;margin-bottom:10px;">
+        <span class="badge-prefix alt">Exec. ${fmtNum(res.exec)}</span>
+        <span class="badge-prefix">Valor total ${fmtMoney(ocndsTotalValor(x))}</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:left;">Estrutura</th><th style="text-align:center;">Exec.</th><th style="text-align:right;">Valor</th><th style="text-align:center;">Fotos</th></tr></thead>
+        <tbody>
+          ${(at.atividades||[]).map((a,idx)=>{
+            const ativ = findAtividade(a.atividadeId);
+            const e = a.quantidadeExecutada==null? null : parseFloat(a.quantidadeExecutada);
+            const vu = ativ?.valorUnitario||0;
+            const execVal = e!=null? e*vu : 0;
+            const fotos = String(a.fotos||'').split(';;').filter(Boolean);
+            return `<tr style="border-top:1px solid var(--border-soft);">
+              <td style="padding:4px 6px;color:var(--muted-2);">${idx+1}</td>
+              <td class="mono" style="padding:4px 6px;">${esc(ativ?.codigo||'?')}</td>
+              <td style="padding:4px 6px;">${esc(ativ?.descricao||'')}</td>
+              <td style="text-align:center;">${esc(ativ?.unidade||'')}</td>
+              <td style="padding:4px 6px;">${esc(a.tipoEstrutura||'—')}</td>
+              <td style="text-align:center;" class="mono"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
+              <td style="text-align:right;" class="mono">${fmtMoney(execVal)}</td>
+              <td style="text-align:center;">${fotos.length? `<div class="rdo-fotos" style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">${fotos.map(u=>`<img class="rdo-foto" src="${esc(u)}" alt="foto" title="Ampliar" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:zoom-in;">`).join('')}</div>`:'<span style="color:var(--muted-2);">—</span>'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${String(observacao||'').trim()? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:6px;">Observação</h4><p style="font-size:12.5px;white-space:pre-wrap;line-height:1.55;">${esc(observacao)}</p></div>`:''}
+    ${anexosHtml}
+    ${(m && !estaReprovada)? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);">
+      <h4 style="margin-bottom:4px;">Campos de medição</h4>
+      ${medicaoOseFormHtml(m, ocndsTotalValor(x))}
+    </div>`:(m === undefined? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);font-size:12.5px;color:var(--muted);">Aprovando esta ocorrência, os campos de medição (Status, Ciclo de Faturamento e Valor Faturado) ficarão disponíveis para preenchimento.</div>`:'')}`;
+
+  openModal({
+    title:'Medição '+tipo+' — '+ocndsGid(x),
+    bodyHtml: body,
+    submitLabel: pode? 'Salvar medição' : 'Fechar',
+    wide:true, maxW:760,
+    footerBtns:[
+      { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printOcNdsCompleto(x) }
+    ],
+    onSubmit:(fd)=>{
+      if(!pode) return true;
+      if(!m || estaReprovada) return true;
+      const ciclo = cicloMask(fd.get('cicloFaturamento'));
+      if(ciclo && !isCicloValido(ciclo)){
+        toast('Informe o ciclo de faturamento no formato CICLO-XX/XXXX (ex.: CICLO-01/2026).', 'error');
+        return false;
+      }
+      m.cicloFaturamento = ciclo;
+      m.status = fd.get('status');
+      m.valorFaturado = String(fd.get('valorFaturado')||'').trim();
+      const totalRdoVal = ocndsTotalValor(x);
+      const valFat = parseFloat(m.valorFaturado)||0;
+      if(m.status==='FATURADO' && totalRdoVal > 0 && valFat > 0 && valFat < totalRdoVal){
+        const just = String(fd.get('justificativaValorMenor')||'').trim();
+        if(!just){
+          toast('Informe a justificativa para o valor faturado ser menor que o valor total do RDO.', 'error');
+          return false;
+        }
+        m.justificativaValorMenor = just;
+      } else {
+        m.justificativaValorMenor = '';
+      }
+      saveData();
+      toast('Medição salva.');
+      return true;
+    },
+    onMount:(root)=>{
+      bindCicloMasks(root);
+      root.querySelector('[data-editar-rdo-med-ocnds]')?.addEventListener('click', ()=>{
+        document.getElementById('modal-root').innerHTML='';
+        openOcNdsModal(Number(x.id));
+        renderMedicaoOcNds(tipo);
+      });
+      const stSel = root.querySelector('#med-ose-status');
+      const totalRdoVal = ocndsTotalValor(x);
+      const toggleJustificativa = ()=>{
+        const jWrap = root.querySelector('[data-ose-justificativa-fat]');
+        if(!jWrap) return;
+        const valFat = parseFloat(root.querySelector('#med-ose-valor')?.value)||0;
+        const precisa = stSel?.value==='FATURADO' && totalRdoVal > 0 && valFat > 0 && valFat < totalRdoVal;
+        jWrap.style.display = precisa ? '' : 'none';
+        if(precisa){
+          const ta = jWrap.querySelector('textarea');
+          if(ta) ta.placeholder = `Informe o motivo do valor faturado (R$ ${fmtMoney(valFat)}) ser menor que o valor total do RDO (R$ ${fmtMoney(totalRdoVal)})...`;
+        }
+      };
+      if(stSel){
+        const toggleValor = ()=>{
+          const wrap = root.querySelector('[data-ose-valor-faturado]');
+          if(!wrap) return;
+          wrap.style.display = (stSel.value==='FATURADO')? '' : 'none';
+          toggleJustificativa();
+        };
+        stSel.addEventListener('change', toggleValor);
+        toggleValor();
+      }
+      const valInput = root.querySelector('#med-ose-valor');
+      if(valInput) valInput.addEventListener('input', toggleJustificativa);
+      toggleJustificativa();
+    }
+  });
+}
+function printOcNdsCompleto(x){
+  const eq = findEquipe(x.equipeId);
+  const rdoRep = x.rdoRespostas||{};
+  const res = ocndsResumo(x);
+  const geradoPor = CURRENT_USER ? ((CURRENT_USER.nome||'') + (CURRENT_USER.login? ' ('+CURRENT_USER.login+')':'') || 'Sistema') : 'Sistema';
+  const horarioVal = (kTop, kRep)=> x[kTop] || rdoRep[kRep] || '—';
+  const horarios = [
+    ['rdoHorarioChegada','rdo_horario_chegada','Horário Chegada'],
+    ['rdoHorarioInicio','rdo_horario_inicio','Horário Início das atividades'],
+    ['rdoHorarioFinalizacao','rdo_horario_finalizacao','Horário Finalização'],
+    ['rdoHorarioSaidaObra','rdo_horario_saida_obra','Horário Saída da obra'],
+    ['rdoHorarioChegadaBase','rdo_horario_chegada_base','Horário Chegada na base']
+  ].map(([kTop,kRep,lbl])=>`<tr><td style="border:1px solid #999;padding:4px 8px;font-weight:600;background:#f5f5f5;">${lbl}</td><td style="border:1px solid #999;padding:4px 8px;">${esc(horarioVal(kTop,kRep))}</td></tr>`).join('');
+  const kmRows = [
+    ['rdoKmInicial','rdo_km_inicial','KM Inicial'],
+    ['rdoKmFinal','rdo_km_final','KM Final']
+  ].map(([kTop,kRep,lbl])=>`<tr><td style="border:1px solid #999;padding:4px 8px;font-weight:600;background:#f5f5f5;">${lbl}</td><td style="border:1px solid #999;padding:4px 8px;">${esc(horarioVal(kTop,kRep))}</td></tr>`).join('');
+  const condicoes = RDO_QUESTIONS.map(q=>`<tr><td style="border:1px solid #999;padding:4px 8px;font-weight:600;background:#f5f5f5;">${q.label}</td><td style="border:1px solid #999;padding:4px 8px;">${String(rdoRep[q.id]||'')||'—'}</td></tr>`).join('');
+  const ativRows = (x.atividades||[]).map((a,idx)=>{
+    const at = findAtividade(a.atividadeId);
+    const e = a.quantidadeExecutada==null? null : parseFloat(a.quantidadeExecutada);
+    const vu = at?.valorUnitario||0;
+    const execVal = e!=null? e*vu : 0;
+    const fotos = String(a.fotos||'').split(';;').filter(Boolean);
+    const fotosHtml = fotos.length? `<div class="fotos">${fotos.map(u=>`<figure><img src="${esc(u)}" alt="Foto da atividade ${idx+1}"><figcaption>Atividade ${at?.codigo||idx+1} — foto ${idx+1}</figcaption></figure>`).join('')}</div>` : '<div style="color:#999;">Sem fotos registradas.</div>';
+    return `<tr>
+      <td style="border:1px solid #999;padding:4px 8px;text-align:center;">${idx+1}</td>
+      <td style="border:1px solid #999;padding:4px 8px;" class="mono">${esc(at?.codigo||'?')}</td>
+      <td style="border:1px solid #999;padding:4px 8px;">${esc(at?.descricao||'')}</td>
+      <td style="border:1px solid #999;padding:4px 8px;text-align:center;">${esc(at?.unidade||'')}</td>
+      <td style="border:1px solid #999;padding:4px 8px;">${esc(a.tipoEstrutura||'—')}</td>
+      <td style="border:1px solid #999;padding:4px 8px;text-align:center;"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
+      <td style="border:1px solid #999;padding:4px 8px;text-align:right;">${fmtMoney(execVal)}</td>
+    </tr><tr><td colspan="7" style="border:1px solid #999;padding:8px;background:#fafafa;">${fotosHtml}</td></tr>`;
+  }).join('') || '<tr><td colspan="7" style="border:1px solid #999;padding:4px 8px;">Sem atividades registradas.</td></tr>';
+  const obs = x.observacoes||x.observacao||'';
+  const stColor = STATUS_OC_NDS_COLOR[x.status]||'#555';
+
+  const w = window.open('', '_blank', 'width=1100,height=800');
+  if(!w) return;
+  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>RDO ${esc(x.gid||'G26-'+String(x.id).padStart(7,'0'))} — ${x.tipo}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px 30px;}
+    h1{font-size:18px;margin:0 0 2px;}
+    h2{font-size:14px;margin:18px 0 6px;border-bottom:2px solid #444;padding-bottom:3px;}
+    .meta{color:#555;font-size:11.5px;margin:2px 0;}
+    .grid{display:flex;gap:40px;flex-wrap:wrap;}
+    table{border-collapse:collapse;width:100%;}
+    th{background:#eee;text-align:left;padding:4px 8px;border:1px solid #999;}
+    td{padding:4px 8px;border:1px solid #999;}
+    .mono{font-family:Consolas,monospace;font-size:11px;}
+    .fotos{display:flex;flex-wrap:wrap;gap:12px;}
+    .fotos figure{margin:0;width:210px;border:1px solid #ccc;border-radius:4px;padding:6px;background:#fff;}
+    .fotos img{width:100%;height:auto;border-radius:3px;}
+    .fotos figcaption{font-size:10px;color:#666;margin-top:4px;}
+    .assin{display:flex;gap:60px;margin-top:46px;}
+    .assin div{flex:1;text-align:center;font-size:11px;color:#555;}
+    .assin .linha{border-top:1px solid #333;padding-top:6px;margin-top:34px;}
+  </style></head><body>
+    <h1>Relatório de RDO — Ocorrência ${x.tipo}</h1>
+    <p class="meta">Ocorrência <strong>${esc(x.gid||'G26-'+String(x.id).padStart(7,'0'))}</strong> · Status: <span style="color:${stColor};font-weight:600;">${esc(x.status)}</span></p>
+    <p class="meta">Setor: ${esc(x.setor||'—')} · Coordenação: ${esc(x.coordenacao||'—')} · Zona: ${esc(x.zona||'—')} · Data: ${fmtDate(x.data)} · Nº Reserva/PEP: ${esc(x.numeroReserva||'—')}</p>
+    <p class="meta">${x.tipo==='OC'? 'PTP: '+esc(x.ptp||'—')+' · SI: '+esc(x.si||'—')+' · OSE: '+esc(x.ose||'—') : 'Ocorrência: '+esc(x.ocorrencia||'—')}</p>
+    <p class="meta">Equipe: <strong>${esc(equipeLabel(eq))}</strong> · Supervisor: ${esc(eq?.supervisor||'—')} · Encarregado: ${esc(eq?.encarregado||'—')} · Motorista: ${esc(eq?.motorista||'—')} · Placa: ${esc(eq?.placaVeiculo||'—')}</p>
+    <p class="meta">Gerado por: <strong>${esc(geradoPor)}</strong> em ${fmtDateTime(Date.now())}</p>
+
+    <h2>Horários do RDO</h2>
+    <table>${horarios}</table>
+
+    <h2>KM do Veículo</h2>
+    <table>${kmRows}</table>
+
+    <h2>Condições do RDO</h2>
+    <table>${condicoes}</table>
+
+    <h2>Atividades e quantidades executadas</h2>
+    <p class="meta">Exec. total: <strong>${fmtNum(res.exec)}</strong> · Valor total do RDO: <strong>${fmtMoney(ocndsTotalValor(x))}</strong></p>
+    <table>
+      <thead><tr><th>#</th><th>Código</th><th>Descrição</th><th>Un.</th><th>Estrutura</th><th>Exec.</th><th>Valor</th></tr></thead>
+      <tbody>${ativRows}</tbody>
+    </table>
+
+    ${String(obs||'').trim()? `<h2>Observação</h2><p style="white-space:pre-wrap;">${esc(obs)}</p>`:''}
+
+    <div class="assin">
+      <div>Supervisor<br><div class="linha">Assinatura e carimbo</div></div>
+      <div>Encarregado<br><div class="linha">Assinatura e carimbo</div></div>
+      <div>Responsável pelo projeto<br><div class="linha">Assinatura e carimbo</div></div>
+    </div>
+    <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},800);});<\/script>
+  </body></html>`);
+  w.document.close();
 }
 const MED_OSE_STATUSES = ['APROVAR ORÇAMENTO','ATEC','CONC','COMISSIONADA','CRIAR NOTA','AS-BUILT','ERRO SISTEMICO','FATURADO','AGUARDANDO BAIXA MATERIAL','AGUARDANDO TÁTICO','REPROVA','AGUARDANDO CADASTRO','CANCELADO'];
 function medicaoOseStatusBadge(s){
@@ -9617,6 +10198,7 @@ function renderRdoProjetos(){
 function renderRdoOcNds(){
   const el = document.getElementById('content');
   const ocndsConcluidas = ocndsVisiveis().filter(x=>x.status==='Concluída').sort((a,b)=> String(b.data||'').localeCompare(String(a.data||'')));
+  const pode = appvMedicaoOcNds();
 
   if(!ocndsConcluidas.length){
     el.innerHTML = `<div class="section-gap"><div class="panel"><div class="empty-state">${icon('check',36)}<h3 style="margin-bottom:6px;">Nenhuma ocorrência OC/NDS concluída</h3><p>Quando as equipes concluiram uma ocorrência OC/NDS, os dados aparecerão aqui.</p><button class="btn btn-primary" id="rdo-oc-back" style="margin-top:16px;">Voltar ao Painel</button></div></div></div>`;
@@ -9629,10 +10211,10 @@ function renderRdoOcNds(){
     <div class="section-gap">
       <div class="panel" style="padding:0;overflow:hidden;">
         <div class="panel-head" style="padding:14px 16px;">
-          <div><h3>Ocorrências OC/NDS Concluídas</h3><div class="admin-field-meta">${ocndsConcluidas.length} ocorrência(s) concluída(s) e registrada(s) no RDO.</div></div>
+          <div><h3>Ocorrências OC/NDS Concluídas</h3><div class="admin-field-meta">${ocndsConcluidas.length} ocorrência(s) concluída(s) e registrada(s) no RDO. Aprovando, a ocorrência sobe para a medição (OC ou NDS) com os campos de medição.</div></div>
         </div>
         <div style="overflow-x:auto;">
-          <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1050px;">
+          <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1200px;">
             <thead>
               <tr>
                 <th style="width:30px;">#</th>
@@ -9644,22 +10226,34 @@ function renderRdoOcNds(){
                 <th>Equipe</th>
                 <th style="text-align:center;">Data</th>
                 <th style="text-align:center;">Status</th>
-                <th style="width:40px;"></th>
+                <th style="text-align:center;">Status Medição</th>
+                <th style="text-align:center;width:130px;">Ação</th>
               </tr>
             </thead>
             <tbody>
               ${ocndsConcluidas.map((x,i)=>{
                 const eq = findEquipe(x.equipeId);
+                const m = ocndsMedicaoFind(x.tipo, x.id);
+                const rowStyle = m?.aprovado===false
+                  ? 'border-left:3px solid var(--red);background:rgba(224,97,91,.06);'
+                  : m
+                    ? 'border-left:3px solid var(--teal);background:rgba(87,199,199,.04);'
+                    : '';
                 const badge = x.tipo==='OC'
                   ? `<span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">OC</span>`
                   : `<span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);">NDS</span>`;
                 const detalhes = x.tipo==='OC'
                   ? [x.ptp&&'PTP: '+x.ptp, x.si&&'SI: '+x.si, x.ose&&'OSE: '+x.ose, x.numeroOC&&'OC: '+x.numeroOC, x.zona&&'Zona: '+x.zona, x.numeroReserva&&'Reserva/PEP: '+x.numeroReserva].filter(Boolean).join(' · ')||'—'
                   : [x.ocorrencia&&'Ocorrência: '+x.ocorrencia, x.zona&&'Zona: '+x.zona, x.numeroReserva&&'Reserva/PEP: '+x.numeroReserva].filter(Boolean).join(' · ')||'—';
+                const acao = m?.aprovado===false
+                  ? (pode? `<button type="button" class="btn btn-sm btn-primary" data-ocnds-reaprovar="${x.id}">${icon('check',12)} Reaprovar</button>` : `<span class="badge" style="color:var(--red);background:rgba(224,97,91,.14);">REPROVADO</span>`)
+                  : m?.aprovado===true
+                    ? (pode? `<button type="button" class="btn btn-sm btn-danger-solid" data-ocnds-reprovar="${x.id}">${icon('x',12)} Reprovado?</button>` : '<span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">Medido</span>')
+                    : (pode? `<button type="button" class="btn btn-sm btn-primary" data-ocnds-aprovar="${x.id}">${icon('check',12)} Aprovar</button>` : '<span style="color:var(--muted-2);">—</span>');
                 return `
-                  <tr data-ocnds-rdo="${x.id}" style="cursor:pointer;" title="Ver detalhes">
+                  <tr data-ocnds-rdo="${x.id}" style="cursor:pointer;${rowStyle}" title="Ver detalhes">
                     <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
-                    <td class="mono">${esc(x.gid||'G26-'+String(x.id).padStart(7,'0'))}</td>
+                    <td class="mono">${esc(x.gid||'G26-'+String(x.id).padStart(7,'0'))}${m?.aprovado===false&&m?.motivoReprovacao? `<div style="font-size:11px;color:var(--red);margin-top:2px;">${icon('alert',10)} ${esc(m.motivoReprovacao)}</div>`:''}</td>
                     <td>${badge}</td>
                     <td style="font-size:12px;">${esc(x.setor||'—')}</td>
                     <td style="font-size:12px;">${esc(x.coordenacao||'—')}</td>
@@ -9667,7 +10261,8 @@ function renderRdoOcNds(){
                     <td>${esc(equipeLabel(eq))}<div class="admin-field-meta">${esc(eq?.supervisor||'')}</div></td>
                     <td style="text-align:center;" class="mono">${fmtDate(x.data)}</td>
                     <td style="text-align:center;"><span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);"><span class="badge-dot"></span>Concluída</span></td>
-                    <td style="text-align:center;">${icon('search',13)}</td>
+                    <td style="text-align:center;">${medicaoOcNdsStatusBadge(m?.status)}</td>
+                    <td style="text-align:center;white-space:nowrap;">${acao}</td>
                   </tr>`;
               }).join('')}
             </tbody>
@@ -9677,7 +10272,17 @@ function renderRdoOcNds(){
     </div>`;
 
   el.querySelectorAll('tr[data-ocnds-rdo]').forEach(tr=>{
-    tr.addEventListener('click', ()=> openOcNdsDetalhe(Number(tr.dataset.ocndsRdo)));
+    const id = Number(tr.dataset.ocndsRdo);
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('[data-ocnds-aprovar]') || e.target.closest('[data-ocnds-reprovar]') || e.target.closest('[data-ocnds-reaprovar]')) return;
+      openOcNdsDetalhe(id);
+    });
+    const ap = tr.querySelector(`[data-ocnds-aprovar="${id}"]`);
+    if(ap) ap.addEventListener('click', (e)=>{ e.stopPropagation(); aprovarMedicaoOcNds(id, (DB.ocnds||[]).find(y=>y.id===id)?.tipo||'OC'); });
+    const rp = tr.querySelector(`[data-ocnds-reprovar="${id}"]`);
+    if(rp) rp.addEventListener('click', (e)=>{ e.stopPropagation(); reprovarMedicaoOcNdsModal(id, (DB.ocnds||[]).find(y=>y.id===id)?.tipo||'OC'); });
+    const rp2 = tr.querySelector(`[data-ocnds-reaprovar="${id}"]`);
+    if(rp2) rp2.addEventListener('click', (e)=>{ e.stopPropagation(); reaprovarMedicaoOcNds(id, (DB.ocnds||[]).find(y=>y.id===id)?.tipo||'OC'); });
   });
 }
 
