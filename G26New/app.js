@@ -1956,6 +1956,11 @@ function renderAtividades(){
 ========================================================= */
 function findTipoEstrutura(id){ return (DB.tiposEstrutura||[]).find(t=>String(t.id)===String(id)); }
 function tipoEstruturaNome(id){ return findTipoEstrutura(id)?.nome || id || ''; }
+function tipoEstruturaOptionsHtmlApp(atual){
+  const opts = DB.tiposEstrutura||[];
+  const selAtual = String(atual||'');
+  return `<option value="">Nenhum</option>` + opts.map(t=>`<option value="${esc(t.nome)}" ${selAtual===String(t.nome)?'selected':''}>${esc(t.nome)}</option>`).join('');
+}
 function openTiposEstruturaModal(){
   if(!requerEscrita()) return;
   const tipos = DB.tiposEstrutura||[];
@@ -10394,23 +10399,42 @@ function editRdoOcNdsModal(x, apos){
   const condicoes = RDO_QUESTIONS.map(q=>`<div class="field"><label>${q.label}</label><select name="${q.id}">${rdoOptionsHtml(q, x.rdoRespostas?.[q.id])}</select></div>`).join('');
 
   const novasAtivs = [];
-  const novaAtrib = [{ atividades: novasAtivs }];
   const fotosExtras = {};
+  const existAtivs = (x.atividades||[]).map(a=>({
+    atividadeId: a.atividadeId? String(a.atividadeId) : '',
+    quantidadePrevista: (a.quantidadePrevista==null || a.quantidadePrevista==='')? '' : a.quantidadePrevista,
+    quantidadeExecutada: (a.quantidadeExecutada==null || a.quantidadeExecutada==='')? '' : a.quantidadeExecutada,
+    tipoEstrutura: a.tipoEstrutura||'',
+    fotos: String(a.fotos||'').split(';;').filter(Boolean)
+  }));
+  const existeAtrib = [{ atividades: existAtivs }];
 
   const fotosThumbsHtml = (urls)=> (urls&&urls.length)? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${urls.map(u=>`<img src="${esc(u)}" alt="foto" style="width:34px;height:34px;object-fit:cover;border-radius:5px;border:1px solid var(--border);">`).join('')}</div>` : '';
 
-  const ativsRows = (x.atividades||[]).map((a,idx)=>{
-    const atDef = findAtividade(a.atividadeId);
-    const existentes = String(a.fotos||'').split(';;').filter(Boolean);
+  const ativsRows = existAtivs.map((a,idx)=>{
+    const atDef = a.atividadeId? findAtividade(a.atividadeId) : null;
+    const executada = (a.quantidadeExecutada==null || a.quantidadeExecutada==='')? '' : a.quantidadeExecutada;
+    const prevista = (a.quantidadePrevista==null || a.quantidadePrevista==='')? '0' : a.quantidadePrevista;
     return `
-      <div class="field" data-rdo-exist-row="${idx}" style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--border-soft);">
-        <div style="flex:1;min-width:180px;font-size:12px;"><strong>${esc(atDef?.codigo||'?')}</strong> · ${esc(atDef?.descricao||'')}
-          ${existentes.length? `<div class="admin-field-meta" style="margin-top:2px;">${existentes.length} foto(s) existente(s)</div>`:''}
-          <div class="rdo-edit-fotos-nov" data-fotos-nov="${idx}"></div>
+      <div class="team-atividade" data-rdo-exist-row="${idx}" style="margin-bottom:10px;">
+        <div class="activity-row act-ac-row">
+          <div class="act-ac" data-idx="0" data-jdx="${idx}">
+            <input type="text" class="act-ac-input" data-idx="0" data-jdx="${idx}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+            <div class="act-ac-list" data-idx="0" data-jdx="${idx}" style="display:none;"></div>
+          </div>
+          <div class="qty-field" style="flex:0 0 90px;"><label>Prevista</label><input type="number" step="0.01" min="0" class="ex-prev" data-jdx="${idx}" placeholder="Qtd." value="${prevista}"></div>
+          <div class="qty-field" style="flex:0 0 90px;"><label>Executada</label><input type="number" step="0.01" min="0" class="ex-exec" data-jdx="${idx}" placeholder="Qtd." value="${executada}"></div>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <input type="number" step="0.01" min="0" name="exec_${idx}" value="${a.quantidadeExecutada!=null? a.quantidadeExecutada:''}" style="max-width:110px;" placeholder="Exec.">
-          <button type="button" class="btn btn-sm" data-rdo-add-foto="${idx}">${icon('photo',13)} Fotos</button>
+        <div class="te-estrutura">
+          <label>Tipo de estruturas</label>
+          <select class="ex-estru" data-jdx="${idx}">${tipoEstruturaOptionsHtmlApp(a.tipoEstrutura)}</select>
+        </div>
+        <div class="activity-fotos">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            ${a.fotos.length? a.fotos.map(u=>`<img src="${esc(u)}" alt="foto" style="width:34px;height:34px;object-fit:cover;border-radius:5px;border:1px solid var(--border);">`).join('') : '<span style="font-size:11px;color:var(--muted-2);">Sem fotos.</span>'}
+            <div class="rdo-edit-fotos-nov" data-fotos-nov="${idx}"></div>
+            <button type="button" class="btn btn-sm" data-rdo-add-foto="${idx}">${icon('photo',13)} Fotos</button>
+          </div>
         </div>
       </div>`;
   }).join('') || '<p class="admin-field-meta">Sem atividades neste registro.</p>';
@@ -10419,16 +10443,29 @@ function editRdoOcNdsModal(x, apos){
     if(!novasAtivs.length) return '<p class="admin-field-meta" style="margin:8px 0 0;">Nenhuma atividade adicionada ainda.</p>';
     return novasAtivs.map((n,jdx)=>{
       const atDef = n.atividadeId? findAtividade(n.atividadeId) : null;
-      return `<div class="activity-row act-ac-row" data-rdo-nova-row="${jdx}" style="padding:8px 0;border-bottom:1px solid var(--border-soft);">
-        <div class="act-ac" data-idx="0" data-jdx="${jdx}">
-          <input type="text" class="act-ac-input" data-idx="0" data-jdx="${jdx}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
-          <div class="act-ac-list" data-idx="0" data-jdx="${jdx}" style="display:none;"></div>
+      const nPrev = (n.quantidadePrevista==null || n.quantidadePrevista==='')? '0' : n.quantidadePrevista;
+      const nExec = (n.quantidadeExecutada==null || n.quantidadeExecutada==='')? '' : n.quantidadeExecutada;
+      return `<div class="team-atividade" data-rdo-nova-row="${jdx}" style="margin-bottom:10px;">
+        <div class="activity-row act-ac-row">
+          <div class="act-ac" data-idx="1" data-jdx="${jdx}">
+            <input type="text" class="act-ac-input" data-idx="1" data-jdx="${jdx}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+            <div class="act-ac-list" data-idx="1" data-jdx="${jdx}" style="display:none;"></div>
+          </div>
+          <div class="qty-field" style="flex:0 0 90px;"><label>Prevista</label><input type="number" step="0.01" min="0" class="nov-qty-prev" data-jdx="${jdx}" placeholder="Qtd." value="${nPrev}"></div>
+          <div class="qty-field" style="flex:0 0 90px;"><label>Executada</label><input type="number" step="0.01" min="0" class="nov-qty-exec" data-jdx="${jdx}" placeholder="Qtd." value="${nExec}"></div>
+          <button type="button" class="icon-btn act-remove" data-nova-rm="${jdx}" title="Remover atividade">${icon('close',13)}</button>
         </div>
-        <input type="number" step="0.01" min="0" class="nov-qty-prev" data-jdx="${jdx}" placeholder="Prev." style="max-width:90px;" value="${n.quantidadePrevista??''}">
-        <input type="number" step="0.01" min="0" class="nov-qty-exec" data-jdx="${jdx}" placeholder="Exec." style="max-width:90px;" value="${n.quantidadeExecutada??''}">
-        <button type="button" class="btn btn-sm" data-nova-add-foto="${jdx}">${icon('photo',13)} Fotos</button>
-        <button type="button" class="btn btn-sm btn-ghost" data-nova-rm="${jdx}" title="Remover">${icon('x',13)}</button>
-        <div class="rdo-edit-fotos-nov" data-nova-fotos="${jdx}" style="flex-basis:100%;">${fotosThumbsHtml(n.fotos)}</div>
+        <div class="te-estrutura">
+          <label>Tipo de estruturas</label>
+          <select class="nov-estru" data-jdx="${jdx}">${tipoEstruturaOptionsHtmlApp(n.tipoEstrutura)}</select>
+        </div>
+        <div class="activity-fotos">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            ${fotosThumbsHtml(n.fotos)}
+            <div class="rdo-edit-fotos-nov" data-nova-fotos="${jdx}"></div>
+            <button type="button" class="btn btn-sm" data-nova-add-foto="${jdx}">${icon('photo',13)} Fotos</button>
+          </div>
+        </div>
       </div>`;
     }).join('');
   }
@@ -10437,7 +10474,7 @@ function editRdoOcNdsModal(x, apos){
     const el = document.getElementById('rdo-novas-list');
     if(!el) return;
     el.innerHTML = novasRowsHtml();
-    bindActAutocomplete(root, novaAtrib, ()=>{}, null);
+    bindActAutocomplete(el, [{ }, { atividades: novasAtivs }], ()=>{}, null);
   }
 
   async function pickFotos(onUrls, max){
@@ -10470,8 +10507,8 @@ function editRdoOcNdsModal(x, apos){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px;">${condicoes}</div>
     </div>
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);">
-      <h4 style="font-size:12.5px;margin:0 0 10px;">Quantidades executadas (existentes)</h4>
-      ${ativsRows}
+      <h4 style="font-size:12.5px;margin:0 0 10px;">Atividades do RDO (existentes)</h4>
+      <div id="rdo-exist-list">${ativsRows}</div>
     </div>
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);">
       <h4 style="font-size:12.5px;margin:0 0 10px;">Adicionar novas atividades</h4>
@@ -10482,6 +10519,8 @@ function editRdoOcNdsModal(x, apos){
   openModal({
     title:'Editar registro RDO — '+gidLabel, bodyHtml: body, wide:true, maxW:780, submitLabel:'Salvar alterações',
     onMount:(root)=>{
+      const existBox = root.querySelector('#rdo-exist-list');
+      if(existBox) bindActAutocomplete(existBox, [existeAtrib[0]], ()=>{}, null);
       paintNovas(root);
       root.addEventListener('click', (e)=>{
         const addF = e.target.closest('[data-rdo-add-foto]');
@@ -10510,7 +10549,7 @@ function editRdoOcNdsModal(x, apos){
           return;
         }
         if(e.target.closest('#rdo-nova-add')){
-          novasAtivs.push({ atividadeId:'', quantidadePrevista:'', quantidadeExecutada:'', fotos:[] });
+          novasAtivs.push({ atividadeId:'', quantidadePrevista:'', quantidadeExecutada:'', tipoEstrutura:'', fotos:[] });
           paintNovas(root);
         }
       });
@@ -10518,7 +10557,17 @@ function editRdoOcNdsModal(x, apos){
         const prev = e.target.closest('.nov-qty-prev');
         if(prev){ const n = novasAtivs[Number(prev.dataset.jdx)]; if(n) n.quantidadePrevista = prev.value; return; }
         const exec = e.target.closest('.nov-qty-exec');
-        if(exec){ const n = novasAtivs[Number(exec.dataset.jdx)]; if(n) n.quantidadeExecutada = exec.value; }
+        if(exec){ const n = novasAtivs[Number(exec.dataset.jdx)]; if(n) n.quantidadeExecutada = exec.value; return; }
+        const ep = e.target.closest('.ex-prev');
+        if(ep){ const a = existAtivs[Number(ep.dataset.jdx)]; if(a) a.quantidadePrevista = ep.value; return; }
+        const ee = e.target.closest('.ex-exec');
+        if(ee){ const a = existAtivs[Number(ee.dataset.jdx)]; if(a) a.quantidadeExecutada = ee.value; }
+      });
+      root.addEventListener('change', (e)=>{
+        const es = e.target.closest('.ex-estru');
+        if(es){ const a = existAtivs[Number(es.dataset.jdx)]; if(a) a.tipoEstrutura = es.value; return; }
+        const ns = e.target.closest('.nov-estru');
+        if(ns){ const n = novasAtivs[Number(ns.dataset.jdx)]; if(n) n.tipoEstrutura = ns.value; }
       });
     },
     onSubmit:(fd)=>{
@@ -10530,12 +10579,15 @@ function editRdoOcNdsModal(x, apos){
       RDO_KM.forEach(h=>{ x[h.k] = String(fd.get(h.k)||'').trim(); });
       RDO_QUESTIONS.forEach(q=>{ x.rdoRespostas[q.id] = String(fd.get(q.id)||'').trim(); });
       x.rdoCondicoes = x.rdoRespostas.rdo_condicoes||'';
-      (x.atividades||[]).forEach((a,idx)=>{
-        const v = fd.get('exec_'+idx);
-        a.quantidadeExecutada = (v!==null && String(v).trim()!=='')? parseFloat(v) : null;
+      (existAtivs).forEach((a,idx)=>{
+        const antiga = (x.atividades||[])[idx]||{};
+        antiga.atividadeId = a.atividadeId? Number(a.atividadeId) : (antiga.atividadeId||null);
+        antiga.quantidadePrevista = (a.quantidadePrevista!=='' && a.quantidadePrevista!=null)? parseFloat(a.quantidadePrevista) : null;
+        antiga.quantidadeExecutada = (a.quantidadeExecutada!=='' && a.quantidadeExecutada!=null)? parseFloat(a.quantidadeExecutada) : null;
+        antiga.tipoEstrutura = a.tipoEstrutura||'';
         if(fotosExtras[idx] && fotosExtras[idx].length){
-          const atuais = String(a.fotos||'').split(';;').filter(Boolean);
-          a.fotos = atuais.concat(fotosExtras[idx]).join(';;');
+          const atuais = String(antiga.fotos||'').split(';;').filter(Boolean);
+          antiga.fotos = atuais.concat(fotosExtras[idx]).join(';;');
         }
       });
       let addDesc = '';
@@ -10549,7 +10601,7 @@ function editRdoOcNdsModal(x, apos){
           atividadeId: Number(n.atividadeId),
           quantidadePrevista: qtdPrev,
           quantidadeExecutada: qtdExec,
-          tipoEstrutura: '',
+          tipoEstrutura: n.tipoEstrutura||'',
           fotos: (n.fotos||[]).join(';;')
         });
         addDesc += (addDesc? ', ':'') + (atDef? atDef.codigo+' · '+atDef.descricao : 'atividade');
