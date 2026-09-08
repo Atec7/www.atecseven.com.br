@@ -1013,7 +1013,7 @@ function abrirEmergencia(){
   if(existing) existing.remove();
   const eqAtual = equipeAtualId();
   const rowsIniciais = [{atividadeId:'',quantidadeExecutada:'',tipoEstrutura:'',fotos:[]}];
-  const estado = { tipo:'OC', equipeId: eqAtual||'', atividades: rowsIniciais, observacoes:'' };
+  const estado = { tipo:'OC', equipeId: eqAtual||'', setor:'', coordenacao:'', ptp:'', si:'', ose:'', ocorrencia:'', data: hojeISO(), numeroReserva:'', zona:'', atividades: rowsIniciais, observacoes:'' };
   const atjs = (DB && DB.atividades)||[];
   const eqs = (DB && DB.equipes)||[];
   const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
@@ -1155,16 +1155,71 @@ function abrirEmergencia(){
       <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <div class="field" style="flex:1;min-width:140px;margin:0;">
-            <label>Tipo <span class="req">*</span></label>
-            <select id="emg-tipo">
-              <option value="OC">OC (Ocorrência)</option>
-              <option value="NDS">NDS (Nota de Serviço)</option>
+            <label>Setor <span class="req">*</span></label>
+            <select id="emg-setor">
+              <option value="">Selecione…</option>
+              <option value="OBRAS">OBRAS</option>
+              <option value="MANUTENÇÃO">MANUTENÇÃO</option>
             </select>
           </div>
-          <div class="field" style="flex:1 1 100%;margin:0;">
-            <label>Equipe (somente 1) <span class="req">*</span></label>
-            <select id="emg-equipe">${equipeOptionsHtml(estado.equipeId)}</select>
+          <div class="field" style="flex:1;min-width:140px;margin:0;">
+            <label>Coordenação <span class="req">*</span></label>
+            <select id="emg-coord">
+              <option value="">Selecione…</option>
+              <option value="RIO VERDE">RIO VERDE</option>
+              <option value="QUIRINOPOLIS">QUIRINÓPOLIS</option>
+            </select>
           </div>
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Tipo <span class="req">*</span></label>
+          <select id="emg-tipo">
+            <option value="OC">OC (Ocorrência)</option>
+            <option value="NDS">NDS (Nota de Serviço)</option>
+          </select>
+        </div>
+        <div id="emg-campos-oc">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <div class="field" style="flex:1;min-width:120px;margin:0;">
+              <label>PTP</label>
+              <input type="text" id="emg-ptp" placeholder="Número do PTP">
+            </div>
+            <div class="field" style="flex:1;min-width:120px;margin:0;">
+              <label>SI</label>
+              <input type="text" id="emg-si" placeholder="Número do SI">
+            </div>
+          </div>
+          <div class="field" style="margin:0;">
+            <label>OSE</label>
+            <input type="text" id="emg-ose" placeholder="Número da OSE">
+          </div>
+        </div>
+        <div id="emg-campos-nds" style="display:none;">
+          <div class="field" style="margin:0;">
+            <label>Ocorrência <span class="req">*</span></label>
+            <input type="text" id="emg-ocorrencia" placeholder="Número da ocorrência">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <div class="field" style="flex:1;min-width:140px;margin:0;">
+            <label>Data <span class="req">*</span></label>
+            <input type="date" id="emg-data" value="${estado.data}">
+          </div>
+          <div class="field" style="flex:1;min-width:140px;margin:0;">
+            <label>Nº da Reserva/PEP</label>
+            <input type="text" id="emg-reserva" placeholder="Opcional">
+          </div>
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Zona <span class="req">*</span></label>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13.5px;"><input type="radio" name="emg-zona" value="RURAL"> ZONA RURAL</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13.5px;"><input type="radio" name="emg-zona" value="URBANA"> ZONA URBANA</label>
+          </div>
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Equipe (somente 1) <span class="req">*</span></label>
+          <select id="emg-equipe">${equipeOptionsHtml(estado.equipeId)}</select>
         </div>
         <div class="field" style="margin:0;">
           <label>Atividades executadas <span class="req">*</span></label>
@@ -1216,7 +1271,20 @@ function abrirEmergencia(){
   const close = ()=> overlay.remove();
   overlay.querySelector('#emg-close').addEventListener('click', close);
   overlay.querySelector('#emg-cancel').addEventListener('click', close);
-  overlay.querySelector('#emg-tipo').addEventListener('change', e=>{ estado.tipo=e.target.value; });
+  overlay.querySelector('#emg-tipo').addEventListener('change', e=>{
+    estado.tipo=e.target.value;
+    overlay.querySelector('#emg-campos-oc').style.display = estado.tipo==='OC'?'':'none';
+    overlay.querySelector('#emg-campos-nds').style.display = estado.tipo==='NDS'?'':'none';
+  });
+  overlay.querySelector('#emg-setor').addEventListener('change', e=>{ estado.setor=e.target.value; });
+  overlay.querySelector('#emg-coord').addEventListener('change', e=>{ estado.coordenacao=e.target.value; });
+  overlay.querySelector('#emg-ptp').addEventListener('input', e=>{ estado.ptp=e.target.value.trim(); });
+  overlay.querySelector('#emg-si').addEventListener('input', e=>{ estado.si=e.target.value.trim(); });
+  overlay.querySelector('#emg-ose').addEventListener('input', e=>{ estado.ose=e.target.value.trim(); });
+  overlay.querySelector('#emg-ocorrencia').addEventListener('input', e=>{ estado.ocorrencia=e.target.value.trim(); });
+  overlay.querySelector('#emg-data').addEventListener('change', e=>{ estado.data=e.target.value; });
+  overlay.querySelector('#emg-reserva').addEventListener('input', e=>{ estado.numeroReserva=e.target.value.trim(); });
+  overlay.querySelectorAll('input[name="emg-zona"]').forEach(r=> r.addEventListener('change', ()=> estado.zona=overlay.querySelector('input[name="emg-zona"]:checked')?.value||''));
   overlay.querySelector('#emg-equipe').addEventListener('change', e=>{ estado.equipeId=Number(e.target.value); });
   overlay.querySelector('#emg-add-atv').addEventListener('click', ()=>{ estado.atividades.push({atividadeId:'',quantidadeExecutada:'',tipoEstrutura:'',fotos:[]}); paintAtividades(); });
   overlay.querySelector('#emg-obs').addEventListener('input', e=>{ estado.observacoes=e.target.value; });
@@ -1251,6 +1319,11 @@ function abrirEmergencia(){
     const ativs = estado.atividades;
     const obs = (document.getElementById('emg-obs').value||'').trim();
     if(!equipeId){ toast('Selecione a equipe (somente 1).','error'); return; }
+    if(!estado.setor){ toast('Selecione o setor.','error'); return; }
+    if(!estado.coordenacao){ toast('Selecione a coordenação.','error'); return; }
+    if(!estado.data){ toast('Informe a data.','error'); return; }
+    if(!estado.zona){ toast('Selecione a zona.','error'); return; }
+    if(estado.tipo==='NDS' && !estado.ocorrencia){ toast('Informe o número da ocorrência (NDS).','error'); return; }
     if(!ativs.length || ativs.every(a=>!a.atividadeId)){ toast('Selecione ao menos uma atividade.','error'); return; }
     if(!obs){ toast('A observação é obrigatória.','error'); return; }
     if(!emgRDOPreenchido()){ toast('Responda todas as questões do RDO e preencha os horários (HH:MM) antes de enviar.', 'error'); return; }
@@ -1282,12 +1355,15 @@ function abrirEmergencia(){
             id: seq,
             gid: 'G26-'+String(Math.floor(1000000+Math.random()*9000000)),
             tipo,
-            setor: '',
-            coordenacao: '',
-            ptp:'', si:'', ose:'', ocorrencia:'',
-            data: hojeISO(),
-            zona: '',
-            numeroReserva: '',
+            setor: estado.setor,
+            coordenacao: estado.coordenacao,
+            ptp: (estado.tipo==='OC'? estado.ptp:''),
+            si: (estado.tipo==='OC'? estado.si:''),
+            ose: (estado.tipo==='OC'? estado.ose:''),
+            ocorrencia: (estado.tipo==='NDS'? estado.ocorrencia:''),
+            data: estado.data,
+            zona: estado.zona,
+            numeroReserva: estado.numeroReserva,
             equipeId: equipeId,
             observacoes: obs,
             anexos: [],
