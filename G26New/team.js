@@ -162,6 +162,78 @@ const ICONS = {
   'chevron-down':'<polyline points="6 9 12 15 18 9"/>'
 };
 
+/* =========================================================
+   FOTO CACHE — evita redecodificar fotos ao reabrir registros
+   (mesmo mecanismo do app do admin)
+========================================================= */
+const _fotoBlob = new Map();
+const _fotoBlobTry = new Set();
+function _fotoConvertData(src){
+  try{
+    const parts = src.split(',');
+    if(!parts[1]) return null;
+    const mime = (/^data:([^;,]+)/.exec(src)||[])[1]||'image/jpeg';
+    const bin = atob(parts[1]);
+    const u8 = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
+    return URL.createObjectURL(new Blob([u8], {type:mime}));
+  }catch(e){ return null; }
+}
+function _fotoSwap(src, url){
+  document.querySelectorAll('img').forEach(im=>{ try{ if(im.getAttribute('src')===src) im.src=url; }catch(e){} });
+}
+function _fotoEmUso(url){
+  let uso = false;
+  document.querySelectorAll('img').forEach(im=>{ try{ if(im.getAttribute('src')===url) uso=true; }catch(e){} });
+  return uso;
+}
+function _fotoEvict(){
+  if(_fotoBlob.size <= 180) return;
+  for(const [src,url] of _fotoBlob){
+    if(_fotoBlob.size <= 180) break;
+    if(!_fotoEmUso(url)){ try{ URL.revokeObjectURL(url); }catch(e){} _fotoBlob.delete(src); }
+  }
+}
+function fotoSrcMemo(src){
+  return src && _fotoBlob.has(src)? _fotoBlob.get(src) : src;
+}
+function fotoCacheApply(img){
+  const src = img.getAttribute('src');
+  if(!src || !/^(data:image\/|https?:)/i.test(src)) return;
+  if(_fotoBlob.has(src)){ img.src = _fotoBlob.get(src); _fotoEvict(); return; }
+  if(_fotoBlobTry.has(src)) return;
+  _fotoBlobTry.add(src);
+  if(/^data:image\//i.test(src)){
+    if(src.startsWith('data:image/gif')){ _fotoBlobTry.delete(src); return; }
+    setTimeout(()=>{
+      const url = _fotoConvertData(src);
+      if(url){ _fotoBlob.set(src, url); _fotoEvict(); _fotoSwap(src, url); }
+    }, 40);
+  }else if(/^https?:/i.test(src)){
+    fetch(src).then(r=>r.blob()).then(b=>{
+      const url = URL.createObjectURL(b);
+      _fotoBlob.set(src, url); _fotoEvict(); _fotoSwap(src, url);
+    }).catch(()=>{});
+  }
+}
+function fotoCacheInstall(){
+  if(fotoCacheInstall._done) return;
+  fotoCacheInstall._done = true;
+  const aplicar = ()=>((document.body||document).querySelectorAll('img').forEach(fotoCacheApply));
+  new MutationObserver(muts=>{
+    for(const m of muts){
+      for(const node of m.addedNodes){
+        if(node.nodeType!==1) continue;
+        if(node.tagName==='IMG'){ fotoCacheApply(node); continue; }
+        if(node.querySelectorAll) node.querySelectorAll('img').forEach(fotoCacheApply);
+      }
+    }
+  }).observe(document.body||document.documentElement, {childList:true, subtree:true});
+  aplicar();
+  if(document.readyState!=='complete') window.addEventListener('load', ()=>setTimeout(aplicar, 100));
+}
+fotoCacheInstall();
+
 /* ── FOTOS DOS REGISTROS (IMGGB) ── */
 var IMGGB_KEY = '95bb16ee776d7e20f26857cec98bd372';
 var FOTOS_SEP = ';;';

@@ -146,7 +146,43 @@ let currentView = 'dashboard';
 let progFilters = (()=>{ const r=monthRangeISO(); return { projeto:'', projQ:'', equipe:'', status:'Programado', ciclo:'', dataDe:r.de, dataAte:r.ate, alteradaEquipe:false, modo:'lista', calView:'mes', calDay:todayISO() }; })();
 let ativFilters = { q:'', fav:'' };
 let equipeFilters = { q:'', status:'' };
-let projFilters = { q:'', status:'', ciclo:'', recebido:'', cidade:'', periodoDe:'', periodoAte:'' };
+let projFilters = { q:'', status:'', ciclo:'', recebido:'', cidade:'', setor:'', coordenacao:'', periodoDe:'', periodoAte:'' };
+const PAGE_SIZE = 50;
+const _pag = {};
+function pagClamp(chave, total, per){
+  per = per||PAGE_SIZE;
+  const totalPaginas = Math.max(1, Math.ceil(total/per));
+  let pag = _pag[chave]||1;
+  if(pag<1) pag=1;
+  if(pag>totalPaginas) pag=totalPaginas;
+  _pag[chave]=pag;
+  return { pag, totalPaginas };
+}
+function paginaSlice(lista, chave, per){
+  per = per||PAGE_SIZE;
+  const { pag } = pagClamp(chave, lista.length, per);
+  const ini = (pag-1)*per;
+  return lista.slice(ini, ini+per);
+}
+function pagFooterHtml(chave, total, per){
+  per = per||PAGE_SIZE;
+  const { pag, totalPaginas } = pagClamp(chave, total, per);
+  if(total <= per) return '';
+  return `<div class="paginacao" data-pag-ctrl="${chave}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;border-top:1px solid var(--border-soft);font-size:12px;color:var(--muted);flex-wrap:wrap;">
+    <span>Página ${pag} de ${totalPaginas} · ${total} registro(s)</span>
+    <div style="display:flex;gap:6px;">
+      <button type="button" class="btn btn-sm" data-pag-ant="${chave}" ${pag<=1?'disabled':''}>${icon('chevL',13)} Anterior</button>
+      <button type="button" class="btn btn-sm" data-pag-prox="${chave}" ${pag>=totalPaginas?'disabled':''}>Próxima ${icon('chevR',13)}</button>
+    </div>
+  </div>`;
+}
+function bindPag(scope, chave){
+  const ctrl = scope.querySelector(`[data-pag-ctrl="${chave}"]`);
+  if(!ctrl) return;
+  ctrl.querySelector('[data-pag-ant]')?.addEventListener('click', ()=>{ if((_pag[chave]||1)>1){ _pag[chave]=(_pag[chave]||1)-1; renderContent(); } });
+  ctrl.querySelector('[data-pag-prox]')?.addEventListener('click', ()=>{ _pag[chave]=(_pag[chave]||1)+1; renderContent(); });
+}
+function pagReset(chave){ _pag[chave]=1; }
 let projetoSel = new Set();
 let avancoFilters = { q:'', status:'' };
 let histFilters = { tipo:'', projeto:'', dataDe:'', dataAte:'', ultimasHs:12 };
@@ -333,6 +369,79 @@ const ICONS = {
   photo:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
 };
 function icon(name,size=16){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||''}</svg>`; }
+
+/* =========================================================
+   FOTO CACHE — evita redecodificar/redesenhar imagens ao
+   reabrir registros: converte cada foto para blob URL UMA vez
+   e reutiliza nas próximas aberturas.
+========================================================= */
+const _fotoBlob = new Map();
+const _fotoBlobTry = new Set();
+function _fotoConvertData(src){
+  try{
+    const parts = src.split(',');
+    if(!parts[1]) return null;
+    const mime = (/^data:([^;,]+)/.exec(src)||[])[1]||'image/jpeg';
+    const bin = atob(parts[1]);
+    const u8 = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
+    return URL.createObjectURL(new Blob([u8], {type:mime}));
+  }catch(e){ return null; }
+}
+function _fotoSwap(src, url){
+  document.querySelectorAll('img').forEach(im=>{ try{ if(im.getAttribute('src')===src) im.src=url; }catch(e){} });
+}
+function _fotoEmUso(url){
+  let uso = false;
+  document.querySelectorAll('img').forEach(im=>{ try{ if(im.getAttribute('src')===url) uso=true; }catch(e){} });
+  return uso;
+}
+function _fotoEvict(){
+  if(_fotoBlob.size <= 180) return;
+  for(const [src,url] of _fotoBlob){
+    if(_fotoBlob.size <= 180) break;
+    if(!_fotoEmUso(url)){ try{ URL.revokeObjectURL(url); }catch(e){} _fotoBlob.delete(src); }
+  }
+}
+function fotoSrcMemo(src){
+  return src && _fotoBlob.has(src)? _fotoBlob.get(src) : src;
+}
+function fotoCacheApply(img){
+  const src = img.getAttribute('src');
+  if(!src || !/^(data:image\/|https?:)/i.test(src)) return;
+  if(_fotoBlob.has(src)){ img.src = _fotoBlob.get(src); _fotoEvict(); return; }
+  if(_fotoBlobTry.has(src)) return;
+  _fotoBlobTry.add(src);
+  if(/^data:image\//i.test(src)){
+    if(src.startsWith('data:image/gif')){ _fotoBlobTry.delete(src); return; }
+    setTimeout(()=>{
+      const url = _fotoConvertData(src);
+      if(url){ _fotoBlob.set(src, url); _fotoEvict(); _fotoSwap(src, url); }
+    }, 40);
+  }else if(/^https?:/i.test(src)){
+    fetch(src).then(r=>r.blob()).then(b=>{
+      const url = URL.createObjectURL(b);
+      _fotoBlob.set(src, url); _fotoEvict(); _fotoSwap(src, url);
+    }).catch(()=>{});
+  }
+}
+function fotoCacheInstall(){
+  if(fotoCacheInstall._done) return;
+  fotoCacheInstall._done = true;
+  const aplicar = ()=>((document.body||document).querySelectorAll('img').forEach(fotoCacheApply));
+  new MutationObserver(muts=>{
+    for(const m of muts){
+      for(const node of m.addedNodes){
+        if(node.nodeType!==1) continue;
+        if(node.tagName==='IMG'){ fotoCacheApply(node); continue; }
+        if(node.querySelectorAll) node.querySelectorAll('img').forEach(fotoCacheApply);
+      }
+    }
+  }).observe(document.body||document.documentElement, {childList:true, subtree:true});
+  aplicar();
+  if(document.readyState!=='complete') window.addEventListener('load', ()=>setTimeout(aplicar, 100));
+}
+fotoCacheInstall();
 
     const navExpanded = {};
     function isViewActive(item){
@@ -690,7 +799,7 @@ function openLightbox(srcs, index){
   const img = wrap.querySelector('.lb-img');
   const counter = wrap.querySelector('.lb-counter');
   function close(){ wrap.remove(); document.removeEventListener('keydown', onKey); }
-  function show(){ img.src = srcs[i]; counter.textContent = (i+1)+' / '+srcs.length; }
+  function show(){ img.src = fotoSrcMemo(srcs[i]); counter.textContent = (i+1)+' / '+srcs.length; }
   function onKey(e){
     if(e.key==='Escape') close();
     else if(e.key==='ArrowRight'){ i=(i+1)%srcs.length; show(); }
@@ -1940,18 +2049,23 @@ function renderProjetos(){
   const customFields = DB.customFields.projetos||[];
   const ciclosPj = [...new Set(visiveis.map(p=>p.ciclo).filter(Boolean))].sort();
   const cidadesPj = [...new Set(visiveis.map(p=>(p.cidade||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const setoresPj = [...new Set(visiveis.map(p=>(p.setor||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const coordsPj = [...new Set(visiveis.map(p=>(p.coordenacao||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const list = visiveis.filter(p=>{
     if(projFilters.status && p.status!==projFilters.status) return false;
     if(projFilters.ciclo && (p.ciclo||'')!==projFilters.ciclo) return false;
     if(projFilters.recebido==='sim' && !p.dataRecebimentoCarteira) return false;
     if(projFilters.recebido==='nao' && p.dataRecebimentoCarteira) return false;
     if(projFilters.cidade && (p.cidade||'').trim().toLowerCase()!==projFilters.cidade.toLowerCase()) return false;
+    if(projFilters.setor && (p.setor||'')!==projFilters.setor) return false;
+    if(projFilters.coordenacao && (p.coordenacao||'')!==projFilters.coordenacao) return false;
     const ini=p.dataInicio||'', fim=p.dataFim||ini;
     if(projFilters.periodoDe && fim && fim<projFilters.periodoDe) return false;
     if(projFilters.periodoAte && ini && ini>projFilters.periodoAte) return false;
     if(projFilters.q){ const t=(p.codigo+' '+(p.nome||'')+' '+(p.descricao||'')+' '+(p.ciclo||'')+' '+(p.setor||'')+' '+(p.coordenacao||'')+' '+(p.cidade||'')).toLowerCase(); if(!t.includes(projFilters.q.toLowerCase())) return false; }
     return true;
   });
+  const pagina = paginaSlice(list, 'projetos');
   el.innerHTML = `
     <div class="panel-head" style="padding:0;margin-bottom:16px;border:none;">
       <div class="filters">
@@ -1959,6 +2073,8 @@ function renderProjetos(){
         <select id="f-pj-status"><option value="">Todos os status</option>${STATUS_PROJETO.map(s=>`<option ${projFilters.status===s?'selected':''}>${s}</option>`).join('')}</select>
         <select id="f-pj-ciclo"><option value="">Todos os ciclos</option>${ciclosPj.map(c=>`<option ${projFilters.ciclo===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
         <select id="f-pj-recebido"><option value="">Recebimento: todos</option><option value="sim" ${projFilters.recebido==='sim'?'selected':''}>Carteira recebida</option><option value="nao" ${projFilters.recebido==='nao'?'selected':''}>Não recebida</option></select>
+        <select id="f-pj-setor"><option value="">Todos os setores</option>${setoresPj.map(s=>`<option ${projFilters.setor===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
+        <select id="f-pj-coord"><option value="">Todas as coordenações</option>${coordsPj.map(c=>`<option ${projFilters.coordenacao===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
         <select id="f-pj-cidade"><option value="">Todas as cidades</option>${cidadesPj.map(c=>`<option ${projFilters.cidade.toLowerCase()===c.toLowerCase()?'selected':''}>${esc(c)}</option>`).join('')}</select>
         <input type="date" id="f-pj-de" title="Período — de" value="${projFilters.periodoDe}">
         <input type="date" id="f-pj-ate" title="Período — até" value="${projFilters.periodoAte}">
@@ -1968,7 +2084,7 @@ function renderProjetos(){
     </div>
     <div class="panel"><div class="table-scroll"><table>
       <thead><tr>${ehMestre()? `<th style="width:28px;"><input type="checkbox" id="pj-sel-all" style="width:auto;" title="Selecionar todos"></th>`:''}<th>Código</th><th>Projeto</th><th>Período</th><th>Receb. carteira</th><th>Vencimento</th><th>Setor · Coordenação</th><th>Cidade</th><th>Ciclo</th><th>Orçado</th><th>Avanço</th><th>Status</th><th>Programações</th>${customFields.map(f=>`<th>${esc(f.label)}</th>`).join('')}<th></th></tr></thead>
-      <tbody>${list.map(p=>{
+      <tbody>${pagina.map(p=>{
       const count = DB.programacoes.filter(x=>x.projetoId===p.id).reduce((s,pg)=>s+(pg.atribuicoes?.length||0),0);
       const av = projetoAvanco(p);
       const aberto = !['Encerrado','Cancelado'].includes(p.status);
@@ -1990,14 +2106,17 @@ function renderProjetos(){
         ${customFields.map(f=>`<td>${esc(p.custom?.[f.id]||'—')}</td>`).join('')}
         <td><div class="row-actions"><button class="icon-btn" title="Imprimir projeto" data-print-pj="${p.id}">${icon('printer',14)}</button><button class="icon-btn" title="Ver avanço" data-avanco-detalhe="${p.id}">${icon('trend',14)}</button><button class="icon-btn" data-edit-pj="${p.id}">${icon('edit',14)}</button><button class="icon-btn" data-del-pj="${p.id}">${icon('trash',14)}</button></div></td>
       </tr>${alerta}`;
-    }).join('') || `<tr class="empty-row"><td colspan="${(ehMestre()?14:13)+customFields.length}">Nenhum projeto encontrado com os filtros.</td></tr>`}</tbody></table></div></div>`;
-  document.getElementById('f-pj-q').addEventListener('input', e=>{ projFilters.q=e.target.value; renderSearchKeepFocus(); });
-  document.getElementById('f-pj-status').addEventListener('change', e=>{ projFilters.status=e.target.value; renderContent(); });
-  document.getElementById('f-pj-ciclo').addEventListener('change', e=>{ projFilters.ciclo=e.target.value; renderContent(); });
-  document.getElementById('f-pj-recebido').addEventListener('change', e=>{ projFilters.recebido=e.target.value; renderContent(); });
-  document.getElementById('f-pj-cidade').addEventListener('change', e=>{ projFilters.cidade=e.target.value; renderContent(); });
-  document.getElementById('f-pj-de').addEventListener('change', e=>{ projFilters.periodoDe=e.target.value; renderContent(); });
-  document.getElementById('f-pj-ate').addEventListener('change', e=>{ projFilters.periodoAte=e.target.value; renderContent(); });
+    }).join('') || `<tr class="empty-row"><td colspan="${(ehMestre()?14:13)+customFields.length}">Nenhum projeto encontrado com os filtros.</td></tr>`}</tbody></table></div>${pagFooterHtml('projetos', list.length)}</div>`;
+  bindPag(el, 'projetos');
+  document.getElementById('f-pj-q').addEventListener('input', e=>{ projFilters.q=e.target.value; pagReset('projetos'); renderSearchKeepFocus(); });
+  document.getElementById('f-pj-status').addEventListener('change', e=>{ projFilters.status=e.target.value; pagReset('projetos'); renderContent(); });
+  document.getElementById('f-pj-ciclo').addEventListener('change', e=>{ projFilters.ciclo=e.target.value; pagReset('projetos'); renderContent(); });
+  document.getElementById('f-pj-recebido').addEventListener('change', e=>{ projFilters.recebido=e.target.value; pagReset('projetos'); renderContent(); });
+  document.getElementById('f-pj-setor').addEventListener('change', e=>{ projFilters.setor=e.target.value; pagReset('projetos'); renderContent(); });
+  document.getElementById('f-pj-coord').addEventListener('change', e=>{ projFilters.coordenacao=e.target.value; pagReset('projetos'); renderContent(); });
+  document.getElementById('f-pj-cidade').addEventListener('change', e=>{ projFilters.cidade=e.target.value; pagReset('projetos'); renderContent(); });
+  document.getElementById('f-pj-de').addEventListener('change', e=>{ projFilters.periodoDe=e.target.value; pagReset('projetos'); renderContent(); });
+  document.getElementById('f-pj-ate').addEventListener('change', e=>{ projFilters.periodoAte=e.target.value; pagReset('projetos'); renderContent(); });
   const selAll = document.getElementById('pj-sel-all');
   if(selAll){
     selAll.checked = list.length>0 && list.every(p=>projetoSel.has(String(p.id)));
@@ -2418,17 +2537,17 @@ function renderProgramacoes(){
       </div>
     </div>
     <div id="prog-area"></div>`;
-  document.getElementById('f-proj-q').addEventListener('input', e=>{progFilters.projQ=e.target.value; renderSearchKeepFocus();});
-  document.getElementById('f-proj-q').addEventListener('keydown', e=>{ if(e.key==='Escape'){ progFilters.projQ=''; renderContent(); } });
-  document.getElementById('f-proj-q-clear').addEventListener('click', ()=>{ progFilters.projQ=''; renderContent(); });
-  document.getElementById('f-equipe').addEventListener('change', e=>{progFilters.equipe=e.target.value; renderContent();});
-  document.getElementById('f-status').addEventListener('change', e=>{progFilters.status=e.target.value; renderContent();});
-  document.getElementById('f-ciclo').addEventListener('change', e=>{progFilters.ciclo=e.target.value; renderContent();});
-  document.getElementById('f-data-de').addEventListener('change', e=>{progFilters.dataDe=e.target.value; renderContent();});
-  document.getElementById('f-data-ate').addEventListener('change', e=>{progFilters.dataAte=e.target.value; renderContent();});
-  document.getElementById('f-mes-atual').addEventListener('click', ()=>{ const r=monthRangeISO(); progFilters.dataDe=r.de; progFilters.dataAte=r.ate; renderContent(); });
-  document.getElementById('f-limpar-datas').addEventListener('click', ()=>{ progFilters.dataDe=''; progFilters.dataAte=''; renderContent(); });
-  document.getElementById('f-alterada-equipe').addEventListener('change', e=>{progFilters.alteradaEquipe=e.target.checked; renderContent();});
+  document.getElementById('f-proj-q').addEventListener('input', e=>{progFilters.projQ=e.target.value; pagReset('prog-lista'); renderSearchKeepFocus();});
+  document.getElementById('f-proj-q').addEventListener('keydown', e=>{ if(e.key==='Escape'){ progFilters.projQ=''; pagReset('prog-lista'); renderContent(); } });
+  document.getElementById('f-proj-q-clear').addEventListener('click', ()=>{ progFilters.projQ=''; pagReset('prog-lista'); renderContent(); });
+  document.getElementById('f-equipe').addEventListener('change', e=>{progFilters.equipe=e.target.value; pagReset('prog-lista'); renderContent();});
+  document.getElementById('f-status').addEventListener('change', e=>{progFilters.status=e.target.value; pagReset('prog-lista'); renderContent();});
+  document.getElementById('f-ciclo').addEventListener('change', e=>{progFilters.ciclo=e.target.value; pagReset('prog-lista'); renderContent();});
+  document.getElementById('f-data-de').addEventListener('change', e=>{progFilters.dataDe=e.target.value; pagReset('prog-lista'); renderContent();});
+  document.getElementById('f-data-ate').addEventListener('change', e=>{progFilters.dataAte=e.target.value; pagReset('prog-lista'); renderContent();});
+  document.getElementById('f-mes-atual').addEventListener('click', ()=>{ const r=monthRangeISO(); progFilters.dataDe=r.de; progFilters.dataAte=r.ate; pagReset('prog-lista'); renderContent(); });
+  document.getElementById('f-limpar-datas').addEventListener('click', ()=>{ progFilters.dataDe=''; progFilters.dataAte=''; pagReset('prog-lista'); renderContent(); });
+  document.getElementById('f-alterada-equipe').addEventListener('change', e=>{progFilters.alteradaEquipe=e.target.checked; pagReset('prog-lista'); renderContent();});
   el.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>{progFilters.modo=t.dataset.modo; renderContent();}));
 
   const area = document.getElementById('prog-area');
@@ -2444,9 +2563,10 @@ function renderProgramacoes(){
 }
 
 function renderProgListaInto(area, list){
+  const pagina = paginaSlice(list, 'prog-lista');
   area.innerHTML = `<div class="panel"><div class="table-scroll"><table>
     <thead><tr><th>ID</th><th>Data</th><th>Projeto</th><th>Ciclo</th><th>Equipe</th><th>Equipe comp.</th><th>Atividades</th><th>Valor prev.</th><th>Status</th><th></th></tr></thead>
-    <tbody>${list.map(x=>{
+    <tbody>${pagina.map(x=>{
       const p=x.atribuicao, pr=findProjeto(x.programacao.projetoId), eq=findEquipe(p.equipeId), late=isLate(p);
       const valPrev = p.atividades.reduce((s,a)=> s + (a.quantidadePrevista||0)*(findAtividade(a.atividadeId)?.valorUnitario||0), 0);
       const metaWarn = metaWarningHtml(p);
@@ -2470,7 +2590,8 @@ function renderProgListaInto(area, list){
           <button class="icon-btn" title="Excluir equipe desta programação" data-del-atrib="${x.programacao.id}|${p.id}">${icon('trash',14)}</button>
         </div></td>
       </tr>`;
-    }).join('')}</tbody></table></div></div>`;
+    }).join('')}</tbody></table></div>${pagFooterHtml('prog-lista', list.length)}</div>`;
+  bindPag(area, 'prog-lista');
   bindProgRowActions(area);
 }
 function bindProgRowActions(area){
@@ -3913,6 +4034,7 @@ function renderHistorico(){
     return true;
   });
   const janela = histFilters.ultimasHs? `últimas ${histFilters.ultimasHs}h` : (histFilters.dataDe||histFilters.dataAte? `de ${histFilters.dataDe||'…'} a ${histFilters.dataAte||'…'}` : 'tudo');
+  const paginaHist = paginaSlice(events, 'historico', 100);
   el.innerHTML = `
     <div class="panel-head" style="padding:0;margin-bottom:16px;border:none;">
       <div class="filters">
@@ -3929,16 +4051,17 @@ function renderHistorico(){
       </div>
       <span style="font-size:12px;color:var(--muted);">${events.length} eventos · ${janela}</span>
     </div>
-    ${events.length? `<div class="panel">${renderHistoricoTimeline(events, true)}</div>` : `<div class="panel"><div class="empty-state">${icon('empty',34)}<p>Nenhum evento encontrado com os filtros.</p></div></div>`}`;
-  document.getElementById('f-h-tipo').addEventListener('change', e=>{ histFilters.tipo=e.target.value; renderContent(); });
-  document.getElementById('f-h-projeto').addEventListener('change', e=>{ histFilters.projeto=e.target.value; renderContent(); });
-  document.getElementById('f-h-data-de').addEventListener('change', e=>{ histFilters.dataDe=e.target.value; histFilters.ultimasHs=0; renderContent(); });
-  document.getElementById('f-h-data-ate').addEventListener('change', e=>{ histFilters.dataAte=e.target.value; histFilters.ultimasHs=0; renderContent(); });
-  document.getElementById('f-h-12h').addEventListener('click', ()=>{ histFilters.ultimasHs=12; histFilters.dataDe=''; histFilters.dataAte=''; renderContent(); });
-  document.getElementById('f-h-24h').addEventListener('click', ()=>{ histFilters.ultimasHs=24; histFilters.dataDe=''; histFilters.dataAte=''; renderContent(); });
-  document.getElementById('f-h-7d').addEventListener('click', ()=>{ histFilters.ultimasHs=168; histFilters.dataDe=''; histFilters.dataAte=''; renderContent(); });
-  document.getElementById('f-h-mes-atual').addEventListener('click', ()=>{ const r=monthRangeISO(); histFilters.ultimasHs=0; histFilters.dataDe=r.de; histFilters.dataAte=r.ate; renderContent(); });
-  document.getElementById('f-h-limpar-datas').addEventListener('click', ()=>{ histFilters.ultimasHs=0; histFilters.dataDe=''; histFilters.dataAte=''; renderContent(); });
+    ${events.length? `<div class="panel">${renderHistoricoTimeline(paginaHist, true)}</div>${pagFooterHtml('historico', events.length, 100)}` : `<div class="panel"><div class="empty-state">${icon('empty',34)}<p>Nenhum evento encontrado com os filtros.</p></div></div>`}`;
+  bindPag(el, 'historico');
+  document.getElementById('f-h-tipo').addEventListener('change', e=>{ histFilters.tipo=e.target.value; pagReset('historico'); renderContent(); });
+  document.getElementById('f-h-projeto').addEventListener('change', e=>{ histFilters.projeto=e.target.value; pagReset('historico'); renderContent(); });
+  document.getElementById('f-h-data-de').addEventListener('change', e=>{ histFilters.dataDe=e.target.value; histFilters.ultimasHs=0; pagReset('historico'); renderContent(); });
+  document.getElementById('f-h-data-ate').addEventListener('change', e=>{ histFilters.dataAte=e.target.value; histFilters.ultimasHs=0; pagReset('historico'); renderContent(); });
+  document.getElementById('f-h-12h').addEventListener('click', ()=>{ histFilters.ultimasHs=12; histFilters.dataDe=''; histFilters.dataAte=''; pagReset('historico'); renderContent(); });
+  document.getElementById('f-h-24h').addEventListener('click', ()=>{ histFilters.ultimasHs=24; histFilters.dataDe=''; histFilters.dataAte=''; pagReset('historico'); renderContent(); });
+  document.getElementById('f-h-7d').addEventListener('click', ()=>{ histFilters.ultimasHs=168; histFilters.dataDe=''; histFilters.dataAte=''; pagReset('historico'); renderContent(); });
+  document.getElementById('f-h-mes-atual').addEventListener('click', ()=>{ const r=monthRangeISO(); histFilters.ultimasHs=0; histFilters.dataDe=r.de; histFilters.dataAte=r.ate; pagReset('historico'); renderContent(); });
+  document.getElementById('f-h-limpar-datas').addEventListener('click', ()=>{ histFilters.ultimasHs=0; histFilters.dataDe=''; histFilters.dataAte=''; pagReset('historico'); renderContent(); });
   el.querySelectorAll('[data-open-atrib]').forEach(r=>r.addEventListener('click', ()=>openAtribDetalhe(r.dataset.openAtrib)));
 }
 function renderHistoricoTimeline(events, withContext){
@@ -4438,13 +4561,13 @@ function renderOseProgramacoes(){
       </div>
     </div>
     <div id="ose-area"></div>`;
-  document.getElementById('ose-f-busca').addEventListener('input', e=>{ oseFilters.busca=e.target.value; renderSearchKeepFocus(); });
-  document.getElementById('ose-f-equipe').addEventListener('change', e=>{ oseFilters.equipe=e.target.value; renderContent(); });
-  document.getElementById('ose-f-status').addEventListener('change', e=>{ oseFilters.status=e.target.value; renderContent(); });
-  document.getElementById('ose-f-de').addEventListener('change', e=>{ oseFilters.dataDe=e.target.value; renderContent(); });
-  document.getElementById('ose-f-ate').addEventListener('change', e=>{ oseFilters.dataAte=e.target.value; renderContent(); });
-  document.getElementById('ose-f-mes-atual').addEventListener('click', ()=>{ const r=monthRangeISO(); oseFilters.dataDe=r.de; oseFilters.dataAte=r.ate; renderContent(); });
-  document.getElementById('ose-f-limpar').addEventListener('click', ()=>{ oseFilters.busca=''; oseFilters.equipe=''; oseFilters.status=''; oseFilters.dataDe=''; oseFilters.dataAte=''; renderContent(); });
+  document.getElementById('ose-f-busca').addEventListener('input', e=>{ oseFilters.busca=e.target.value; pagReset('ose-lista'); renderSearchKeepFocus(); });
+  document.getElementById('ose-f-equipe').addEventListener('change', e=>{ oseFilters.equipe=e.target.value; pagReset('ose-lista'); renderContent(); });
+  document.getElementById('ose-f-status').addEventListener('change', e=>{ oseFilters.status=e.target.value; pagReset('ose-lista'); renderContent(); });
+  document.getElementById('ose-f-de').addEventListener('change', e=>{ oseFilters.dataDe=e.target.value; pagReset('ose-lista'); renderContent(); });
+  document.getElementById('ose-f-ate').addEventListener('change', e=>{ oseFilters.dataAte=e.target.value; pagReset('ose-lista'); renderContent(); });
+  document.getElementById('ose-f-mes-atual').addEventListener('click', ()=>{ const r=monthRangeISO(); oseFilters.dataDe=r.de; oseFilters.dataAte=r.ate; pagReset('ose-lista'); renderContent(); });
+  document.getElementById('ose-f-limpar').addEventListener('click', ()=>{ oseFilters.busca=''; oseFilters.equipe=''; oseFilters.status=''; oseFilters.dataDe=''; oseFilters.dataAte=''; pagReset('ose-lista'); renderContent(); });
   el.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>{oseFilters.modo=t.dataset.modo; renderContent();}));
 
   const area = document.getElementById('ose-area');
@@ -4459,9 +4582,10 @@ function renderOseProgramacoes(){
 }
 
 function renderOseListaInto(area, list){
+  const pagina = paginaSlice(list, 'ose-lista');
   area.innerHTML = `<div class="panel"><div class="table-scroll"><table>
     <thead><tr><th>ID</th><th>Data</th><th>Nº OSE</th><th>Município</th><th>Subestação</th><th>Tipo</th><th>Equipe</th><th>Status Doc.</th><th>Atividades</th><th>Status</th><th></th></tr></thead>
-    <tbody>${list.map(x=>{
+    <tbody>${pagina.map(x=>{
       const p=x.programacao, a=x.atribuicao, eq=findEquipe(a.equipeId);
       const late = a.dataProgramada < todayISO() && !['Concluído','Cancelado'].includes(a.status);
       const ativResumo = (a.atividades||[]).map(at=>{ const atd=findAtividade(at.atividadeId); return `${esc(atd?.codigo||'?')} ×${at.quantidadePrevista??'—'}`; }).join(', ');
@@ -4485,7 +4609,8 @@ function renderOseListaInto(area, list){
           <button class="icon-btn" title="Excluir" data-ose-del="${p.id}">${icon('trash',14)}</button>
         </div></td>
       </tr>`;
-    }).join('')}</tbody></table></div></div>`;
+    }).join('')}</tbody></table></div>${pagFooterHtml('ose-lista', list.length)}</div>`;
+  bindPag(area, 'ose-lista');
   bindOseRowActions(area);
 }
 
@@ -5982,13 +6107,13 @@ function renderPodaProgramacoes(){
       </div>
     </div>
     <div id="poda-area"></div>`;
-  document.getElementById('poda-f-busca').addEventListener('input', e=>{ podaFilters.busca=e.target.value; renderSearchKeepFocus(); });
-  document.getElementById('poda-f-equipe').addEventListener('change', e=>{ podaFilters.equipe=e.target.value; renderContent(); });
-  document.getElementById('poda-f-status').addEventListener('change', e=>{ podaFilters.status=e.target.value; renderContent(); });
-  document.getElementById('poda-f-de').addEventListener('change', e=>{ podaFilters.dataDe=e.target.value; renderContent(); });
-  document.getElementById('poda-f-ate').addEventListener('change', e=>{ podaFilters.dataAte=e.target.value; renderContent(); });
-  document.getElementById('poda-f-mes-atual').addEventListener('click', ()=>{ const r=monthRangeISO(); podaFilters.dataDe=r.de; podaFilters.dataAte=r.ate; renderContent(); });
-  document.getElementById('poda-f-limpar').addEventListener('click', ()=>{ podaFilters.busca=''; podaFilters.equipe=''; podaFilters.status=''; podaFilters.dataDe=''; podaFilters.dataAte=''; renderContent(); });
+  document.getElementById('poda-f-busca').addEventListener('input', e=>{ podaFilters.busca=e.target.value; pagReset('poda-lista'); renderSearchKeepFocus(); });
+  document.getElementById('poda-f-equipe').addEventListener('change', e=>{ podaFilters.equipe=e.target.value; pagReset('poda-lista'); renderContent(); });
+  document.getElementById('poda-f-status').addEventListener('change', e=>{ podaFilters.status=e.target.value; pagReset('poda-lista'); renderContent(); });
+  document.getElementById('poda-f-de').addEventListener('change', e=>{ podaFilters.dataDe=e.target.value; pagReset('poda-lista'); renderContent(); });
+  document.getElementById('poda-f-ate').addEventListener('change', e=>{ podaFilters.dataAte=e.target.value; pagReset('poda-lista'); renderContent(); });
+  document.getElementById('poda-f-mes-atual').addEventListener('click', ()=>{ const r=monthRangeISO(); podaFilters.dataDe=r.de; podaFilters.dataAte=r.ate; pagReset('poda-lista'); renderContent(); });
+  document.getElementById('poda-f-limpar').addEventListener('click', ()=>{ podaFilters.busca=''; podaFilters.equipe=''; podaFilters.status=''; podaFilters.dataDe=''; podaFilters.dataAte=''; pagReset('poda-lista'); renderContent(); });
   el.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>{podaFilters.modo=t.dataset.modo; renderContent();}));
 
   const area = document.getElementById('poda-area');
@@ -6003,9 +6128,10 @@ function renderPodaProgramacoes(){
 }
 
 function renderPodaListaInto(area, list){
+  const pagina = paginaSlice(list, 'poda-lista');
   area.innerHTML = `<div class="panel"><div class="table-scroll"><table>
     <thead><tr><th>ID</th><th>Data</th><th>OSI</th><th>Subestação</th><th>Tipo</th><th>Equipe</th><th>Status Doc.</th><th>Atividades</th><th>Status</th><th></th></tr></thead>
-    <tbody>${list.map(x=>{
+    <tbody>${pagina.map(x=>{
       const p=x.programacao, a=x.atribuicao, eq=findEquipe(a.equipeId);
       const late = a.dataProgramada < todayISO() && !['Concluído','Cancelado'].includes(a.status);
       const ativResumo = (a.atividades||[]).map(at=>{ const atd=findAtividade(at.atividadeId); return `${esc(atd?.codigo||'?')} ×${at.quantidadePrevista??'—'}`; }).join(', ');
@@ -6028,7 +6154,8 @@ function renderPodaListaInto(area, list){
           <button class="icon-btn" title="Excluir" data-poda-del="${p.id}">${icon('trash',14)}</button>
         </div></td>
       </tr>`;
-    }).join('')}</tbody></table></div></div>`;
+    }).join('')}</tbody></table></div>${pagFooterHtml('poda-lista', list.length)}</div>`;
+  bindPag(area, 'poda-lista');
   bindPodaRowActions(area);
 }
 
