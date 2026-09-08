@@ -8114,6 +8114,7 @@ function openMedicaoPodaModal(atribId){
     submitLabel: pode? 'Salvar medição' : 'Fechar',
     wide:true, maxW:760,
     footerBtns:[
+      { label: icon('history',14)+' Histórico', cls:'btn', onClick: ()=> openPodaHistoricoModal(x.atribuicao.id) },
       { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'poda') }
     ],
     onSubmit:(fd)=>{

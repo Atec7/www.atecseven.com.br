@@ -157,7 +157,8 @@ const ICONS = {
   calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   check:'<path d="M20 6 9 17l-5-5"/>',
   camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
-  image:'<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>'
+  image:'<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+  chart:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>'
 };
 
 /* ── FOTOS DOS REGISTROS (IMGGB) ── */
@@ -879,6 +880,487 @@ function abrirModalAcidente(){
     }
   });
 }
+/* =========================================================
+   RODAPÉ DA PÁGINA DA EQUIPE — Programações da semana + EMERGÊNCIA
+========================================================= */
+function equipeAtualId(){
+  if(isOcndsMode && ocndsItem) return ocndsItem.equipeId;
+  if(filterEquipeId) return filterEquipeId;
+  const keys = Object.keys(editors||{});
+  return keys.length? Number(keys[0]) : null;
+}
+function hojeISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function semanaAtualRange(){
+  const now = new Date();
+  const dia = now.getDay(); // 0=dom
+  const desloc = (dia===0? -6 : 1-dia); // desloca até a segunda-feira
+  const seg = new Date(now); seg.setDate(now.getDate()+desloc); seg.setHours(0,0,0,0);
+  const dom = new Date(seg); dom.setDate(seg.getDate()+6); dom.setHours(23,59,59,999);
+  const iso = d=> d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return { de: iso(seg), ate: iso(dom) };
+}
+function teamAtribuicoesSemana(){
+  const eqId = equipeAtualId();
+  if(!DB) return [];
+  const {de, ate} = semanaAtualRange();
+  const out = [];
+  const colA = (nome, tipoLabel, gidFn)=>{
+    (DB[nome]||[]).forEach(pg=>{
+      (pg.atribuicoes||[]).forEach(a=>{
+        if(eqId && String(a.equipeId)!==String(eqId)) return;
+        const data = a.dataProgramada || pg.dataProgramada || '';
+        if(!data || data<de || data>ate) return;
+        out.push({ tipo:tipoLabel, gid: gidFn(pg,a), data, status:a.status||pg.status||'Programado', pg, a });
+      });
+    });
+  };
+  colA('programacoes','Projeto', pg=>pg.gid||('G26-'+String(pg.id).padStart(7,'0')));
+  colA('podaProgramacoes','PODA', pg=>pg.gid||('PODA-'+String(pg.id).padStart(7,'0')));
+  colA('oseProgramacoes','OSE', pg=>pg.gid||('OSE-'+String(pg.id).padStart(7,'0')));
+  (DB.ocnds||[]).forEach(o=>{
+    if(eqId && String(o.equipeId)!==String(eqId)) return;
+    if(!o.data || String(o.data)<de || String(o.data)>ate) return;
+    out.push({ tipo:'OC/NDS', gid:o.gid||('G26-'+String(o.id).padStart(7,'0')), data:o.data, status:o.status||'Despachada', pg:o, a:o });
+  });
+  out.sort((x,y)=>String(x.data).localeCompare(String(y.data)));
+  return out;
+}
+function abrirResumoSemana(){
+  const eqId = equipeAtualId();
+  const eq = findEquipe(DB, Number(eqId));
+  const eqLabel = equipeLabel(eq);
+  const {de, ate} = semanaAtualRange();
+  const itens = teamAtribuicoesSemana();
+  const total = itens.length;
+  const concl = itens.filter(x=>x.status==='Concluído').length;
+  const cancel = itens.filter(x=>x.status==='Cancelado').length;
+  const emAndamento = itens.filter(x=>!['Concluído','Cancelado'].includes(x.status)).length;
+  const statusColor = s=> s==='Concluído'? '#4caf6d' : s==='Cancelado'? '#e0615b' : s==='Reprogramado'? '#e0a458' : '#5b8def';
+  let rows = '';
+  if(itens.length){
+    rows = itens.map((x,i)=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border-soft);border-radius:8px;background:var(--panel-2);">
+        <div style="flex-shrink:0;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;background:var(--panel);border:1px solid var(--border);color:${statusColor(x.status)};">${x.tipo.startsWith('Proj')?'P':x.tipo}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:13px;color:var(--text);">${esc(x.gid)}</div>
+          <div style="font-size:11.5px;color:var(--muted-2);">${fmtDate(x.data)}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;color:${statusColor(x.status)};white-space:nowrap;">${esc(x.status)}</span>
+      </div>`).join('');
+  }else{
+    rows = `<div style="padding:26px 16px;color:var(--muted-2);font-size:12.5px;text-align:center;">Nenhuma programação encontrada para esta equipe na semana vigente (${fmtDate(de)} a ${fmtDate(ate)}).</div>`;
+  }
+  const body = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+      <div style="text-align:center;padding:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;"><div style="font-size:20px;font-weight:700;color:var(--accent);">${total}</div><div style="font-size:10.5px;color:var(--muted-2);">Total</div></div>
+      <div style="text-align:center;padding:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;"><div style="font-size:20px;font-weight:700;color:var(--green);">${concl}</div><div style="font-size:10.5px;color:var(--muted-2);">Concluídas</div></div>
+      <div style="text-align:center;padding:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;"><div style="font-size:20px;font-weight:700;color:var(--blue);">${emAndamento}</div><div style="font-size:10.5px;color:var(--muted-2);">Pendentes</div></div>
+    </div>
+    <div style="margin-bottom:12px;font-size:12.5px;color:var(--muted);"><strong style="color:var(--text);">${esc(eqLabel)}</strong> — semana vigente: <span class="mono">${fmtDate(de)}</span> a <span class="mono">${fmtDate(ate)}</span></div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow-y:auto;">${rows}</div>`;
+  const ov = openTeamModal('Programações da semana', body);
+  const btnProd = document.createElement('button');
+  btnProd.type='button';
+  btnProd.className='btn btn-primary';
+  btnProd.innerHTML = icon('chart',13)+' Minha Produção';
+  const foot = ov.querySelector('.modal-foot');
+  foot.insertBefore(btnProd, foot.firstChild);
+  btnProd.addEventListener('click', ()=>{
+    openTeamModalEmBreve('Minha Produção', eqLabel);
+  });
+}
+function openTeamModalEmBreve(title, eqLabel){
+  const existing = document.getElementById('team-modal-overlay');
+  if(existing) existing.remove();
+  const html = `
+    <div class="modal-overlay" id="team-modal-overlay">
+      <div class="modal" style="max-width:520px;">
+        <div class="modal-head"><h3>${title}</h3><button class="icon-btn" id="team-modal-close">${icon('close')}</button></div>
+        <div class="modal-body" style="align-items:center;text-align:center;padding:32px 24px;">
+          <div style="width:52px;height:52px;border-radius:12px;background:rgba(224,164,88,.12);color:var(--accent);display:flex;align-items:center;justify-content:center;">${icon('chart',24)}</div>
+          <p style="margin:14px 0 0;font-size:14px;color:var(--text);line-height:1.6;">Em breve aqui você poderá acompanhar a prévia da produtividade da equipe <strong>“${esc(eqLabel)}”.</strong></p>
+        </div>
+        <div class="modal-foot"><button type="button" class="btn btn-ghost" id="team-modal-close2">Fechar</button></div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  const overlay = document.getElementById('team-modal-overlay');
+  const close = ()=> overlay.remove();
+  overlay.querySelector('#team-modal-close').addEventListener('click', close);
+  overlay.querySelector('#team-modal-close2').addEventListener('click', close);
+}
+function openTeamModal(title, bodyHtml){
+  const existing = document.getElementById('team-modal-overlay');
+  if(existing) existing.remove();
+  const html = `
+    <div class="modal-overlay" id="team-modal-overlay">
+      <div class="modal" style="max-width:560px;">
+        <div class="modal-head"><h3>${title}</h3><button class="icon-btn" id="team-modal-close">${icon('close')}</button></div>
+        <div class="modal-body">${bodyHtml}</div>
+        <div class="modal-foot"><button type="button" class="btn btn-ghost" id="team-modal-close2">Fechar</button></div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  const overlay = document.getElementById('team-modal-overlay');
+  const close = ()=> overlay.remove();
+  overlay.querySelector('#team-modal-close').addEventListener('click', close);
+  overlay.querySelector('#team-modal-close2').addEventListener('click', close);
+  return overlay;
+}
+function abrirEmergencia(){
+  const existing = document.getElementById('emergency-overlay');
+  if(existing) existing.remove();
+  const eqAtual = equipeAtualId();
+  const rowsIniciais = [{atividadeId:'',quantidadeExecutada:'',tipoEstrutura:'',fotos:[]}];
+  const estado = { tipo:'OC', equipeId: eqAtual||'', atividades: rowsIniciais, observacoes:'' };
+  const atjs = (DB && DB.atividades)||[];
+  const eqs = (DB && DB.equipes)||[];
+  const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  function equipeOptionsHtml(sel){
+    return '<option value="">Selecione a equipe…</option>' + eqs.map(e=>`<option value="${e.id}" ${String(sel)===String(e.id)?'selected':''}>${equipeLabel(e)}${e.encarregado? ' · '+esc(e.encarregado):''}</option>`).join('');
+  }
+  function atividadesHtml(){
+    return estado.atividades.map((r,i)=>{
+      const atDef = r.atividadeId? findAtividade(DB, r.atividadeId) : null;
+      const fotos = r.fotos||[];
+      return `
+        <div class="team-atividade" data-ridx="${i}" style="margin-bottom:10px;">
+          <div class="activity-row act-ac-row">
+            <div class="act-ac emg-ac" data-ridx="${i}">
+              <input type="text" class="act-ac-input" data-ridx="${i}" autocomplete="off" placeholder="Buscar atividade por código ou descrição…" value="${atDef? esc(atDef.codigo+' · '+atDef.descricao):''}">
+              <div class="act-ac-list" data-ridx="${i}" style="display:none;"></div>
+            </div>
+            <div class="qty-field" style="flex:0 0 110px;"><label>Qtd. executada</label><input type="number" step="0.01" min="0" class="emg-qty" data-ridx="${i}" placeholder="Qtd." value="${r.quantidadeExecutada??''}"></div>
+            <button type="button" class="icon-btn emg-remove" data-ridx="${i}" title="Remover atividade" ${estado.atividades.length>1?'':'disabled'}>${icon('close',13)}</button>
+          </div>
+          <div class="te-estrutura">
+            <label>Tipo de estruturas</label>
+            <select class="emg-estrutura" data-ridx="${i}">${tipoEstruturaOptionsHtml(DB, r.tipoEstrutura)}</select>
+          </div>
+          <div class="activity-fotos">
+            <div class="emg-thumbs" data-emg-tef="${i}">${fotos.map(f=>`<div class="te-thumb"><img src="${f}" alt="foto"></div>`).join('')}</div>
+            <div class="te-actions">
+              <span class="emg-photo-hint" data-emg-ph="${i}"></span>
+              <button type="button" class="btn btn-sm emg-camera" data-emg-cam="${i}">${icon('camera',13)} Câmera</button>
+              <button type="button" class="btn btn-sm btn-ghost emg-gallery" data-emg-gal="${i}">${icon('image',13)} Galeria</button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+  function bindAc(){
+    const root = document.getElementById('emergency-overlay');
+    root.querySelectorAll('.act-ac[data-ridx]').forEach(ac=>{
+      const ridx = Number(ac.dataset.ridx);
+      const input = ac.querySelector('.act-ac-input');
+      const listEl = ac.querySelector('.act-ac-list');
+      let arrow=-1;
+      function openList(){
+        const r = estado.atividades[ridx];
+        const d = r.atividadeId? findAtividade(DB, r.atividadeId) : null;
+        const curLabel = d? (d.codigo+' · '+d.descricao) : '';
+        const q = norm(input.value);
+        let items = atjs;
+        if(q && input.value!==curLabel) items = items.filter(a=>norm(a.codigo).includes(q)||norm(a.descricao).includes(q));
+        items = items.slice(0,30);
+        listEl.scrollTop=0;
+        if(!items.length){ listEl.innerHTML='<div class="act-ac-empty">Nenhuma atividade encontrada</div>'; listEl.style.display='block'; arrow=-1; return; }
+        listEl.innerHTML = items.map(a=>`<div class="act-ac-item" data-id="${a.id}"><span class="ac-cc">${esc(a.codigo)}</span><span class="ac-desc">${esc(a.descricao)}</span></div>`).join('');
+        listEl.style.display='block'; arrow=-1;
+        listEl.querySelectorAll('.act-ac-item').forEach(it=>{ it.addEventListener('mousedown', e=>{ e.preventDefault(); select(it.dataset.id); }); });
+      }
+      function highlight(items){ items.forEach((it,k)=>it.classList.toggle('active', k===arrow)); }
+      function select(id){
+        const r = estado.atividades[ridx];
+        if(r) r.atividadeId = id;
+        const d = findAtividade(DB, Number(id));
+        input.value = d? (d.codigo+' · '+d.descricao) : '';
+        listEl.style.display='none';
+      }
+      input.addEventListener('focus', ()=>{ input.select(); openList(); });
+      input.addEventListener('input', openList);
+      input.addEventListener('keydown', e=>{
+        const items = listEl.querySelectorAll('.act-ac-item');
+        if(e.key==='ArrowDown'){ e.preventDefault(); if(items.length){ arrow=Math.min(arrow+1,items.length-1); highlight(items);} }
+        else if(e.key==='ArrowUp'){ e.preventDefault(); if(items.length){ arrow=Math.max(arrow-1,0); highlight(items);} }
+        else if(e.key==='Enter'){ e.preventDefault(); if(arrow>=0&&items[arrow]) select(items[arrow].dataset.id); else if(items.length===1) select(items[0].dataset.id); }
+        else if(e.key==='Escape'){ listEl.style.display='none'; input.blur(); }
+      });
+      input.addEventListener('blur', ()=>{ setTimeout(()=>{ listEl.style.display='none'; },130); });
+    });
+    root.querySelectorAll('.emg-qty').forEach(inp=>{
+      inp.addEventListener('input', ()=>{ const ridx=Number(inp.dataset.ridx); const r=estado.atividades[ridx]; if(r) r.quantidadeExecutada=inp.value; });
+    });
+    root.querySelectorAll('.emg-estrutura').forEach(sel=>{
+      sel.addEventListener('change', ()=>{ const ridx=Number(sel.dataset.ridx); const r=estado.atividades[ridx]; if(r) r.tipoEstrutura=sel.value; });
+    });
+    root.querySelectorAll('.emg-remove').forEach(b=>{
+      b.addEventListener('click', ()=>{ if(estado.atividades.length<=1){ toast('Mantenha ao menos uma atividade.','error'); return; } estado.atividades.splice(Number(b.dataset.ridx),1); paintAtividades(); });
+    });
+    function emgAddFotos(ridx, files){
+      const r = estado.atividades[ridx];
+      const max = 10 - (r.fotos||[]).length;
+      const lista = Array.from(files||[]).slice(0, max);
+      (async ()=>{
+        for(const f of lista){
+          const dataUrl = await asyncFileToDataUrl(f);
+          if(!dataUrl) continue;
+          if(!r.fotos) r.fotos=[];
+          r.fotos.push(dataUrl);
+        }
+        atualizarEmgFotos(ridx);
+      })();
+    }
+    function atualizarEmgFotos(ridx){
+      const r = estado.atividades[ridx];
+      const thumbs = document.querySelector('.emg-thumbs[data-emg-tef="'+ridx+'"]');
+      if(thumbs){
+        thumbs.innerHTML = (r.fotos||[]).map(f=>`<div class="te-thumb"><img src="${f}" alt="foto"></div>`).join('');
+      }
+      const hint = document.querySelector('.emg-photo-hint[data-emg-ph="'+ridx+'"]');
+      if(hint){
+        const n = (r.fotos||[]).length;
+        hint.textContent = n? n+'/10 foto'+(n>1?'s':'') : 'Adicione ao menos 1 foto (opcional)';
+        hint.className = 'emg-photo-hint ' + (n? 'ok':'missing');
+      }
+    }
+    function openEmgPicker(ridx, modo){
+      const inp = document.createElement('input');
+      inp.type='file'; inp.accept='image/*';
+      if(modo==='camera') inp.setAttribute('capture','environment'); else inp.multiple=true;
+      inp.style.display='none';
+      inp.onchange = ()=>{ if(inp.files&&inp.files.length) emgAddFotos(ridx, inp.files); inp.remove(); };
+      document.body.appendChild(inp); inp.click();
+    }
+    root.querySelectorAll('.emg-camera').forEach(b=>{ b.addEventListener('click', ()=>openEmgPicker(Number(b.dataset.emgCam),'camera')); });
+    root.querySelectorAll('.emg-gallery').forEach(b=>{ b.addEventListener('click', ()=>openEmgPicker(Number(b.dataset.emgGal),'gallery')); });
+    root.querySelectorAll('.emg-photo-hint').forEach(h=>{ atualizarEmgFotos(Number(h.dataset.emgPh)); });
+  }
+  function paintAtividades(){
+    const area = document.getElementById('emg-atividades');
+    if(!area) return;
+    area.innerHTML = atividadesHtml();
+    bindAc();
+  }
+  const overlay = document.createElement('div');
+  overlay.id='emergency-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(6,8,11,.72);backdrop-filter:blur(3px);z-index:200;overflow-y:auto;display:flex;align-items:flex-start;justify-content:center;padding:24px 14px;';
+  overlay.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;width:100%;max-width:620px;box-shadow:var(--shadow);box-sizing:border-box;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <div><h3 style="color:var(--red);font-size:16px;">${icon('alert',16)} Nova ocorrência OC/NDS</h3><div style="font-size:11px;color:var(--muted-2);margin-top:2px;">EMERGÊNCIA — a ocorrência será enviada ao escritório</div></div>
+        <button type="button" class="icon-btn" id="emg-close">${icon('close',18)}</button>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <div class="field" style="flex:1;min-width:140px;margin:0;">
+            <label>Tipo <span class="req">*</span></label>
+            <select id="emg-tipo">
+              <option value="OC">OC (Ocorrência)</option>
+              <option value="NDS">NDS (Nota de Serviço)</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1 1 100%;margin:0;">
+            <label>Equipe (somente 1) <span class="req">*</span></label>
+            <select id="emg-equipe">${equipeOptionsHtml(estado.equipeId)}</select>
+          </div>
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Atividades executadas <span class="req">*</span></label>
+          <div id="emg-atividades">${atividadesHtml()}</div>
+          <button type="button" class="btn btn-sm btn-ghost" id="emg-add-atv">${icon('plus',13)} Adicionar atividade</button>
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Observação <span class="req">*</span></label>
+          <textarea id="emg-obs" rows="3" placeholder="Descreva o que foi executado / motivo da emergência">${esc(estado.observacoes)}</textarea>
+        </div>
+      </div>
+      <div style="padding:14px 20px;border-top:1px solid var(--border-soft);display:flex;justify-content:flex-end;gap:8px;">
+        <button type="button" class="btn btn-ghost" id="emg-cancel">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="emg-submit" style="background:var(--red);border-color:var(--red);color:#fff;font-weight:700;">${icon('check',15)} Enviar ocorrência</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = ()=> overlay.remove();
+  overlay.querySelector('#emg-close').addEventListener('click', close);
+  overlay.querySelector('#emg-cancel').addEventListener('click', close);
+  overlay.querySelector('#emg-tipo').addEventListener('change', e=>{ estado.tipo=e.target.value; });
+  overlay.querySelector('#emg-equipe').addEventListener('change', e=>{ estado.equipeId=Number(e.target.value); });
+  overlay.querySelector('#emg-add-atv').addEventListener('click', ()=>{ estado.atividades.push({atividadeId:'',quantidadeExecutada:'',tipoEstrutura:'',fotos:[]}); paintAtividades(); });
+  overlay.querySelector('#emg-obs').addEventListener('input', e=>{ estado.observacoes=e.target.value; });
+  overlay.querySelector('#emg-submit').addEventListener('click', async ()=>{
+    const tipo = estado.tipo;
+    const equipeId = estado.equipeId;
+    const ativs = estado.atividades;
+    const obs = (document.getElementById('emg-obs').value||'').trim();
+    if(!equipeId){ toast('Selecione a equipe (somente 1).','error'); return; }
+    if(!ativs.length || ativs.every(a=>!a.atividadeId)){ toast('Selecione ao menos uma atividade.','error'); return; }
+    if(!obs){ toast('A observação é obrigatória.','error'); return; }
+    if(navigator.onLine===false){ toast('Conecte-se à internet para enviar a ocorrência de emergência.','error'); return; }
+    const btn = document.getElementById('emg-submit');
+    btn.disabled=true; btn.textContent='Enviando fotos…';
+    try{
+      const fotosPorAtiv = [];
+      for(const a of ativs){
+        const urls = [];
+        for(const f of (a.fotos||[])){
+          const u = await uploadToImGbb(f);
+          if(u) urls.push(u);
+        }
+        fotosPorAtiv.push(urls.join(FOTOS_SEP));
+      }
+      const snap = await DB_REF.once('value');
+      let db;
+      if(snap.exists()){ const v=snap.val(); db=(typeof v==='string')?JSON.parse(v):v; }
+      else{ db={equipes:[],atividades:[],projetos:[],programacoes:[],ocnds:[],usuarios:[],customFields:{equipes:[],atividades:[],projetos:[],programacoes:[]},tiposEstrutura:[],seq:1}; }
+      db.ocnds = db.ocnds||[];
+      const seq = (db.seq||0)+1; db.seq=seq;
+      const ativsValidas = ativs.filter(a=>a.atividadeId);
+      const novo = {
+        id: seq,
+        gid: 'G26-'+String(Math.floor(1000000+Math.random()*9000000)),
+        tipo,
+        setor: '',
+        coordenacao: '',
+        ptp:'', si:'', ose:'', ocorrencia:'',
+        data: hojeISO(),
+        zona: '',
+        numeroReserva: '',
+        equipeId: equipeId,
+        observacoes: obs,
+        anexos: [],
+        status: 'Despachada',
+        numeroOC: '',
+        atividades: ativsValidas.map((a,i)=>({
+          atividadeId: Number(a.atividadeId),
+          quantidadePrevista: null,
+          quantidadeExecutada: (a.quantidadeExecutada===''||a.quantidadeExecutada==null)? null : parseFloat(a.quantidadeExecutada),
+          tipoEstrutura: a.tipoEstrutura||'',
+          fotos: fotosPorAtiv[i]||''
+        })),
+        rdoRespostas: {},
+        origem: 'emergencia',
+        historico: [{ usuarioNome:'Equipe (emergência)', usuarioLogin:'', ts:Date.now(), tipo:'emergencia', de:null, para:'Despachada', motivo:obs }]
+      };
+      db.ocnds.push(novo);
+      await DB_REF.set(JSON.stringify(db));
+      DB=db; saveCache(db); dbToEditors(DB);
+      toast('Ocorrência de emergência enviada ao escritório!');
+      close();
+    }catch(err){
+      console.error(err);
+      toast('Falha ao enviar a ocorrência. Tente novamente.','error');
+      btn.disabled=false; btn.textContent=icon('check',15)+' Enviar ocorrência';
+    }
+  });
+  bindAc();
+}
+function teamFooterBind(){
+  const bSemana = document.getElementById('btn-resumo-semana');
+  const bEmg = document.getElementById('btn-emergencia');
+  if(bSemana) bSemana.addEventListener('click', ()=>{ abrirResumoSemana(); });
+  if(bEmg) bEmg.addEventListener('click', ()=>{ abrirEmergencia(); });
+}
+
+/* =========================================================
+   INSTALAR (PWA) — botão flutuante
+========================================================= */
+let installPromptEvent = null;
+function initInstallButton(){
+  const btn = document.getElementById('btn-install');
+  if(!btn) return;
+  const mostrar = ()=> btn.style.display = '';
+  window.addEventListener('beforeinstallprompt', (e)=>{
+    e.preventDefault();
+    installPromptEvent = e;
+    mostrar();
+  });
+  btn.addEventListener('click', async ()=>{
+    if(!installPromptEvent){ toast('Este aparelho não está permitindo a instalação agora.','error'); return; }
+    installPromptEvent.prompt();
+    const {outcome} = await installPromptEvent.userChoice;
+    if(outcome === 'accepted'){ btn.style.display='none'; toast('App instalado! Procure o ícone da G26 na tela inicial.'); }
+    installPromptEvent = null;
+  });
+  window.addEventListener('appinstalled', ()=>{ btn.style.display='none'; toast('App instalado com sucesso!'); });
+}
+
+/* =========================================================
+   LOGIN DA EQUIPE (1 vez) — escolhe o prefixo da equipe
+========================================================= */
+const ME_KEY = 'g26_equipe_me';
+function loadMe(){ try{ return JSON.parse(localStorage.getItem(ME_KEY)||'null'); }catch(e){ return null; } }
+function saveMe(m){ try{ localStorage.setItem(ME_KEY, JSON.stringify(m)); }catch(e){} }
+function prefixosDisponiveis(){
+  if(!DB) return [];
+  const vistos = {};
+  const out = [];
+  (DB.equipes||[]).forEach(e=>{
+    const p = e.eqtl || e.prtn || '';
+    if(!p || vistos[p]) return;
+    vistos[p] = true;
+    out.push({ prefixo: p, equipeId: e.id, label: equipeLabel(e) });
+  });
+  out.sort((a,b)=>String(a.prefixo).localeCompare(String(b.prefixo)));
+  return out;
+}
+function abrirLoginEquipe(apos){
+  const existing = document.getElementById('team-modal-overlay');
+  if(existing) existing.remove();
+  const prefixos = prefixosDisponiveis();
+  const me = loadMe();
+  const optionMatcher = op=> String(op.prefixo)===String(apos?.q) || String(op.equipeId)===String(apos?.equipeId);
+  const selecionado = prefixos.find(optionMatcher) || prefixos.find(o=>me && String(o.equipeId)===String(me.equipeId));
+  const optsHtml = prefixos.map(o=>`<option value="${o.equipeId}" ${selecionado && String(o.equipeId)===String(selecionado.equipeId)?'selected':''}>${esc(o.prefixo)} — ${esc(o.label)}</option>`).join('');
+  const html = `
+    <div class="modal-overlay" id="team-modal-overlay">
+      <div class="modal" style="max-width:520px;">
+        <div class="modal-head"><h3>Identificação da equipe</h3><button class="icon-btn" id="team-modal-close">${icon('close')}</button></div>
+        <div class="modal-body">
+          <p style="font-size:13px;color:var(--muted);margin:0;">Selecione o <strong style="color:var(--text);">prefixo da sua equipe</strong> (EQTL/PRTN) para identificarmos quem está lançando. Esse passo é feito apenas <strong>1 vez</strong> neste aparelho.</p>
+          <div class="field" style="margin:0;">
+            <label>Prefixo da equipe <span class="req">*</span></label>
+            <select id="me-prefixo">${prefixos.length? optsHtml : '<option value="">Nenhuma equipe cadastrada</option>'}</select>
+          </div>
+        </div>
+        <div class="modal-foot"><button type="button" class="btn btn-ghost" id="team-modal-close2">Cancelar</button><button type="button" class="btn btn-primary" id="me-confirmar">${icon('check',14)} Confirmar</button></div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  const overlay = document.getElementById('team-modal-overlay');
+  const close = ()=> overlay.remove();
+  overlay.querySelector('#team-modal-close').addEventListener('click', close);
+  overlay.querySelector('#team-modal-close2').addEventListener('click', close);
+  overlay.querySelector('#me-confirmar').addEventListener('click', ()=>{
+    const sel = overlay.querySelector('#me-prefixo');
+    if(!sel.value){ toast('Selecione o prefixo da sua equipe.','error'); return; }
+    const op = prefixos.find(o=>String(o.equipeId)===String(sel.value));
+    const me2 = { prefixo: op? op.prefixo : sel.value, equipeId: op? op.equipeId : sel.value, ts: Date.now() };
+    saveMe(me2);
+    atualizarLoginBadge();
+    toast('Identificação salva: '+esc(op? op.prefixo : sel.value));
+    close();
+    if(apos && apos.onOk) apos.onOk(me2);
+  });
+}
+function atualizarLoginBadge(){
+  const badge = document.getElementById('team-login-badge');
+  if(!badge) return;
+  const me = loadMe();
+  if(!me || !me.prefixo){ badge.style.display='none'; return; }
+  const eq = findEquipe(DB, Number(me.equipeId));
+  const nome = me.prefixo + (eq? ' — '+equipeLabel(eq) : '');
+  badge.style.display='inline-flex';
+  badge.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span class="tlb-txt">${esc(nome)}</span><span class="tlb-edit">mudar</span>`;
+  badge.onclick = ()=> abrirLoginEquipe();
+}
+function teamLoginInit(){
+  atualizarLoginBadge();
+  const me = loadMe();
+  if(me && me.prefixo) return;
+  if(!prefixosDisponiveis().length) return;
+  abrirLoginEquipe();
+}
 function renderTeamBlock(eqId){
   const eq = findEquipe(DB, Number(eqId));
   const rows = editors[eqId];
@@ -1485,6 +1967,8 @@ function initPrint(){
 
 /* --- init --- */
 function init(){
+  teamFooterBind();
+  initInstallButton();
   if(PRINT_PROG){
     initPrint();
     return;
@@ -1496,7 +1980,7 @@ function init(){
   }
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js').catch(()=>{}); }
   const cached = loadCache();
-  if(cached){ DB = cached; dbToEditors(DB); if(!isOcndsMode) atualizaRDOCompletado(); render(); }
+  if(cached){ DB = cached; dbToEditors(DB); if(!isOcndsMode) atualizaRDOCompletado(); render(); teamLoginInit(); }
   window.addEventListener('online', ()=>{ online=true; setStatus('Conectado — sincronizando…','ok'); if(isOcndsMode) syncNowOcNds(); else syncNow(); });
   window.addEventListener('offline', ()=>{ online=false; setStatus('Offline — as alterações serão enviadas quando houver conexão','warn'); });
   DB_REF.once('value').then(snap=>{
@@ -1516,6 +2000,7 @@ function init(){
       atualizaRDOCompletado();
     }
     render();
+    teamLoginInit();
   }).catch(()=>{ render(); }).finally(()=>{ if(isOcndsMode) syncNowOcNds(); else syncNow(); });
   window.addEventListener('pagehide', ()=>pararPresencaTeam());
   window.addEventListener('beforeunload', ()=>pararPresencaTeam());
