@@ -143,7 +143,7 @@ function nextId(){ DB.seq = (DB.seq||1)+1; return DB.seq; }
 
 let DB = structuredClone(DEFAULT_DATA);
 let currentView = 'dashboard';
-let progFilters = (()=>{ const r=monthRangeISO(); return { projeto:'', projQ:'', equipe:'', status:'Programado', ciclo:'', dataDe:r.de, dataAte:r.ate, alteradaEquipe:false, modo:'lista', calView:'mes', calDay:todayISO() }; })();
+let progFilters = (()=>{ const r=monthRangeISO(); return { projeto:'', projQ:'', equipe:'', status:'Programado', ciclo:'', setor:'', coordenacao:'', dataDe:r.de, dataAte:r.ate, alteradaEquipe:false, modo:'lista', calView:'mes', calDay:todayISO() }; })();
 let ativFilters = { q:'', fav:'' };
 let equipeFilters = { q:'', status:'' };
 let projFilters = { q:'', status:'', ciclo:'', recebido:'', cidade:'', setor:'', coordenacao:'', periodoDe:'', periodoAte:'' };
@@ -2496,6 +2496,11 @@ function programacoesFiltradas(){
     if(progFilters.dataDe && x.atribuicao.dataProgramada < progFilters.dataDe) return false;
     if(progFilters.dataAte && x.atribuicao.dataProgramada > progFilters.dataAte) return false;
     if(progFilters.alteradaEquipe && !lastTeamEdit(x.atribuicao)) return false;
+    if(progFilters.setor || progFilters.coordenacao){
+      const pr = findProjeto(x.programacao.projetoId);
+      if(progFilters.setor && (pr?.setor||'')!==progFilters.setor) return false;
+      if(progFilters.coordenacao && (pr?.coordenacao||'')!==progFilters.coordenacao) return false;
+    }
     return true;
   }).sort((a,b)=> a.atribuicao.dataProgramada.localeCompare(b.atribuicao.dataProgramada));
 }
@@ -2520,11 +2525,16 @@ function renderProgramacoes(){
     return;
   }
   const list = programacoesFiltradas();
+  const progVisiveis = flatAtribuicoes();
+  const setoresProg = [...new Set(progVisiveis.map(x=>{ const pr=findProjeto(x.programacao.projetoId); return (pr?.setor||'').trim(); }).filter(Boolean))].sort();
+  const coordsProg = [...new Set(progVisiveis.map(x=>{ const pr=findProjeto(x.programacao.projetoId); return (pr?.coordenacao||'').trim(); }).filter(Boolean))].sort();
   el.innerHTML = `
     <div class="panel-head" style="padding:0;margin-bottom:16px;border:none;">
       <div class="filters">
         <div class="search-wrap"><span class="search-ic">${icon('search',14)}</span><input id="f-proj-q" type="search" placeholder="Buscar projeto…" value="${esc(progFilters.projQ)}"><button type="button" class="search-clear" id="f-proj-q-clear" title="Limpar busca">${icon('close',12)}</button></div>
         <select id="f-equipe"><option value="">Todas as equipes</option>${equipesVisiveis().map(e=>`<option value="${e.id}" ${progFilters.equipe==String(e.id)?'selected':''}>${equipeLabel(e)}${e.encarregado? ' — '+esc(e.encarregado):''}</option>`).join('')}</select>
+        <select id="f-setor"><option value="">Todos os setores</option>${setoresProg.map(s=>`<option ${progFilters.setor===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
+        <select id="f-coord"><option value="">Todas as coordenações</option>${coordsProg.map(c=>`<option ${progFilters.coordenacao===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
         <select id="f-status"><option value="">Todos os status</option>${STATUS_PROG.map(s=>`<option ${progFilters.status===s?'selected':''}>${s}</option>`).join('')}</select>
         <select id="f-ciclo"><option value="">Todos os ciclos</option>${ciclosUnicos().map(c=>`<option ${progFilters.ciclo===c?'selected':''}>${c}</option>`).join('')}</select>
         <input type="date" id="f-data-de" value="${progFilters.dataDe}" title="Data inicial">
@@ -2546,6 +2556,8 @@ function renderProgramacoes(){
   document.getElementById('f-proj-q').addEventListener('keydown', e=>{ if(e.key==='Escape'){ progFilters.projQ=''; pagReset('prog-lista'); renderContent(); } });
   document.getElementById('f-proj-q-clear').addEventListener('click', ()=>{ progFilters.projQ=''; pagReset('prog-lista'); renderContent(); });
   document.getElementById('f-equipe').addEventListener('change', e=>{progFilters.equipe=e.target.value; pagReset('prog-lista'); renderContent();});
+  document.getElementById('f-setor').addEventListener('change', e=>{progFilters.setor=e.target.value; pagReset('prog-lista'); renderContent();});
+  document.getElementById('f-coord').addEventListener('change', e=>{progFilters.coordenacao=e.target.value; pagReset('prog-lista'); renderContent();});
   document.getElementById('f-status').addEventListener('change', e=>{progFilters.status=e.target.value; pagReset('prog-lista'); renderContent();});
   document.getElementById('f-ciclo').addEventListener('change', e=>{progFilters.ciclo=e.target.value; pagReset('prog-lista'); renderContent();});
   document.getElementById('f-data-de').addEventListener('change', e=>{progFilters.dataDe=e.target.value; pagReset('prog-lista'); renderContent();});
@@ -4443,7 +4455,7 @@ function renderContent(){
 /* --- Ose helpers --- */
 const STATUS_OSE = ['Programado','Em Execução','Concluído','Reprogramado','Cancelado'];
 const TIPO_INTERVENCAO_OPCOES = ['MT','BT'];
-let oseFilters = (()=>{ const r=monthRangeISO(); return { busca:'', equipe:'', status:'', dataDe:r.de, dataAte:r.ate, modo:'lista', calView:'mes', calDay:todayISO() }; })();
+let oseFilters = (()=>{ const r=monthRangeISO(); return { busca:'', equipe:'', status:'', setor:'', coordenacao:'', dataDe:r.de, dataAte:r.ate, modo:'lista', calView:'mes', calDay:todayISO() }; })();
 let oseCalRef = new Date();
 function oseProgLabel(p){ return p.gid || ('OSE-'+String(p.id).padStart(7,'0')); }
 function findOseProg(id){ return (DB.oseProgramacoes||[]).find(p=>p.id===Number(id)); }
@@ -4479,6 +4491,8 @@ function oseProgramacoesFiltradas(){
     if(eqId && String(a.equipeId)!==String(eqId)) return false;
     if(de && (a.dataProgramada||p.dataProgramacao||'') < de) return false;
     if(ate && (a.dataProgramada||p.dataProgramacao||'') > ate) return false;
+    if(oseFilters.setor && (eq?.setor||'')!==oseFilters.setor) return false;
+    if(oseFilters.coordenacao && (eq?.coordenacao||'')!==oseFilters.coordenacao) return false;
     if(q){
       const hay = norm([p.municipio,p.subestacao,p.tipoIntervencao,p.status,p.statusDocumentacao,oseProgLabel(p),equipeLabel(eq),eq?.supervisor,fmtDate(a.dataProgramada||p.dataProgramacao),p.observacoes].join(' '));
       if(!hay.includes(q)) return false;
@@ -4548,11 +4562,16 @@ function renderOseProgramacoes(){
     return;
   }
   const list = oseProgramacoesFiltradas();
+  const oseVisiveis = flatOseAtribuicoes();
+  const setoresOse = [...new Set(oseVisiveis.map(x=>{ const e=findEquipe(x.atribuicao.equipeId); return (e?.setor||'').trim(); }).filter(Boolean))].sort();
+  const coordsOse = [...new Set(oseVisiveis.map(x=>{ const e=findEquipe(x.atribuicao.equipeId); return (e?.coordenacao||'').trim(); }).filter(Boolean))].sort();
   el.innerHTML = `
     <div class="panel-head" style="padding:0;margin-bottom:16px;border:none;">
       <div class="filters">
         <input type="search" id="ose-f-busca" placeholder="Buscar município, subestação, equipe..." style="flex:1;min-width:180px;" value="${esc(oseFilters.busca)}">
         <select id="ose-f-equipe"><option value="">Todas as equipes</option>${equipesVisiveis().filter(e=>e.ativo!==false).map(e=>`<option value="${e.id}" ${oseFilters.equipe==String(e.id)?'selected':''}>${equipeLabel(e)}${e.encarregado? ' — '+esc(e.encarregado):''}</option>`).join('')}</select>
+        <select id="ose-f-setor"><option value="">Todos os setores</option>${setoresOse.map(s=>`<option ${oseFilters.setor===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
+        <select id="ose-f-coord"><option value="">Todas as coordenações</option>${coordsOse.map(c=>`<option ${oseFilters.coordenacao===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
         <select id="ose-f-status"><option value="">Todos os status</option>${STATUS_OSE.map(s=>`<option ${oseFilters.status===s?'selected':''}>${s}</option>`).join('')}</select>
         <input type="date" id="ose-f-de" value="${oseFilters.dataDe}" title="Data inicial">
         <span style="color:var(--muted);font-size:12px;">até</span>
@@ -4569,11 +4588,13 @@ function renderOseProgramacoes(){
     <div id="ose-area"></div>`;
   document.getElementById('ose-f-busca').addEventListener('input', e=>{ oseFilters.busca=e.target.value; pagReset('ose-lista'); renderSearchKeepFocus(); });
   document.getElementById('ose-f-equipe').addEventListener('change', e=>{ oseFilters.equipe=e.target.value; pagReset('ose-lista'); renderContent(); });
+  document.getElementById('ose-f-setor').addEventListener('change', e=>{ oseFilters.setor=e.target.value; pagReset('ose-lista'); renderContent(); });
+  document.getElementById('ose-f-coord').addEventListener('change', e=>{ oseFilters.coordenacao=e.target.value; pagReset('ose-lista'); renderContent(); });
   document.getElementById('ose-f-status').addEventListener('change', e=>{ oseFilters.status=e.target.value; pagReset('ose-lista'); renderContent(); });
   document.getElementById('ose-f-de').addEventListener('change', e=>{ oseFilters.dataDe=e.target.value; pagReset('ose-lista'); renderContent(); });
   document.getElementById('ose-f-ate').addEventListener('change', e=>{ oseFilters.dataAte=e.target.value; pagReset('ose-lista'); renderContent(); });
   document.getElementById('ose-f-mes-atual').addEventListener('click', ()=>{ const r=monthRangeISO(); oseFilters.dataDe=r.de; oseFilters.dataAte=r.ate; pagReset('ose-lista'); renderContent(); });
-  document.getElementById('ose-f-limpar').addEventListener('click', ()=>{ oseFilters.busca=''; oseFilters.equipe=''; oseFilters.status=''; oseFilters.dataDe=''; oseFilters.dataAte=''; pagReset('ose-lista'); renderContent(); });
+  document.getElementById('ose-f-limpar').addEventListener('click', ()=>{ oseFilters.busca=''; oseFilters.equipe=''; oseFilters.status=''; oseFilters.setor=''; oseFilters.coordenacao=''; oseFilters.dataDe=''; oseFilters.dataAte=''; pagReset('ose-lista'); renderContent(); });
   el.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>{oseFilters.modo=t.dataset.modo; renderContent();}));
 
   const area = document.getElementById('ose-area');
@@ -5911,7 +5932,7 @@ const TIPO_REDE_OPCOES = ['MT','BT'];
 const STATUS_PODA = ['Programado','Em Execução','Concluído','Reprogramado','Cancelado'];
 const STATUS_VALIDACAO_OPCOES = ['ENVIADA','REJEITADA','FATURADA','ERRO SISTÊMICO'];
 const SIM_NAO_OPCOES = ['SIM','NÃO'];
-let podaFilters = (()=>{ const r=monthRangeISO(); return { busca:'', equipe:'', status:'', dataDe:r.de, dataAte:r.ate, modo:'lista', calView:'mes', calDay:todayISO() }; })();
+let podaFilters = (()=>{ const r=monthRangeISO(); return { busca:'', equipe:'', status:'', setor:'', coordenacao:'', dataDe:r.de, dataAte:r.ate, modo:'lista', calView:'mes', calDay:todayISO() }; })();
 let podaCalRef = new Date();
 function podaProgLabel(p){ return p.gid || ('PODA-'+String(p.id).padStart(7,'0')); }
 function findPodaProg(id){ return (DB.podaProgramacoes||[]).find(p=>p.id===Number(id)); }
@@ -6039,6 +6060,8 @@ function podaProgramacoesFiltradas(){
     if(eqId && String(a.equipeId)!==String(eqId)) return false;
     if(de && (a.dataProgramada||p.dataProgramacao||'') < de) return false;
     if(ate && (a.dataProgramada||p.dataProgramacao||'') > ate) return false;
+    if(podaFilters.setor && (eq?.setor||'')!==podaFilters.setor) return false;
+    if(podaFilters.coordenacao && (eq?.coordenacao||'')!==podaFilters.coordenacao) return false;
     if(q){
       const hay = norm([p.osi,p.subestacao,p.tipoRede,p.chave,p.status,p.statusDocumentacao,podaProgLabel(p),equipeLabel(eq),eq?.supervisor,fmtDate(a.dataProgramada||p.dataProgramacao),p.observacoes].join(' '));
       if(!hay.includes(q)) return false;
@@ -6108,11 +6131,16 @@ function renderPodaProgramacoes(){
     return;
   }
   const list = podaProgramacoesFiltradas();
+  const podaVisiveis = flatPodaAtribuicoes();
+  const setoresPoda = [...new Set(podaVisiveis.map(x=>{ const e=findEquipe(x.atribuicao.equipeId); return (e?.setor||'').trim(); }).filter(Boolean))].sort();
+  const coordsPoda = [...new Set(podaVisiveis.map(x=>{ const e=findEquipe(x.atribuicao.equipeId); return (e?.coordenacao||'').trim(); }).filter(Boolean))].sort();
   el.innerHTML = `
     <div class="panel-head" style="padding:0;margin-bottom:16px;border:none;">
       <div class="filters">
         <input type="search" id="poda-f-busca" placeholder="Buscar OSI, subestação, equipe..." style="flex:1;min-width:180px;" value="${esc(podaFilters.busca)}">
         <select id="poda-f-equipe"><option value="">Todas as equipes</option>${equipesVisiveis().filter(e=>e.ativo!==false).map(e=>`<option value="${e.id}" ${podaFilters.equipe==String(e.id)?'selected':''}>${equipeLabel(e)}${e.encarregado? ' — '+esc(e.encarregado):''}</option>`).join('')}</select>
+        <select id="poda-f-setor"><option value="">Todos os setores</option>${setoresPoda.map(s=>`<option ${podaFilters.setor===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
+        <select id="poda-f-coord"><option value="">Todas as coordenações</option>${coordsPoda.map(c=>`<option ${podaFilters.coordenacao===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
         <select id="poda-f-status"><option value="">Todos os status</option>${STATUS_PODA.map(s=>`<option ${podaFilters.status===s?'selected':''}>${s}</option>`).join('')}</select>
         <input type="date" id="poda-f-de" value="${podaFilters.dataDe}" title="Data inicial">
         <span style="color:var(--muted);font-size:12px;">até</span>
@@ -6129,11 +6157,13 @@ function renderPodaProgramacoes(){
     <div id="poda-area"></div>`;
   document.getElementById('poda-f-busca').addEventListener('input', e=>{ podaFilters.busca=e.target.value; pagReset('poda-lista'); renderSearchKeepFocus(); });
   document.getElementById('poda-f-equipe').addEventListener('change', e=>{ podaFilters.equipe=e.target.value; pagReset('poda-lista'); renderContent(); });
+  document.getElementById('poda-f-setor').addEventListener('change', e=>{ podaFilters.setor=e.target.value; pagReset('poda-lista'); renderContent(); });
+  document.getElementById('poda-f-coord').addEventListener('change', e=>{ podaFilters.coordenacao=e.target.value; pagReset('poda-lista'); renderContent(); });
   document.getElementById('poda-f-status').addEventListener('change', e=>{ podaFilters.status=e.target.value; pagReset('poda-lista'); renderContent(); });
   document.getElementById('poda-f-de').addEventListener('change', e=>{ podaFilters.dataDe=e.target.value; pagReset('poda-lista'); renderContent(); });
   document.getElementById('poda-f-ate').addEventListener('change', e=>{ podaFilters.dataAte=e.target.value; pagReset('poda-lista'); renderContent(); });
   document.getElementById('poda-f-mes-atual').addEventListener('click', ()=>{ const r=monthRangeISO(); podaFilters.dataDe=r.de; podaFilters.dataAte=r.ate; pagReset('poda-lista'); renderContent(); });
-  document.getElementById('poda-f-limpar').addEventListener('click', ()=>{ podaFilters.busca=''; podaFilters.equipe=''; podaFilters.status=''; podaFilters.dataDe=''; podaFilters.dataAte=''; pagReset('poda-lista'); renderContent(); });
+  document.getElementById('poda-f-limpar').addEventListener('click', ()=>{ podaFilters.busca=''; podaFilters.equipe=''; podaFilters.status=''; podaFilters.setor=''; podaFilters.coordenacao=''; podaFilters.dataDe=''; podaFilters.dataAte=''; pagReset('poda-lista'); renderContent(); });
   el.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>{podaFilters.modo=t.dataset.modo; renderContent();}));
 
   const area = document.getElementById('poda-area');
