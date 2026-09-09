@@ -22,7 +22,7 @@ const AUD_REF = rtdb.ref('g26_planner/auditoria');
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js').catch(()=>{}); }
 
 const DEFAULT_DATA = {
-  equipes: [], atividades: [], projetos: [], programacoes: [], ocnds: [], podaProgramacoes: [], oseProgramacoes: [], usuarios: [], medicaoPoda: [], medicaoOse: [], medicaoOc: [], medicaoNds: [],
+  equipes: [], atividades: [], projetos: [], programacoes: [], ocnds: [], podaProgramacoes: [], oseProgramacoes: [], usuarios: [], medicaoProjetos: [], medicaoPoda: [], medicaoOse: [], medicaoOc: [], medicaoNds: [],
   tiposEstrutura: [],
   customFields: { equipes: [], atividades: [], projetos: [], programacoes: [], podaProgramacoes: [], oseProgramacoes: [] },
   cidades: [], cidadeDistancias: [], cidadeMaxDist: 50,
@@ -7852,8 +7852,666 @@ function flatOcNds(){
 function renderMedição(){
   renderModuloEmDesenvolvimento('Medição');
 }
+function appvMedicaoProjeto(){
+  if(!CURRENT_USER) return true;
+  return ehMestre() || (CURRENT_USER.role==='administrador' && CURRENT_USER.nivel==='total');
+}
+function findMedicaoProjeto(atribId){
+  return (DB.medicaoProjetos||[]).find(m=> m.atribuicaoId===Number(atribId));
+}
+function medicaoProjetoReprovacaoInfo(m){
+  if(!m || m.aprovado!==false) return null;
+  return {
+    motivo: m.motivoReprovacao||'RDO reprovado na medição.',
+    total: m.totalReprovacoes||0,
+    por: m.reprovadoPor?.usuarioNome||'Medição',
+    em: m.reprovadoEm
+  };
+}
+function medicaoProjetoCountTag(total){
+  const n = Number(total)||0;
+  return `<span class="med-poda-reprov-count">${n} reprovação${n===1?'':'ões'}</span>`;
+}
+function projMedCiclosComRdo(){
+  const set = new Set();
+  flatAtribuicoes().forEach(x=>{ if(x.programacao.ciclo && rdoTemExecucao(x)) set.add(x.programacao.ciclo); });
+  return [...set].sort();
+}
+function projMedCicloPadrao(){
+  const cs = projMedCiclosComRdo();
+  return cs[cs.length-1] || '';
+}
+let projMedFilters = { q:'', ciclo:'', situacao:'', setor:'', coordenacao:'', de:'', ate:'', page:1 };
+const PROJ_MED_PAGE_SIZE = 10;
+function projMedCicloAtivo(){ return projMedFilters.ciclo || projMedCicloPadrao(); }
+function projMedRows(){
+  const ciclo = projMedCicloAtivo();
+  const norm = s=> String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const q = norm(projMedFilters.q.trim());
+  return projetosVisiveis().map(p=>{
+    const atribs = flatAtribuicoes().filter(x=>{
+      if(x.programacao.projetoId!==p.id) return false;
+      if(ciclo && String(x.programacao.ciclo||'')!==ciclo) return false;
+      if(projMedFilters.setor && p.setor!==projMedFilters.setor) return false;
+      if(projMedFilters.coordenacao && p.coordenacao!==projMedFilters.coordenacao) return false;
+      const data = x.atribuicao.dataProgramada||'';
+      if(projMedFilters.de && data<projMedFilters.de) return false;
+      if(projMedFilters.ate && data>projMedFilters.ate) return false;
+      const tem = rdoTemExecucao(x);
+      if(projMedFilters.situacao==='executadas' && !tem) return false;
+      if(projMedFilters.situacao==='pendentes' && tem) return false;
+      if(q){
+        const hay = norm([p.nome,p.codigo,p.setor,p.coordenacao,progGid(x.programacao),x.programacao.ciclo,x.atribuicao.dataProgramada,x.atribuicao.status].join(' '));
+        if(hay.indexOf(q)===-1) return false;
+      }
+      return true;
+    });
+    if(!atribs.length) return null;
+    return { projeto:p, atribs };
+  }).filter(Boolean).sort((a,b)=> String(a.projeto.nome||'').localeCompare(String(b.projeto.nome||'')));
+}
+function projMedStatusBadge(x){
+  const m = findMedicaoProjeto(x.atribuicao.id);
+  if(!rdoTemExecucao(x)) return '<span class="badge" style="color:var(--muted);background:rgba(128,128,128,.14);">PENDENTE EXECUÇÃO</span>';
+  if(m?.aprovado===true) return '<span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);">APROVADO</span>';
+  if(m?.aprovado===false) return '<span class="badge" style="color:var(--red);background:rgba(224,97,91,.14);">REPROVADO</span>';
+  return '<span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);">EM ANÁLISE</span>';
+}
+function projMedDetailHtml(r, av){
+  const p = r.projeto;
+  const pode = appvMedicaoProjeto();
+  const rowsHtml = r.atribs.map((x,i)=>{
+    const eq = findEquipe(x.atribuicao.equipeId);
+    const m = findMedicaoProjeto(x.atribuicao.id);
+    const tem = rdoTemExecucao(x);
+    const sit = projMedStatusBadge(x);
+    const acao = tem
+      ? (pode
+          ? `<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;white-space:nowrap;">
+              <button type="button" class="btn btn-sm btn-ghost" data-proj-med-analisar="${x.atribuicao.id}" title="Abrir análise da medição">${icon('search',12)} Analisar</button>
+              ${m?.aprovado===false
+                ? `<button type="button" class="btn btn-sm btn-primary" data-proj-med-reaprovar="${x.atribuicao.id}">${icon('check',12)} Reaprovar</button>${m?.motivoReprovacao? `<div style="font-size:11px;color:var(--red);margin-top:2px;line-height:1.3;">${icon('alert',9)} ${esc(m.motivoReprovacao)}</div>`:''}`
+                : `${m?.aprovado===true? '' : `<button type="button" class="btn btn-sm btn-primary" data-proj-med-aprovar="${x.atribuicao.id}">${icon('check',12)} Aprovar</button>`}
+                   <button type="button" class="btn btn-sm btn-danger-solid" data-proj-med-reprovar="${x.atribuicao.id}">${icon('x',12)} Reprovar</button>`}
+            </div>`
+          : sit)
+      : '<span style="color:var(--muted-2);">—</span>';
+    return `<tr>
+      <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
+      <td><strong class="mono">${progGid(x.programacao)}</strong><div class="admin-field-meta">Reserva/PEP ${esc(x.programacao.numeroReserva||'—')}</div>${x.programacao.ciclo? `<span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${esc(x.programacao.ciclo)}</span>`:''}</td>
+      <td>${esc(equipeLabel(eq))}<div class="admin-field-meta">${esc(eq?.encarregado||'')}</div></td>
+      <td style="text-align:center;" class="mono">${fmtDate(x.atribuicao.dataProgramada)}</td>
+      <td style="text-align:center;">${rdoStatusBadge(x.atribuicao.status)}</td>
+      <td style="text-align:center;" class="mono">${tem? fmtNum(rdoResumo(x).exec):'—'}</td>
+      <td style="text-align:center;" class="mono">${tem? fmtMoney(rdoTotalValor(x)):'—'}</td>
+      <td style="text-align:center;">${tem? sit:'<span style="color:var(--muted-2);">—</span>'}</td>
+      <td style="text-align:center;white-space:nowrap;">${acao}</td>
+    </tr>`;
+  }).join('');
+  return `
+    <td colspan="9" style="padding:0;">
+      <div style="padding:14px 18px;background:var(--panel-2);">
+        <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+          <span class="admin-field-meta">Período <strong>${fmtDate(p.dataInicio)}</strong>${p.dataFim? ' → <strong>'+fmtDate(p.dataFim)+'</strong>':''}</span>
+          <span class="admin-field-meta">Orçado <strong class="mono">${fmtMoney(av.valorOrcado)}</strong></span>
+          <span class="admin-field-meta">Executado <strong class="mono">${fmtMoney(av.valorExecutado)}</strong></span>
+          <span class="admin-field-meta">Avanço físico <strong class="mono">${av.fisicoPct.toFixed(1)}%</strong></span>
+          <span class="admin-field-meta">Avanço financeiro <strong class="mono">${av.financeiroPct.toFixed(1)}%</strong></span>
+        </div>
+        <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12px;min-width:1100px;">
+          <thead>
+            <tr>
+              <th style="width:28px;">#</th>
+              <th>Programação</th>
+              <th>Equipe</th>
+              <th style="text-align:center;">Data</th>
+              <th style="text-align:center;">Status RDO</th>
+              <th style="text-align:center;">Exec.</th>
+              <th style="text-align:center;">Valor Total RDO</th>
+              <th style="text-align:center;">Medição</th>
+              <th style="text-align:center;">Ações</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </td>`;
+}
 function renderMediçãoProjetos(){
-  renderModuloEmDesenvolvimento('Medição – Projetos');
+  const el = document.getElementById('content');
+  const rows = projMedRows();
+  const med = x=> findMedicaoProjeto(x.atribuicao.id);
+  const ciclo = projMedCicloAtivo();
+
+  let totalExec=0, totalAprov=0, totalReprov=0, totalSem=0, totalPend=0;
+  rows.forEach(r=>{
+    r.execs = r.atribs.filter(rdoTemExecucao);
+    r.pends = r.atribs.filter(x=> !rdoTemExecucao(x));
+    r.aprov = r.execs.filter(x=> med(x)?.aprovado===true);
+    r.reprov = r.execs.filter(x=> med(x)?.aprovado===false);
+    r.sem = r.execs.filter(x=> !med(x) || med(x)?.aprovado==null);
+    totalExec+=r.execs.length; totalAprov+=r.aprov.length; totalReprov+=r.reprov.length; totalSem+=r.sem.length; totalPend+=r.pends.length;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(rows.length/PROJ_MED_PAGE_SIZE));
+  if(projMedFilters.page>totalPages) projMedFilters.page = totalPages;
+  const pageIdx = Math.max(1, projMedFilters.page||1);
+  const pageRows = rows.slice((pageIdx-1)*PROJ_MED_PAGE_SIZE, pageIdx*PROJ_MED_PAGE_SIZE);
+
+  const stats = `
+    <div class="grid-stats">
+      <div class="stat-card"><div class="lbl">Projetos no recorte</div><div class="val">${rows.length}</div></div>
+      <div class="stat-card"><div class="lbl">RDOs executados</div><div class="val">${totalExec}<small>${totalPend} pend. execução</small></div></div>
+      <div class="stat-card" style="--accent-c:var(--green);"><div class="lbl">Aprovados</div><div class="val">${totalAprov}</div></div>
+      <div class="stat-card" style="--accent-c:var(--red);"><div class="lbl">Reprovados</div><div class="val">${totalReprov}</div></div>
+      <div class="stat-card" style="--accent-c:var(--blue);"><div class="lbl">Em análise</div><div class="val">${totalSem}</div></div>
+    </div>`;
+
+  const visiveis = projetosVisiveis();
+  const setores = [...new Set(visiveis.map(p=>p.setor).filter(Boolean))].sort();
+  const coordenacoes = [...new Set(visiveis.map(p=>p.coordenacao).filter(Boolean))].sort();
+  const ciclos = ciclosUnicos();
+  const cicloPadrao = projMedCicloPadrao();
+
+  const filters = `
+    <div class="panel" style="padding:14px 16px;margin-bottom:16px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+        <input type="search" id="med-proj-f-busca" placeholder="Buscar por projeto, código, coordenação..." style="flex:1;" value="${esc(projMedFilters.q)}">
+        <button class="btn btn-sm" id="med-proj-f-busca-aplicar">${icon('search',13)} Buscar</button>
+      </div>
+      <div class="filters">
+        <label style="font-weight:600;">Ciclo</label>
+        <select id="med-proj-f-ciclo">
+          <option value="">Padrão (${cicloPadrao||'—'})</option>
+          ${ciclos.map(c=>`<option value="${esc(c)}" ${projMedFilters.ciclo===c?'selected':''}>${esc(c)}</option>`).join('')}
+        </select>
+        <label style="font-weight:600;">Situação</label>
+        <select id="med-proj-f-situacao">
+          <option value="">Todas</option>
+          <option value="executadas" ${projMedFilters.situacao==='executadas'?'selected':''}>Com RDO</option>
+          <option value="pendentes" ${projMedFilters.situacao==='pendentes'?'selected':''}>Pendentes de execução</option>
+        </select>
+        <label style="font-weight:600;">Setor</label>
+        <select id="med-proj-f-setor">
+          <option value="">Todos</option>
+          ${setores.map(s=>`<option value="${esc(s)}" ${projMedFilters.setor===s?'selected':''}>${esc(s)}</option>`).join('')}
+        </select>
+        <label style="font-weight:600;">Coordenação</label>
+        <select id="med-proj-f-coordenacao">
+          <option value="">Todas</option>
+          ${coordenacoes.map(c=>`<option value="${esc(c)}" ${projMedFilters.coordenacao===c?'selected':''}>${esc(c)}</option>`).join('')}
+        </select>
+        <label style="font-weight:600;">De</label>
+        <input type="date" id="med-proj-f-de" value="${projMedFilters.de}">
+        <label style="font-weight:600;">Até</label>
+        <input type="date" id="med-proj-f-ate" value="${projMedFilters.ate}">
+        <button class="btn btn-sm" id="med-proj-f-aplicar">${icon('grid',13)} Filtrar</button>
+        <button class="btn btn-sm btn-ghost" id="med-proj-f-limpar">Limpar</button>
+      </div>
+      <div class="admin-field-meta" style="margin-top:10px;">${projMedFilters.ciclo? ('Ciclo filtrado: <strong>'+esc(projMedFilters.ciclo)+'</strong>') : ('Ciclo padrão: <strong>'+esc(cicloPadrao||'—')+'</strong> · o mais recente com RDO executado.')}</div>
+    </div>`;
+
+  if(!rows.length){
+    el.innerHTML = `<div class="section-gap">${stats}${filters}<div class="panel"><div class="empty-state">${icon('folder',36)}<h3 style="margin-bottom:6px;">Nenhum projeto no recorte atual</h3><p>Nenhuma programação atende aos filtros aplicados. Ajuste o ciclo, datas ou situação para visualizar as execuções.</p></div></div></div>`;
+    return;
+  }
+
+  const paginacao = totalPages>1
+    ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border:1px solid var(--border-soft);border-radius:8px;margin-bottom:16px;background:var(--panel);">
+        <div class="admin-field-meta">${rows.length} projetos · página <strong>${pageIdx}</strong> de <strong>${totalPages}</strong></div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm btn-ghost" id="med-proj-page-prev" ${pageIdx<=1?'disabled':''}>${icon('chevL',12)} Anterior</button>
+          <button class="btn btn-sm btn-ghost" id="med-proj-page-next" ${pageIdx>=totalPages?'disabled':''}>Próxima ${icon('chevR',12)}</button>
+        </div>
+      </div>`
+    : '';
+
+  const tabela = `
+    <div class="panel" style="padding:0;overflow:hidden;">
+      <div class="panel-head" style="padding:14px 16px;">
+        <div><h3>Medição de Projetos</h3><div class="admin-field-meta">Uma linha por projeto no ciclo <strong>${esc(ciclo||'—')}</strong>. Clique na linha para <strong>analisar, aprovar ou reprovar</strong> cada RDO, execução a execução.</div></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1350px;">
+          <thead>
+            <tr>
+              <th style="width:28px;"></th>
+              <th>Projeto</th>
+              <th>Coordenação</th>
+              <th style="text-align:center;">Ciclo</th>
+              <th style="text-align:center;">Prev. conclusão</th>
+              <th style="text-align:center;">Resumo dos RDOs</th>
+              <th style="text-align:center;width:120px;">Avanço físico</th>
+              <th style="text-align:center;">Valor executado</th>
+              <th style="text-align:center;">% Orçado</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pageRows.map(r=>{
+              const p = r.projeto;
+              const av = projetoAvanco(p);
+              const fim = p.dataFim||'';
+              const atrasado = fim && fim < todayISO() && !['Concluído','Encerrado','Cancelado'].includes(p.status);
+              const chips = `
+                <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;align-items:center;">
+                  <span class="badge" style="color:var(--green);background:rgba(34,139,34,.14);" title="Aprovados">${icon('check',11)} ${r.aprov.length}</span>
+                  <span class="badge" style="color:var(--red);background:rgba(224,97,91,.14);" title="Reprovados">${icon('x',11)} ${r.reprov.length}</span>
+                  <span class="badge" style="color:var(--blue);background:rgba(78,140,235,.14);" title="Executados em análise">${icon('search',11)} ${r.sem.length}</span>
+                  <span class="badge" style="color:var(--accent);background:rgba(224,164,88,.14);" title="Programações pendentes de execução">${icon('clock',11)} ${r.pends.length}</span>
+                </div>`;
+              return `
+                <tr class="proj-med-summary" data-proj-med-row="${p.id}" style="cursor:pointer;">
+                  <td style="text-align:center;"><span class="proj-med-chev" style="display:inline-flex;transition:.15s;">${icon('chevR',14)}</span></td>
+                  <td><strong>${esc(p.nome)}</strong><div class="admin-field-meta">${esc(p.codigo)} · ${esc(p.setor||'—')}</div>${r.reprov.length? `<div style="font-size:11px;color:var(--red);margin-top:2px;">${icon('alert',10)} ${r.reprov.length} reprovado${r.reprov.length===1?'':'s'} na medição</div>`:''}</td>
+                  <td>${esc(p.coordenacao||'—')}</td>
+                  <td style="text-align:center;"><span class="badge" style="color:var(--teal);background:rgba(87,199,199,.12);">${esc(ciclo||'—')}</span></td>
+                  <td style="text-align:center;" class="mono">${fim? fmtDate(fim):'—'}${atrasado? `<div style="font-size:11px;color:var(--red);margin-top:2px;">${icon('alert',9)} atrasado</div>`:''}</td>
+                  <td style="text-align:center;">${chips}</td>
+                  <td><div style="display:flex;align-items:center;gap:6px;"><div style="flex:1;height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${Math.min(100,av.fisicoPct)}%;background:${av.fisicoPct>=100?'var(--green)':av.fisicoPct>=50?'var(--accent)':'var(--red)'};border-radius:3px;"></div></div><span class="mono" style="font-size:11px;min-width:34px;text-align:right;">${av.fisicoPct.toFixed(0)}%</span></div></td>
+                  <td style="text-align:center;" class="mono"><strong>${fmtMoney(av.valorExecutado)}</strong><div class="admin-field-meta">de ${fmtMoney(av.valorOrcado)}</div></td>
+                  <td style="text-align:center;" class="mono">${av.financeiroPct.toFixed(0)}%</td>
+                </tr>
+                <tr class="proj-med-detail" data-proj-med-detail="${p.id}" style="display:none;"></tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  el.innerHTML = `<div class="section-gap">${stats}${filters}${paginacao}${tabela}</div>`;
+
+  const fBusca = document.getElementById('med-proj-f-busca');
+  const fCiclo = document.getElementById('med-proj-f-ciclo');
+  const fSit = document.getElementById('med-proj-f-situacao');
+  const fSetor = document.getElementById('med-proj-f-setor');
+  const fCoord = document.getElementById('med-proj-f-coordenacao');
+  const fDe = document.getElementById('med-proj-f-de');
+  const fAte = document.getElementById('med-proj-f-ate');
+  const aplicar = ()=>{
+    projMedFilters.q = fBusca.value.trim();
+    projMedFilters.ciclo = fCiclo.value;
+    projMedFilters.situacao = fSit.value;
+    projMedFilters.setor = fSetor.value;
+    projMedFilters.coordenacao = fCoord.value;
+    projMedFilters.de = fDe.value;
+    projMedFilters.ate = fAte.value;
+    projMedFilters.page = 1;
+    renderMediçãoProjetos();
+  };
+  fBusca.addEventListener('keydown', e=>{ if(e.key==='Enter') aplicar(); });
+  document.getElementById('med-proj-f-busca-aplicar').addEventListener('click', aplicar);
+  document.getElementById('med-proj-f-aplicar').addEventListener('click', aplicar);
+  document.getElementById('med-proj-f-limpar').addEventListener('click', ()=>{
+    fBusca.value=''; fCiclo.value=''; fSit.value=''; fSetor.value=''; fCoord.value=''; fDe.value=''; fAte.value='';
+    aplicar();
+  });
+
+  const btnPrev = document.getElementById('med-proj-page-prev');
+  const btnNext = document.getElementById('med-proj-page-next');
+  if(btnPrev) btnPrev.addEventListener('click', ()=>{ if(projMedFilters.page>1){ projMedFilters.page--; renderMediçãoProjetos(); } });
+  if(btnNext) btnNext.addEventListener('click', ()=>{ if(projMedFilters.page<totalPages){ projMedFilters.page++; renderMediçãoProjetos(); } });
+
+  pageRows.forEach(r=>{
+    const sum = el.querySelector(`tr[data-proj-med-row="${r.projeto.id}"]`);
+    if(!sum) return;
+    const det = el.querySelector(`tr[data-proj-med-detail="${r.projeto.id}"]`);
+    if(!det) return;
+    const chev = sum.querySelector('.proj-med-chev');
+    const toggle = ()=>{
+      const open = det.style.display!=='none';
+      if(!open && !det.dataset.ready){
+        det.innerHTML = projMedDetailHtml(r, projetoAvanco(r.projeto));
+        det.dataset.ready = '1';
+        bindProjMedDetailActions(det);
+      }
+      det.style.display = open? 'none' : '';
+      if(chev) chev.style.transform = open? '' : 'rotate(90deg)';
+    };
+    sum.addEventListener('click', e=>{ if(e.target.closest('button, a')) return; toggle(); });
+  });
+}
+
+function bindProjMedDetailActions(det){
+  det.querySelectorAll('[data-proj-med-analisar]').forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); openMedicaoProjetoModal(Number(b.dataset.projMedAnalisar)); }));
+  det.querySelectorAll('[data-proj-med-aprovar]').forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); aprovarMedicaoProjeto(Number(b.dataset.projMedAprovar)); }));
+  det.querySelectorAll('[data-proj-med-reprovar]').forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); reprovarMedicaoProjetoModal(Number(b.dataset.projMedReprovar)); }));
+  det.querySelectorAll('[data-proj-med-reaprovar]').forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); reaprovarMedicaoProjeto(Number(b.dataset.projMedReaprovar)); }));
+}
+
+function aprovarMedicaoProjeto(atribId){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoProjeto()){ toast('Apenas administradores podem aprovar a medição.', 'error'); return; }
+  const x = flatAtribuicoes().find(y=> y.atribuicao.id===Number(atribId));
+  if(!x) return;
+  const pr = findProjeto(x.programacao.projetoId);
+  if(findMedicaoProjeto(atribId)){ toast('Este RDO já possui registro de medição.', 'error'); return; }
+  modalComMotivo({
+    title:'Aprovar RDO para medição',
+    texto:'Confirma a aprovação deste RDO de <strong>'+esc(progGid(x.programacao))+'</strong>'+(pr? ' · '+esc(pr.nome):'')+' para a medição do projeto? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Aprovar',
+    onConfirm:(motivo)=>{
+      DB.medicaoProjetos.push({
+        id: nextId(),
+        programacaoId: x.programacao.id,
+        atribuicaoId: x.atribuicao.id,
+        projetoId: x.programacao.projetoId,
+        rdoData: structuredClone(x.atribuicao),
+        statusValidacao: '',
+        cicloFaturamento: '',
+        enviadoEqtl: '',
+        recolha: '',
+        valorFaturado: '',
+        aprovado: true,
+        motivoReprovacao: '',
+        motivoAprovacao: motivo,
+        totalReprovacoes: 0,
+        historicoReprovacoes: [],
+        aprovadoPor: currentAutor(),
+        aprovadoEm: Date.now(),
+        custom: {}
+      });
+      x.atribuicao.historico = x.atribuicao.historico||[];
+      x.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+      registrarEvento('medicao','atribuicao',x.atribuicao.id,progGid(x.programacao),'RDO aprovado para medição de projeto · '+motivo);
+      saveData();
+      toast('RDO aprovado para medição.');
+      renderMediçãoProjetos();
+    }
+  });
+}
+
+function reaprovarMedicaoProjeto(atribId){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoProjeto()){ toast('Apenas administradores podem reaprovar a medição.', 'error'); return; }
+  const m = findMedicaoProjeto(atribId);
+  if(!m){ toast('Registro não encontrado na medição.', 'error'); return; }
+  const x = flatAtribuicoes().find(y=> y.atribuicao.id===Number(atribId));
+  const pr = x? findProjeto(x.programacao.projetoId) : null;
+  modalComMotivo({
+    title:'Reaprovar RDO na medição',
+    texto:'Confirma a REAPROVAÇÃO deste RDO de <strong>'+esc(x? progGid(x.programacao):'')+'</strong>'+(pr? ' · '+esc(pr.nome):'')+' na medição, após revisão? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Reaprovar',
+    onConfirm:(motivo)=>{
+      m.aprovado = true;
+      m.motivoReprovacao = '';
+      m.motivoAprovacao = motivo;
+      m.aprovadoPor = currentAutor();
+      m.aprovadoEm = Date.now();
+      if(x){
+        x.atribuicao.historico = x.atribuicao.historico||[];
+        x.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+        registrarEvento('medicao','atribuicao',atribId,progGid(x.programacao),'RDO reaprovado na medição de projeto · '+motivo);
+      }
+      saveData();
+      toast('Medição reaprovada.');
+      renderMediçãoProjetos();
+    }
+  });
+}
+
+function reprovarMedicaoProjetoModal(atribId){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoProjeto()){ toast('Apenas administradores podem reprovar a medição.', 'error'); return; }
+  const x = flatAtribuicoes().find(y=> y.atribuicao.id===Number(atribId));
+  if(!x) return;
+  const pr = findProjeto(x.programacao.projetoId);
+  const body = `
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Reprovar a medição de <strong>${esc(progGid(x.programacao))}</strong>${pr? ' · '+esc(pr.nome):''}. Isso marcará como pendência para o responsável pelo RDO anexar mais evidências ou editar o registro.</div>
+    <div class="field"><label>Motivo da reprovação <span class="req">*</span></label><textarea name="motivo" required rows="3" maxlength="500" placeholder="Descreva o motivo da reprovação."></textarea></div>`;
+  openModal({
+    title:'Reprovar medição de projeto', bodyHtml: body, submitLabel:'Reprovar',
+    onSubmit:(fd)=>{
+      const motivo = String(fd.get('motivo')||'').trim();
+      if(!motivo){ toast('Informe o motivo da reprovação.', 'error'); return false; }
+      let m = findMedicaoProjeto(atribId);
+      if(!m){
+        DB.medicaoProjetos.push(m = {
+          id: nextId(),
+          programacaoId: x.programacao.id,
+          atribuicaoId: x.atribuicao.id,
+          projetoId: x.programacao.projetoId,
+          rdoData: structuredClone(x.atribuicao),
+          statusValidacao: '',
+          cicloFaturamento: '',
+          enviadoEqtl: '',
+          recolha: '',
+          valorFaturado: '',
+          aprovado: false,
+          motivoReprovacao: motivo,
+          motivoAprovacao: '',
+          totalReprovacoes: 1,
+          historicoReprovacoes: [{ motivo, por: currentAutor(), em: Date.now() }],
+          reprovadoPor: currentAutor(),
+          reprovadoEm: Date.now(),
+          custom: {}
+        });
+      } else {
+        m.aprovado = false;
+        m.motivoReprovacao = motivo;
+        m.reprovadoPor = currentAutor();
+        m.reprovadoEm = Date.now();
+        m.totalReprovacoes = (m.totalReprovacoes||0)+1;
+        m.historicoReprovacoes = m.historicoReprovacoes||[];
+        m.historicoReprovacoes.push({ motivo, por: currentAutor(), em: Date.now() });
+      }
+      x.atribuicao.historico = x.atribuicao.historico||[];
+      x.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Reprovado', motivo});
+      registrarEvento('medicao','atribuicao',x.atribuicao.id,progGid(x.programacao),'RDO reprovado na medição de projeto: '+motivo);
+      saveData();
+      toast('Medição reprovada.');
+      renderMediçãoProjetos();
+      return true;
+    }
+  });
+}
+
+function openProjetoMedicaoHistoricoModal(atribId){
+  const x = flatAtribuicoes().find(y=> y.atribuicao.id===Number(atribId));
+  if(!x) return;
+  const events = [...(x.atribuicao.historico||[])].sort((a,b)=>b.ts-a.ts);
+  if(!events.length){
+    openModal({ title:'Histórico', bodyHtml:'<div style="padding:24px;color:var(--muted-2);font-size:12.5px;">Sem eventos registrados.</div>', submitLabel:'Fechar', onSubmit:()=>true, wide:true });
+    return;
+  }
+  const html = `<div class="timeline">${events.map(h=>{
+    let dotColor='var(--muted)', title='';
+    if(h.tipo==='criacao'){ dotColor='var(--blue)'; title='Atribuição criada'; }
+    else if(h.tipo==='status'){ dotColor=STATUS_COLOR[h.para]||'var(--muted)'; title=`Status alterado: ${h.de} → ${h.para}`; }
+    else if(h.tipo==='reprogramacao'){ dotColor='var(--red)'; title=`Reprogramada: ${fmtDate(h.de)} → ${fmtDate(h.para)}`; }
+    else { title=h.tipo||'Evento'; }
+    return `<div class="tl-item" style="--dot-c:${dotColor}"><div class="tl-title">${title}</div><div class="tl-meta">${fmtDateTime(h.ts)} · <strong style="color:var(--muted);">${autor(h)}</strong></div>${h.motivo? `<div class="tl-motivo"><strong>Motivo:</strong> ${esc(h.motivo)}${h.obs? ' — '+esc(h.obs):''}</div>`:''}</div>`;
+  }).join('')}</div>`;
+  openModal({ title:'Histórico — '+progGid(x.programacao), bodyHtml:html, submitLabel:'Fechar', onSubmit:()=>true, wide:true });
+}
+
+function openMedicaoProjetoModal(atribId){
+  const x = flatAtribuicoes().find(y=> y.atribuicao.id===Number(atribId));
+  if(!x) return;
+  const pr = findProjeto(x.programacao.projetoId);
+  const eq = findEquipe(x.atribuicao.equipeId);
+  const m = findMedicaoProjeto(atribId);
+  const rdo = x.atribuicao.rdoRespostas||{};
+  const res = rdoResumo(x);
+  const imped = rdoImpedimentos(x.atribuicao);
+  const pode = appvMedicaoProjeto();
+  const estaAprovada = m?.aprovado===true;
+  const estaReprovada = m?.aprovado===false;
+  const atRdo = m?.rdoData || x.atribuicao;
+  const horarios = RDO_HORARIOS.map(h=> `
+    <tr><td style="font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;">${h.label}</td>
+    <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${atRdo[h.k]||'—'}</td></tr>`).join('');
+  const kms = RDO_KM.map(h=> `
+    <tr><td style="font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;">${h.label}</td>
+    <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${atRdo[h.k]||'—'}</td></tr>`).join('');
+  const condicoes = RDO_QUESTIONS.map(q=> `
+    <tr><td style="font-weight:600;padding:3px 12px 3px 0;">${q.label}</td>
+    <td style="padding:3px 10px;">${String((atRdo.rdoRespostas||{})[q.id]||'')||'—'}</td></tr>`).join('');
+  const observacao = atRdo.observacao||'';
+
+  const banner = estaReprovada
+    ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(224,97,91,.35);background:rgba(224,97,91,.08);border-radius:10px;margin-bottom:16px;">
+        <span style="color:var(--red);flex-shrink:0;margin-top:2px;">${icon('alert',18)}</span>
+        <div>
+          <strong style="color:var(--red);">Medição REPROVADA pelo usuário ${esc(m?.reprovadoPor?.usuarioNome||'—')}</strong>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Motivo: <strong>${esc(m?.motivoReprovacao||'—')}</strong><br>Em <span class="mono">${fmtDateTime(m?.reprovadoEm)}</span>. O responsável pelo RDO deve anexar mais evidências ou editar o registro para reenvio.</div>
+          <button type="button" class="btn btn-sm" data-editar-rdo-med style="margin-top:8px;">${icon('edit',13)} Editar registro RDO</button>
+        </div>
+      </div>`
+    : estaAprovada
+      ? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(34,139,34,.35);background:rgba(34,139,34,.07);border-radius:10px;margin-bottom:16px;">
+          <span style="color:var(--green);flex-shrink:0;margin-top:2px;">${icon('check',18)}</span>
+          <div><strong style="color:var(--green);">Medição APROVADA pelo usuário ${esc(m?.aprovadoPor?.usuarioNome||'—')}</strong><div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Em <span class="mono">${fmtDateTime(m?.aprovadoEm)}</span>${m?.motivoAprovacao? ' — Motivo: <strong style="color:#1c7d1c;">'+esc(m.motivoAprovacao)+'</strong>':''}. Preencha os campos de medição abaixo.</div></div>
+        </div>`
+      : (m? '' : `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Este RDO ainda não foi enviado para medição. Utilize o botão "Aprovar" para liberar os campos de medição.</div>`);
+
+  const body = `
+    ${banner}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div>
+        <h4 style="margin-bottom:8px;">Programação ${progGid(x.programacao)}</h4>
+        <p class="admin-field-meta" style="margin:2px 0;"><strong>${esc(pr?.nome||'—')}</strong> (${esc(pr?.codigo||'—')})</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Setor ${esc(pr?.setor||'—')} · Coordenação ${esc(pr?.coordenacao||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Ciclo ${esc(x.programacao.ciclo||'—')} · Data ${fmtDate(x.atribuicao.dataProgramada)} ${zonaBadge(x.programacao.zona)}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Nº da Reserva/PEP: ${esc(x.programacao.numeroReserva||'—')}</p>
+        <div style="margin-top:8px;">${rdoStatusBadge(x.atribuicao.status)}</div>
+      </div>
+      <div>
+        <h4 style="margin-bottom:8px;">Equipe</h4>
+        <p class="admin-field-meta" style="margin:2px 0;"><strong>${esc(equipeLabel(eq))}</strong></p>
+        <p class="admin-field-meta" style="margin:2px 0;">Supervisor: ${esc(eq?.supervisor||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Encarregado: ${esc(eq?.encarregado||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Motorista: ${esc(eq?.motorista||'—')}</p>
+        <p class="admin-field-meta" style="margin:2px 0;">Placa do veículo: ${esc(eq?.placaVeiculo||'—')}</p>
+      </div>
+    </div>
+    ${String(x.programacao.local||'').trim()? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:6px;">Local de execução</h4><p class="admin-field-meta" style="margin:2px 0;">${esc(x.programacao.local)}</p><p class="admin-field-meta" style="margin:2px 0;">Zona: ${zonaBadge(x.programacao.zona)}</p></div>`:''}
+    ${(x.programacao.anexos&&x.programacao.anexos.length)? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:8px;">Anexos do programador</h4>${anexosDisplayHtml(x.programacao.anexos)}</div>`:''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div>
+        <h4 style="margin-bottom:8px;">Horários do RDO</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${horarios}</table>
+      </div>
+      <div>
+        <h4 style="margin-bottom:8px;">KM do Veículo</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${kms}</table>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:8px;">Condições do RDO</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">${condicoes}</table>
+      ${imped.length? `<div style="margin-top:10px;">${imped.map(i=>`<span class="badge" style="color:var(--red);background:rgba(224,97,91,.12);margin-right:4px;">${esc(i)}</span>`).join('')}</div>`:''}
+    </div>
+    <div style="margin-bottom:16px;">
+      <h4 style="margin-bottom:6px;">Quantidades executadas</h4>
+      <div style="display:flex;gap:14px;margin-bottom:10px;">
+        <span class="badge-prefix">Prev. ${fmtNum(res.prev)}</span>
+        <span class="badge-prefix alt">Exec. ${fmtNum(res.exec)}</span>
+        <span class="badge-prefix" style="color:${res.pct>=100?'var(--green)':res.pct>=50?'var(--accent)':'var(--red)'};">${res.pct}%</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr><th style="text-align:left;padding:4px 6px;">#</th><th style="text-align:left;">Código</th><th style="text-align:left;">Descrição</th><th style="text-align:center;">Un.</th><th style="text-align:left;">Estrutura</th><th style="text-align:center;">Prev.</th><th style="text-align:center;">Exec.</th><th style="text-align:center;">%</th><th style="text-align:center;">Fotos</th></tr></thead>
+        <tbody>
+          ${((m?.rdoData?.atividades||x.atribuicao.atividades)||[]).map((a,idx)=>{
+            const at = findAtividade(a.atividadeId);
+            const p = parseFloat(a.quantidadePrevista)||0;
+            const e = a.quantidadeExecutada==null? null : parseFloat(a.quantidadeExecutada);
+            const pct = p? Math.round((e||0)/p*100) : 0;
+            const fotos = String(a.fotos||'').split(';;').filter(Boolean);
+            return `<tr style="border-top:1px solid var(--border-soft);">
+              <td style="padding:4px 6px;color:var(--muted-2);">${idx+1}</td>
+              <td class="mono" style="padding:4px 6px;">${esc(at?.codigo||'?')}</td>
+              <td style="padding:4px 6px;">${esc(at?.descricao||'')}</td>
+              <td style="text-align:center;">${esc(at?.unidade||'')}</td>
+              <td style="padding:4px 6px;">${esc(a.tipoEstrutura||'—')}</td>
+              <td style="text-align:center;" class="mono">${p? fmtNum(p):'—'}</td>
+              <td style="text-align:center;" class="mono"><strong>${e!=null? fmtNum(e):'—'}</strong></td>
+              <td style="text-align:center;color:${pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--red)'};font-weight:700;">${p? pct+'%':'—'}</td>
+              <td style="text-align:center;">${fotos.length? `<div class="rdo-fotos" style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">${fotos.map(u=>`<img class="rdo-foto" src="${esc(u)}" alt="foto" title="Ampliar" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:zoom-in;">`).join('')}</div>`:'<span style="color:var(--muted-2);">—</span>'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${String(observacao||'').trim()? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:6px;">Observação da execução</h4><p style="font-size:12.5px;white-space:pre-wrap;line-height:1.55;">${esc(observacao)}</p></div>`:''}
+    ${(m && !estaReprovada)? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);">
+      <h4 style="margin-bottom:4px;">Campos de medição</h4>
+      ${medicaoPodaFormHtml(m, rdoTotalValor(x))}
+    </div>`:(m === undefined? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);font-size:12.5px;color:var(--muted);">Aprovando este RDO, os campos de medição (Status da Validação, Enviado EQTL e Recolha) ficarão disponíveis para preenchimento.</div>`:'')}
+    <div class="admin-field-meta" style="margin-top:16px;">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
+
+  openModal({
+    title:'Medição Projetos — '+progGid(x.programacao),
+    bodyHtml: body,
+    submitLabel: pode? 'Salvar medição' : 'Fechar',
+    wide:true, maxW:760,
+    footerBtns:[
+      { label: icon('history',14)+' Histórico', cls:'btn', onClick: ()=> openProjetoMedicaoHistoricoModal(x.atribuicao.id) },
+      { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOCompleto(x) }
+    ],
+    onSubmit:(fd)=>{
+      if(!pode) return true;
+      if(!m || estaReprovada) return true;
+      const ciclo = cicloMask(fd.get('cicloFaturamento'));
+      if(ciclo && !isCicloValido(ciclo)){
+        toast('Informe o ciclo de faturamento no formato CICLO-XX/XXXX (ex.: CICLO-01/2026).', 'error');
+        return false;
+      }
+      m.cicloFaturamento = ciclo;
+      m.statusValidacao = fd.get('statusValidacao');
+      m.enviadoEqtl = fd.get('enviadoEqtl');
+      m.recolha = fd.get('recolha');
+      m.valorFaturado = String(fd.get('valorFaturado')||'').trim();
+      const totalRdoVal = rdoTotalValor(x);
+      const valFat = parseFloat(m.valorFaturado)||0;
+      if(m.statusValidacao==='FATURADA' && totalRdoVal > 0 && valFat > 0 && valFat < totalRdoVal){
+        const just = String(fd.get('justificativaValorMenor')||'').trim();
+        if(!just){
+          toast('Informe a justificativa para o valor faturado ser menor que o valor total do RDO.', 'error');
+          return false;
+        }
+        m.justificativaValorMenor = just;
+      } else {
+        m.justificativaValorMenor = '';
+      }
+      saveData();
+      toast('Medição salva.');
+      return true;
+    },
+    onMount:(root)=>{
+      bindCicloMasks(root);
+      root.querySelector('[data-editar-rdo-med]')?.addEventListener('click', ()=>{
+        document.getElementById('modal-root').innerHTML='';
+        editRdoModal(x);
+        renderMediçãoProjetos();
+      });
+      const stSel = root.querySelector('#med-val-status');
+      const totalRdoVal = rdoTotalValor(x);
+      const toggleJustificativa = ()=>{
+        const jWrap = root.querySelector('[data-justificativa-fat]');
+        if(!jWrap) return;
+        const valFat = parseFloat(root.querySelector('#med-val-valor')?.value)||0;
+        const precisa = stSel?.value==='FATURADA' && totalRdoVal > 0 && valFat > 0 && valFat < totalRdoVal;
+        jWrap.style.display = precisa ? '' : 'none';
+        if(precisa){
+          const ta = jWrap.querySelector('textarea');
+          if(ta) ta.placeholder = `Informe o motivo do valor faturado (R$ ${fmtMoney(valFat)}) ser menor que o valor total do RDO (R$ ${fmtMoney(totalRdoVal)})...`;
+        }
+      };
+      if(stSel){
+        const toggleValor = ()=>{
+          const wrap = root.querySelector('[data-valor-faturado]');
+          if(!wrap) return;
+          wrap.style.display = (stSel.value==='FATURADA')? '' : 'none';
+          toggleJustificativa();
+        };
+        stSel.addEventListener('change', toggleValor);
+        toggleValor();
+      }
+      const valInput = root.querySelector('#med-val-valor');
+      if(valInput) valInput.addEventListener('input', toggleJustificativa);
+      toggleJustificativa();
+    }
+  });
 }
 function appvMedicaoOcNds(){
   if(!CURRENT_USER) return true;
