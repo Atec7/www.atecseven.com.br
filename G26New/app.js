@@ -8435,8 +8435,8 @@ function openMedicaoProjetoModal(atribId){
     ${String(observacao||'').trim()? `<div style="margin-bottom:16px;"><h4 style="margin-bottom:6px;">Observação da execução</h4><p style="font-size:12.5px;white-space:pre-wrap;line-height:1.55;">${esc(observacao)}</p></div>`:''}
     ${(m && !estaReprovada)? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);">
       <h4 style="margin-bottom:4px;">Campos de medição</h4>
-      ${medicaoPodaFormHtml(m, rdoTotalValor(x))}
-    </div>`:(m === undefined? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);font-size:12.5px;color:var(--muted);">Aprovando este RDO, os campos de medição (Status da Validação, Enviado EQTL e Recolha) ficarão disponíveis para preenchimento.</div>`:'')}
+      ${medicaoPodaFormHtml(m, rdoTotalValor(x), true)}
+    </div>`:(m === undefined? `<div style="padding-top:14px;border-top:1px solid var(--border-soft);font-size:12.5px;color:var(--muted);">Aprovando este RDO, os campos de medição (Status da Validação e Enviado EQTL) ficarão disponíveis para preenchimento.</div>`:'')}
     <div class="admin-field-meta" style="margin-top:16px;">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
 
   openModal({
@@ -8459,7 +8459,7 @@ function openMedicaoProjetoModal(atribId){
       m.cicloFaturamento = ciclo;
       m.statusValidacao = fd.get('statusValidacao');
       m.enviadoEqtl = fd.get('enviadoEqtl');
-      m.recolha = fd.get('recolha');
+      m.recolha = ''; // Projetos não utilizam o campo Recolha
       m.valorFaturado = String(fd.get('valorFaturado')||'').trim();
       const totalRdoVal = rdoTotalValor(x);
       const valFat = parseFloat(m.valorFaturado)||0;
@@ -9938,7 +9938,7 @@ function reprovarMedicaoPodaModal(atribId){
   });
 }
 
-function medicaoPodaFormHtml(m, totalRdo){
+function medicaoPodaFormHtml(m, totalRdo, semRecolha){
   const isReprovada = m?.aprovado===false;
   const mostrarValor = m?.statusValidacao==='FATURADA';
   const valFatNum = parseFloat(m?.valorFaturado)||0;
@@ -9965,13 +9965,13 @@ function medicaoPodaFormHtml(m, totalRdo){
           ${SIM_NAO_OPCOES.map(o=>`<option value="${o}" ${m?.enviadoEqtl===o?'selected':''}>${o}</option>`).join('')}
         </select>
       </div>
-      <div class="field" style="margin:0;">
+      ${semRecolha? '' : `<div class="field" style="margin:0;">
         <label>RECOLHA</label>
         <select name="recolha" ${isReprovada?'disabled':''}>
           <option value="">Selecione...</option>
           ${SIM_NAO_OPCOES.map(o=>`<option value="${o}" ${m?.recolha===o?'selected':''}>${o}</option>`).join('')}
         </select>
-      </div>
+      </div>`}
       <div class="field" style="margin:0;">
         <label>VALOR TOTAL RDO (R$)</label>
         <div style="padding:8px 10px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;font-weight:700;font-size:13px;">${fmtMoney(totalRdo)}</div>
