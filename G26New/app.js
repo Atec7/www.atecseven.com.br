@@ -5559,10 +5559,12 @@ function renderOseRdo(){
               const res = rdoResumo(x);
               const imped = rdoImpedimentos(x.atribuicao);
               const horarios = [x.atribuicao.rdoHorarioChegada, x.atribuicao.rdoHorarioSaidaObra].filter(Boolean).join(' → ')||'—';
+              const med = findMedicaoOse(x.atribuicao.id);
+              const repInfo = medicaoOseReprovacaoInfo(med);
               return `
-                <tr data-ose-prog="${x.programacao.id}" data-ose-atrib="${x.atribuicao.id}" style="cursor:pointer;" title="Ver detalhes">
+                <tr data-ose-prog="${x.programacao.id}" data-ose-atrib="${x.atribuicao.id}" style="cursor:pointer;" class="${repInfo?'poda-rdo-reprovado':''}" title="Ver detalhes">
                   <td style="text-align:center;color:var(--muted-2);">${i+1}</td>
-                  <td><strong>${oseProgLabel(x.programacao)}</strong><div class="admin-field-meta">${esc(x.programacao.municipio||'—')} · ${esc(x.programacao.subestacao||'—')}</div></td>
+                  <td><strong>${oseProgLabel(x.programacao)}</strong><div class="admin-field-meta">${esc(x.programacao.municipio||'—')} · ${esc(x.programacao.subestacao||'—')}</div>${repInfo? `<div class="med-poda-reprov-msg">${icon('alert',12)} Reprovado na medição${repInfo.total>0? ' · '+medicaoOseCountTag(repInfo.total):''}<div class="med-poda-reprov-motivo">${esc(repInfo.motivo)}</div></div>`:''}</td>
                   <td>${esc(equipeLabel(eq))}<div class="admin-field-meta">${esc(eq?.supervisor||'')}</div></td>
                   <td style="text-align:center;" class="mono">${fmtDate(x.atribuicao.dataProgramada)}</td>
                   <td style="text-align:center;">${rdoStatusBadge(x.atribuicao.status)}</td>
@@ -5695,6 +5697,14 @@ function openOseRDOModal(progId, attribId){
     <td style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;">${x.atribuicao[h.k]||'—'}</td></tr>`).join('');
 
   const body = `
+    ${(()=>{ const ri = medicaoOseReprovacaoInfo(findMedicaoOse(x.atribuicao.id));
+      return ri? `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgba(224,97,91,.45);background:rgba(224,97,91,.10);border-radius:10px;margin-bottom:16px;">
+        <span style="color:var(--red);flex-shrink:0;margin-top:2px;">${icon('alert',18)}</span>
+        <div style="font-size:12.5px;">
+          <strong style="color:var(--red);">RDO REPROVADO NA MEDIÇÃO</strong> <span class="med-poda-reprov-count" style="margin-left:4px;">${ri.total} reprovação${ri.total===1?'':'ões'}</span>
+          <div style="color:var(--muted);margin-top:2px;">Motivo: <strong style="color:#7a2b26;">${esc(ri.motivo)}</strong><br>Reprovado por <strong>${esc(ri.por)}</strong> em <span class="mono">${fmtDateTime(ri.em)}</span>. Anexe evidências ou edite o registro para reenvio à medição.</div>
+        </div>
+      </div>`:''; })()}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
       <div>
         <h4 style="margin-bottom:8px;">Programação ${oseProgLabel(x.programacao)}</h4>
@@ -5777,11 +5787,15 @@ function openOseRDOModal(progId, attribId){
     </div>
     <div class="admin-field-meta">Confirmado pela equipe em <strong>${rdoConfData(x)}</strong></div>`;
 
-  openModal({ title:'RDO OSE — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, maxW:760, footerBtns:[
+  const podeAprovar = appvMedicaoOse();
+  const aprovarBtn = podeAprovar? { label: icon('check',14)+' Aprovar', cls:'btn btn-primary', onClick: ()=> aprovarRdoParaMedicaoOse(x) } : null;
+  const footerBtns = [
+    aprovarBtn,
     { label: icon('download',14)+' Baixar fotos', cls:'btn', onClick: ()=> baixarFotosRdo(x.atribuicao.atividades) },
     { label: icon('edit',14)+' Editar registro', cls:'btn', onClick: ()=> editRdoModal(x, oseProgLabel) },
     { label: icon('print',14)+' Gerar PDF', cls:'btn', onClick: ()=> printRDOTipoCompleto(x,'ose') }
-  ], onMount: (root)=>{ root.querySelector('[data-baixar-fotos-rdo]')?.addEventListener('click', ()=> baixarFotosRdo(x.atribuicao.atividades)); } });
+  ].filter(Boolean);
+  openModal({ title:'RDO OSE — Detalhes da execução', bodyHtml: body, submitLabel:'Fechar', wide:true, maxW:760, footerBtns, onMount: (root)=>{ root.querySelector('[data-baixar-fotos-rdo]')?.addEventListener('click', ()=> baixarFotosRdo(x.atribuicao.atividades)); } });
 }
 
 /* --- OSE Confirmação de Execução (bloqueante) --- */
@@ -7368,6 +7382,7 @@ function openOcNdsModal(id){
     </div>
 
     <div id="ocnds-campos-oc" style="display:${(!item || item.tipo==='OC')?'block':'none'};">
+      <div class="field"><label>Nº da Ocorrência <span class="req">*</span></label><input type="text" name="numeroOC" value="${esc(item?.numeroOC||'')}" placeholder="Número da ocorrência"></div>
       <div class="field-row">
         <div class="field"><label>PTP</label><input type="text" name="ptp" value="${esc(item?.ptp||'')}" placeholder="Número do PTP"></div>
         <div class="field"><label>SI</label><input type="text" name="si" value="${esc(item?.si||'')}" placeholder="Número do SI"></div>
@@ -7501,7 +7516,8 @@ function openOcNdsModal(id){
       if(!zona){ toast('Selecione a zona (RURAL ou URBANA).', 'error'); return false; }
 
       if(tipo==='OC'){
-        const ocorr = fd.get('ocorrencia');
+        const ocorr = fd.get('numeroOC');
+        if(!ocorr || !ocorr.trim()){ toast('Informe o número da ocorrência.', 'error'); return false; }
       } else {
         const ocorr = fd.get('ocorrencia');
         if(!ocorr || !ocorr.trim()){ toast('Informe o número da ocorrência.', 'error'); return false; }
@@ -7521,6 +7537,7 @@ function openOcNdsModal(id){
         item.ptp = fd.get('ptp').trim();
         item.si = fd.get('si').trim();
         item.ose = fd.get('ose').trim();
+        item.numeroOC = fd.get('numeroOC')?.trim()||'';
         item.ocorrencia = fd.get('ocorrencia')?.trim()||'';
         item.data = data;
         item.observacoes = observacoes;
@@ -7552,7 +7569,7 @@ function openOcNdsModal(id){
             observacoes,
             anexos: (window._ocndsAnexos||[]).slice(),
             status: 'Despachada',
-            numeroOC: '',
+            numeroOC: fd.get('numeroOC')?.trim()||'',
             atividades: [],
             rdoRespostas: {},
             historico:[{...currentAutor(), ts:Date.now(), tipo:'criacao', de:null, para:'Despachada', motivo:'Ocorrência despachada para equipe'}]
@@ -8438,6 +8455,20 @@ function appvMedicaoOse(){
 function findMedicaoOse(atribId){
   return (DB.medicaoOse||[]).find(m=> m.atribuicaoId===Number(atribId));
 }
+function medicaoOseReprovacaoInfo(m){
+  if(!m || m.aprovado!==false) return null;
+  const total = m.totalReprovacoes||0;
+  return {
+    motivo: m.motivoReprovacao||'RDO reprovado na medição.',
+    total,
+    por: m.reprovadoPor?.usuarioNome||'Medição',
+    em: m.reprovadoEm
+  };
+}
+function medicaoOseCountTag(total){
+  const n = Number(total)||0;
+  return `<span class="med-poda-reprov-count">${n} reprovação${n===1?'':'ões'}</span>`;
+}
 function medicaoOseRegistros(){
   return flatOseAtribuicoes().filter(rdoTemExecucao);
 }
@@ -8609,6 +8640,52 @@ function renderMediçãoOSE(){
     if(rp) rp.addEventListener('click', (e)=>{ e.stopPropagation(); reprovarMedicaoOseModal(Number(x.atribuicao.id)); });
     const rp2 = tr.querySelector(`[data-med-ose-reaprovar="${x.atribuicao.id}"]`);
     if(rp2) rp2.addEventListener('click', (e)=>{ e.stopPropagation(); reaprovarMedicaoOse(Number(x.atribuicao.id)); });
+  });
+}
+
+function aprovarRdoParaMedicaoOse(x){
+  if(!requerEscrita()) return;
+  if(!appvMedicaoOse()){ toast('Apenas administradores podem aprovar a medição.', 'error'); return; }
+  if(!x) return;
+  const atribId = x.atribuicao.id;
+  let m = findMedicaoOse(atribId);
+  if(m && m.aprovado===true){ toast('Este RDO já está aprovado para medição.'); return; }
+  modalComMotivo({
+    title:'Aprovar RDO para medição',
+    texto:'Confirma a aprovação deste RDO de <strong>'+esc(oseProgLabel(x.programacao))+'</strong> para a medição de OSE? Informe um motivo, que ficará registrado nos fluxos e nos dados do registro.',
+    submitLabel:'Aprovar',
+    onConfirm:(motivo)=>{
+      DB.medicaoOse = DB.medicaoOse||[];
+      if(!m){
+        m = {
+          id: nextId(),
+          programacaoId: x.programacao.id,
+          atribuicaoId: atribId,
+          rdoData: structuredClone(x.atribuicao),
+          status: '',
+          cicloFaturamento: '',
+          valorFaturado: '',
+          aprovado: null,
+          motivoReprovacao: '',
+          totalReprovacoes: 0,
+          historicoReprovacoes: [],
+          enviadoPor: currentAutor(),
+          enviadoEm: Date.now(),
+          custom: {}
+        };
+        DB.medicaoOse.push(m);
+      }
+      m.aprovado = true;
+      m.motivoReprovacao = '';
+      m.motivoAprovacao = motivo;
+      m.aprovadoPor = currentAutor();
+      m.aprovadoEm = Date.now();
+      x.atribuicao.historico = x.atribuicao.historico||[];
+      x.atribuicao.historico.push({...currentAutor(), ts:Date.now(), tipo:'medicao', de:null, para:'Aprovado', motivo});
+      registrarEvento('medicao','atribuicao',atribId,oseProgLabel(x.programacao),'RDO aprovado para medição de OSE · '+motivo);
+      saveData();
+      toast('RDO aprovado para medição de OSE.');
+    }
   });
 }
 

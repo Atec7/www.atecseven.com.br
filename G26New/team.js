@@ -704,17 +704,14 @@ function render(){
         <div class="panel" style="border-color:var(--border);padding:12px;text-align:center;"><div class="admin-field-meta">PTP</div><div style="font-size:15px;font-weight:700;margin-top:4px;">${esc(ocndsItem.ptp||'—')}</div></div>
         <div class="panel" style="border-color:var(--border);padding:12px;text-align:center;"><div class="admin-field-meta">SI</div><div style="font-size:15px;font-weight:700;margin-top:4px;">${esc(ocndsItem.si||'—')}</div></div>
         <div class="panel" style="border-color:var(--border);padding:12px;text-align:center;"><div class="admin-field-meta">OSE</div><div style="font-size:15px;font-weight:700;margin-top:4px;">${esc(ocndsItem.ose||'—')}</div></div>
-      </div>` : `
-      <div style="margin-bottom:16px;">
-        <div class="panel" style="border-color:var(--border);padding:12px;text-align:center;"><div class="admin-field-meta">Ocorrência</div><div style="font-size:15px;font-weight:700;margin-top:4px;">${esc(ocndsItem.ocorrencia||'—')}</div></div>
-      </div>`;
-
-    const numeroOCField = isOC ? `
-      <div class="field" style="margin-bottom:16px;">
-        <label style="font-weight:600;">Nº da Ocorrência (OC)</label>
-        <input type="text" id="ocnds-numero-oc" value="${esc(ocndsItem.numeroOC||'')}" placeholder="Informe o número da ocorrência" style="width:100%;padding:10px;font-size:16px;">
-        <div class="field-hint">Preencha o número da ocorrência atribuída.</div>
       </div>` : '';
+
+    const numeroOCField = `
+      <div class="field" style="margin-bottom:16px;">
+        <label style="font-weight:600;">Nº da Ocorrência <span class="req">*</span></label>
+        <input type="text" id="ocnds-numero-oc" value="${esc(isOC? ocndsItem.numeroOC||'' : ocndsItem.ocorrencia||'')}" placeholder="Informe o número da ocorrência" style="width:100%;padding:10px;font-size:16px;">
+        <div class="field-hint">Preencha o número da ocorrência — referência principal deste registro.</div>
+      </div>`;
 
     const anexosHtml = renderOcNdsAnexosHtml();
 
@@ -730,7 +727,7 @@ function render(){
           <span class="badge" style="color:var(--blue);background:rgba(78,140,235,.12);">${esc(ocndsItem.status)}</span>
         </div>
         <div style="padding:16px;display:flex;flex-direction:column;gap:16px;">
-          <div class="team-hint">${icon('alert',14)} <div>Esta é uma ocorrência de <strong>livre escolha</strong>. ${isOC? 'Preencha o <strong>Nº da Ocorrência (OC)</strong> e registre as atividades executadas.' : 'Registre as atividades executadas.'} As alterações ficam salvas neste aparelho e são enviadas quando houver internet.</div></div>
+          <div class="team-hint">${icon('alert',14)} <div>Esta é uma ocorrência de <strong>livre escolha</strong>. Preencha o <strong>Nº da Ocorrência</strong> e registre as atividades executadas. As alterações ficam salvas neste aparelho e são enviadas quando houver internet.</div></div>
           ${detalhesHtml}
           ${ocndsItem.observacoes? `<div style="border-left:4px solid var(--accent);padding:10px 14px;background:var(--bg-soft);border-radius:0 8px 8px 0;"><div class="admin-field-meta" style="margin-bottom:4px;">Observações do escritório:</div><div style="font-size:13px;">${esc(ocndsItem.observacoes)}</div></div>` : ''}
           ${numeroOCField}
@@ -1085,7 +1082,7 @@ function abrirEmergencia(){
   if(existing) existing.remove();
   const eqAtual = equipeAtualId();
   const rowsIniciais = [{atividadeId:'',quantidadeExecutada:'',tipoEstrutura:'',fotos:[]}];
-  const estado = { tipo:'OC', equipeId: eqAtual||'', setor:'', coordenacao:'', ptp:'', si:'', ose:'', ocorrencia:'', data: hojeISO(), numeroReserva:'', zona:'', atividades: rowsIniciais, observacoes:'' };
+  const estado = { tipo:'OC', equipeId: eqAtual||'', setor:'', coordenacao:'', ptp:'', si:'', ose:'', ocorrencia:'', numeroOC:'', data: hojeISO(), numeroReserva:'', zona:'', atividades: rowsIniciais, observacoes:'' };
   const atjs = (DB && DB.atividades)||[];
   const eqs = (DB && DB.equipes)||[];
   const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
@@ -1251,6 +1248,10 @@ function abrirEmergencia(){
           </select>
         </div>
         <div id="emg-campos-oc">
+          <div class="field" style="margin:0;">
+            <label>Nº da Ocorrência <span class="req">*</span></label>
+            <input type="text" id="emg-numero-oc" placeholder="Número da ocorrência">
+          </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
             <div class="field" style="flex:1;min-width:120px;margin:0;">
               <label>PTP</label>
@@ -1354,6 +1355,7 @@ function abrirEmergencia(){
   overlay.querySelector('#emg-si').addEventListener('input', e=>{ estado.si=e.target.value.trim(); });
   overlay.querySelector('#emg-ose').addEventListener('input', e=>{ estado.ose=e.target.value.trim(); });
   overlay.querySelector('#emg-ocorrencia').addEventListener('input', e=>{ estado.ocorrencia=e.target.value.trim(); });
+  overlay.querySelector('#emg-numero-oc').addEventListener('input', e=>{ estado.numeroOC=e.target.value.trim(); });
   overlay.querySelector('#emg-data').addEventListener('change', e=>{ estado.data=e.target.value; });
   overlay.querySelector('#emg-reserva').addEventListener('input', e=>{ estado.numeroReserva=e.target.value.trim(); });
   overlay.querySelectorAll('input[name="emg-zona"]').forEach(r=> r.addEventListener('change', ()=> estado.zona=overlay.querySelector('input[name="emg-zona"]:checked')?.value||''));
@@ -1395,6 +1397,7 @@ function abrirEmergencia(){
     if(!estado.coordenacao){ toast('Selecione a coordenação.','error'); return; }
     if(!estado.data){ toast('Informe a data.','error'); return; }
     if(!estado.zona){ toast('Selecione a zona.','error'); return; }
+    if(estado.tipo==='OC' && !estado.numeroOC){ toast('Informe o número da ocorrência (OC).','error'); return; }
     if(estado.tipo==='NDS' && !estado.ocorrencia){ toast('Informe o número da ocorrência (NDS).','error'); return; }
     if(!ativs.length || ativs.every(a=>!a.atividadeId)){ toast('Selecione ao menos uma atividade.','error'); return; }
     if(!obs){ toast('A observação é obrigatória.','error'); return; }
@@ -1440,7 +1443,7 @@ function abrirEmergencia(){
             observacoes: obs,
             anexos: [],
             status: 'Despachada',
-            numeroOC: '',
+            numeroOC: (estado.tipo==='OC'? estado.numeroOC:''),
             atividades: ativsValidas.map((a,i)=>({
               atividadeId: Number(a.atividadeId),
               quantidadePrevista: null,
@@ -1788,10 +1791,8 @@ async function submitEditOcNds(){
   const obs = observacao.trim();
   if(!obs){ toast('A observação é obrigatória.', 'error'); return; }
 
-  if(ocndsItem && ocndsItem.tipo === 'OC'){
-    const numeroOC = (document.getElementById('ocnds-numero-oc')?.value||'').trim();
-    if(!numeroOC){ toast('Informe o Nº da Ocorrência (OC).', 'error'); return; }
-  }
+  const numeroOC = (document.getElementById('ocnds-numero-oc')?.value||'').trim();
+  if(!numeroOC){ toast('Informe o Nº da Ocorrência.', 'error'); return; }
 
   for(const eqId of Object.keys(editors)){
     const rows = editors[eqId];
@@ -1826,6 +1827,7 @@ async function submitEditOcNds(){
         ts: Date.now(),
         observacao: obs,
         numeroOC: (ocndsItem && ocndsItem.tipo === 'OC')? (document.getElementById('ocnds-numero-oc')?.value||'').trim() : '',
+        ocorrencia: (ocndsItem && ocndsItem.tipo === 'NDS')? (document.getElementById('ocnds-numero-oc')?.value||'').trim() : (ocndsItem?.ocorrencia||''),
         atribuicoes: Object.keys(editors).map(eqId=>({
           equipeId: Number(eqId),
           atividades: editors[eqId].map((r,i)=>({
@@ -1877,6 +1879,7 @@ async function syncNowOcNds(){
       const item = (db.ocnds||[]).find(p=>p.id===Number(patch.ocndsId));
       if(!item) return;
       item.numeroOC = patch.numeroOC || item.numeroOC;
+      if(patch.ocorrencia){ item.ocorrencia = patch.ocorrencia; }
       item.atividades = (patch.atribuicoes||[]).flatMap(pa=> pa.atividades||[]);
       item.observacaoEquipe = patch.observacao || item.observacaoEquipe || '';
       item.status = 'Baixada';
