@@ -739,7 +739,7 @@ function render(){
     document.getElementById('team-obs').addEventListener('input', e=>{ observacao = e.target.value; });
     bindTeamActAutocomplete(root);
     root.querySelectorAll('.te-qty').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.teq.split('|'); editors[eid][Number(idx)].quantidadePrevista = e.target.value; saveEditorsDraft(); }));
-    root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; saveEditorsDraft(); }));
+root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; saveEditorsDraft(); atualizarPhotoHint(eid, Number(idx)); }));
     root.querySelectorAll('.te-tipo-estrutura').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tte.split('|'); editors[eid][Number(idx)].tipoEstrutura = e.target.value; saveEditorsDraft(); }));
     root.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', e=>{ const [eid,idx]=e.currentTarget.dataset.eqRm.split('|'); editors[eid].splice(Number(idx),1); divergeFotosOnRemove(eid,Number(idx)); render(); }));
     root.querySelectorAll('.te-add').forEach(b=>b.addEventListener('click', e=>{ editors[e.currentTarget.dataset.eqAdd].push({atividadeId:'',quantidadePrevista:'',quantidadeExecutada:'',tipoEstrutura:''}); saveEditorsDraft(); render(); }));
@@ -747,9 +747,7 @@ function render(){
     root.querySelectorAll('.te-gallery').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.teg.split('|'); openPhotoPicker(eid, Number(idx), 'gallery'); }));
     root.querySelectorAll('.te-photo-hint').forEach(h=>{
       const [eid,idx] = h.dataset.ph.split('|');
-      const n = fotosCount(eid, Number(idx));
-      h.textContent = n? `${n}/10 foto${n>1?'s':''}` : 'Obrigatório: adicione ao menos 1 foto';
-      h.className = 'te-photo-hint ' + (n? 'ok':'missing');
+      atualizarPhotoHint(eid, Number(idx));
       atualizarFotosUI(eid, Number(idx));
     });
     document.getElementById('team-submit').addEventListener('click', submitEditOcNds);
@@ -826,7 +824,7 @@ function render(){
         </div>
       </div>
       <div style="padding:16px;display:flex;flex-direction:column;gap:16px;">
-        <div class="team-hint">${icon('alert',14)} <div>Edite apenas as <strong>atividades e quantidades</strong> da programação. A <strong>observação é obrigatória</strong> e cada atividade exige <strong>pelo menos 1 foto</strong> (câmera ou galeria). As alterações ficam salvas neste aparelho e são enviadas automaticamente quando houver internet.</div></div>
+        <div class="team-hint">${icon('alert',14)} <div>Edite apenas as <strong>atividades e quantidades</strong> da programação. A <strong>observação é obrigatória</strong> e cada atividade exige <strong>pelo menos 1 foto</strong> (câmera ou galeria) — exceto quando a quantidade executada for zerada. As alterações ficam salvas neste aparelho e são enviadas automaticamente quando houver internet.</div></div>
         ${Object.keys(editors).map(eqId=>renderTeamBlock(eqId)).join('')}
         <div class="field"><label>Observação <span class="req">*</span></label><textarea id="team-obs" rows="3" placeholder="Descreva o que mudou e o motivo">${esc(observacao)}</textarea></div>
         <button class="btn btn-primary" id="team-submit" style="align-self:flex-end;">${icon('check',15)} Enviar alterações</button>
@@ -835,7 +833,7 @@ function render(){
   document.getElementById('team-obs').addEventListener('input', e=>{ observacao = e.target.value; });
   bindTeamActAutocomplete(root);
   root.querySelectorAll('.te-qty').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.teq.split('|'); editors[eid][Number(idx)].quantidadePrevista = e.target.value; saveEditorsDraft(); }));
-  root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; saveEditorsDraft(); }));
+  root.querySelectorAll('.te-exec').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tee.split('|'); editors[eid][Number(idx)].quantidadeExecutada = e.target.value; saveEditorsDraft(); atualizarPhotoHint(eid, Number(idx)); }));
   root.querySelectorAll('.te-tipo-estrutura').forEach(s=>s.addEventListener('change', e=>{ const [eid,idx]=e.currentTarget.dataset.tte.split('|'); editors[eid][Number(idx)].tipoEstrutura = e.target.value; saveEditorsDraft(); }));
   root.querySelectorAll('.te-anom').forEach(s=>s.addEventListener('input', e=>{ const [eid,idx]=e.currentTarget.dataset.tea.split('|'); editors[eid][Number(idx)].qtdAnomaliaExecutada = e.target.value; saveEditorsDraft(); }));
   root.querySelectorAll('.te-remove').forEach(b=>b.addEventListener('click', e=>{ const [eid,idx]=e.currentTarget.dataset.eqRm.split('|'); editors[eid].splice(Number(idx),1); divergeFotosOnRemove(eid,Number(idx)); render(); }));
@@ -844,9 +842,7 @@ function render(){
   root.querySelectorAll('.te-gallery').forEach(b=>b.addEventListener('click', ()=>{ const [eid,idx]=b.dataset.teg.split('|'); openPhotoPicker(eid, Number(idx), 'gallery'); }));
   root.querySelectorAll('.te-photo-hint').forEach(h=>{
     const [eid,idx] = h.dataset.ph.split('|');
-    const n = fotosCount(eid, Number(idx));
-    h.textContent = n? `${n}/10 foto${n>1?'s':''}` : 'Obrigatório: adicione ao menos 1 foto';
-    h.className = 'te-photo-hint ' + (n? 'ok':'missing');
+    atualizarPhotoHint(eid, Number(idx));
     atualizarFotosUI(eid, Number(idx));
   });
   document.getElementById('team-submit').addEventListener('click', submitEdit);
@@ -1765,6 +1761,31 @@ function resetFotos(){
 function fotosCount(eqId, idx){
   return ((_fotos[eqId]||[])[idx]||[]).length;
 }
+/* Foto/evidência é obrigatória apenas se a quantidade executada NÃO foi zerada
+   pela equipe (0 = atividade não executada → evidência opcional). */
+function atividadeExigeFoto(eqId, idx){
+  const r = (editors[eqId]||[])[idx];
+  if(!r) return false;
+  const v = r.quantidadeExecutada;
+  if(v === '' || v === null || v === undefined) return true;
+  return Number(v) !== 0;
+}
+function atualizarPhotoHint(eqId, idx){
+  const h = document.querySelector('.te-photo-hint[data-ph="'+eqId+'|'+idx+'"]');
+  if(!h) return;
+  const n = fotosCount(eqId, Number(idx));
+  const exige = atividadeExigeFoto(eqId, Number(idx));
+  if(n){
+    h.textContent = `${n}/10 foto${n>1?'s':''}`;
+    h.className = 'te-photo-hint ok';
+  }else if(exige){
+    h.textContent = 'Obrigatório: adicione ao menos 1 foto';
+    h.className = 'te-photo-hint missing';
+  }else{
+    h.textContent = 'Opcional: quantidade executada zerada';
+    h.className = 'te-photo-hint opt';
+  }
+}
 /* Ao remover uma atividade, remove também as fotos daquela linha e
    desloca as linhas seguintes, mantendo o alinhamento fotos <-> atividades. */
 function divergeFotosOnRemove(eqId, idx){
@@ -1798,7 +1819,7 @@ async function submitEditOcNds(){
     const rows = editors[eqId];
     if(!rows.length){ toast('Adicione ao menos uma atividade.', 'error'); return; }
     for(let i=0;i<rows.length;i++){
-      if(!fotosCount(eqId, i)){ toast('Cada atividade precisa de pelo menos 1 foto.', 'error'); return; }
+      if(atividadeExigeFoto(eqId, i) && !fotosCount(eqId, i)){ toast('Cada atividade precisa de pelo menos 1 foto.', 'error'); return; }
     }
   }
   if(_fotosEnviando) return;
@@ -1915,7 +1936,7 @@ async function submitEdit(){
     if(!rows.length){ toast('Cada equipe precisa de ao menos uma atividade.', 'error'); return; }
     if(rows.some(r=>!r.atividadeId)){ toast('Selecione a atividade em todas as linhas.', 'error'); return; }
     for(let i=0;i<rows.length;i++){
-      if(!fotosCount(eqId, i)){ toast('Cada atividade precisa de pelo menos 1 foto.', 'error'); return; }
+      if(atividadeExigeFoto(eqId, i) && !fotosCount(eqId, i)){ toast('Cada atividade precisa de pelo menos 1 foto.', 'error'); return; }
     }
   }
   if(_fotosEnviando) return;
