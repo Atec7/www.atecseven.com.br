@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portaria · Cadastro de Equipes</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div>
+    <h1>Cadastro de Equipes</h1>
+    <div class="sub">Cada equipe recebe um QR code unico</div>
+  </div>
+  <a class="btn btn-cinza" href="dashboard.html">Abrir painel</a>
+</header>
+
+<div class="wrap">
+
+  <div class="painel">
+    <h2>Nova equipe</h2>
+    <form id="formCadastro">
+      <div class="form-grid">
+        <div class="campo">
+          <label>Nome da equipe *</label>
+          <input type="text" id="nome" required placeholder="Ex: Equipe Alpha">
+        </div>
+        <div class="campo">
+          <label>Responsavel</label>
+          <input type="text" id="responsavel" placeholder="Nome do responsavel">
+        </div>
+        <div class="campo">
+          <label>Placa do veiculo *</label>
+          <input type="text" id="placa" required placeholder="ABC1D23" maxlength="10" autocomplete="off">
+        </div>
+        <div class="campo">
+          <label>Modelo / Descricao</label>
+          <input type="text" id="modelo" placeholder="Ex: Fiat Strada">
+        </div>
+        <div class="campo">
+          <label>Hora prevista de saida *</label>
+          <input type="time" id="horaPrevista" required>
+        </div>
+        <div class="campo">
+          <label>Dias da semana em que sai</label>
+          <div class="dias-box" id="diasBox"></div>
+        </div>
+        <div style="grid-column:1/-1">
+          <button type="submit" class="btn btn-amarelo" id="btnSalvar">Cadastrar e gerar QR</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="painel">
+    <h2>Equipes cadastradas</h2>
+    <div id="listaEquipes" class="lista-equipes"></div>
+  </div>
+
+</div>
+
+<div class="modal-fundo" id="modalQR">
+  <div class="modal">
+    <h3 id="modalNome"></h3>
+    <div class="qr-img" id="qrDiv"></div>
+    <div class="qr-url" id="qrUrl"></div>
+    <div class="acoes">
+      <button class="btn btn-amarelo" id="btnPrint">Imprimir</button>
+      <button class="btn btn-cinza" id="btnFechar">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="js/firebase-config.js"></script>
+<script>
+(function(){
+  var form = document.getElementById("formCadastro");
+  var listaEl = document.getElementById("listaEquipes");
+  var modal = document.getElementById("modalQR");
+  var qrDiv = document.getElementById("qrDiv");
+  var qrUrlEl = document.getElementById("qrUrl");
+  var modalNome = document.getElementById("modalNome");
+  var btnSalvar = document.getElementById("btnSalvar");
+  var uidAtual = "";
+  var hashTratado = false;
+
+  var DIAS_OP = [
+    {n:"Seg", v:"1"}, {n:"Ter", v:"2"}, {n:"Qua", v:"3"}, {n:"Qui", v:"4"},
+    {n:"Sex", v:"5"}, {n:"Sab", v:"6"}, {n:"Dom", v:"0"}
+  ];
+
+  function montarDias(){
+    var box = document.getElementById("diasBox");
+    box.innerHTML = "";
+    DIAS_OP.forEach(function(d, i){
+      var el = document.createElement("span");
+      el.className = "dia-op" + (i < 5 ? " active" : "");
+      el.innerHTML = '<input type="checkbox" value="'+d.v+'"'+(i < 5 ? " checked" : "")+'>'+d.n;
+      el.onclick = function(){
+        var cb = el.querySelector("input");
+        cb.checked = !cb.checked;
+        el.classList.toggle("active", cb.checked);
+      };
+      box.appendChild(el);
+    });
+  }
+  montarDias();
+
+  form.addEventListener("submit", function(e){
+    e.preventDefault();
+    btnSalvar.disabled = true;
+
+    var dias = {};
+    document.querySelectorAll("#diasBox input:checked").forEach(function(cb){
+      dias[cb.value] = true;
+    });
+
+    var ref = db.ref("equipes").push();
+    ref.set({
+      nome: document.getElementById("nome").value.trim(),
+      responsavel: document.getElementById("responsavel").value.trim(),
+      placa: document.getElementById("placa").value.trim().toUpperCase(),
+      modelo: document.getElementById("modelo").value.trim(),
+      horaPrevista: document.getElementById("horaPrevista").value,
+      dias: dias,
+      criadoEm: Date.now()
+    }).then(function(){
+      btnSalvar.disabled = false;
+      form.reset();
+      montarDias();
+      abrirQR(ref.key);
+    }).catch(function(){
+      btnSalvar.disabled = false;
+      alert("Erro ao salvar. Verifique a internet e as regras do Firebase.");
+    });
+  });
+
+  db.ref("equipes").on("value", function(s){
+    var val = s.val() || {};
+    var html = "";
+    for(var uid in val){
+      var t = val[uid];
+      var dias = [];
+      for(var d in (t.dias||{})) dias.push(DIAS[d]);
+      html += '<div class="item-equipe">';
+      html += '<div class="info"><b>'+esc(t.nome)+'</b>';
+      html += '<div>Sai as <b class="am">'+esc(t.horaPrevista||"--:--")+'</b> &middot; '+dias.join(" ")+'</div>';
+      if(t.placa || t.modelo) html += '<div>'+esc(t.placa||"")+(t.modelo ? " &middot; "+esc(t.modelo) : "")+'</div>';
+      if(t.responsavel) html += '<div>Resp: '+esc(t.responsavel)+'</div>';
+      html += '</div>';
+      html += '<button class="btn btn-amarelo" data-uid="'+uid+'">QR</button>';
+      html += '<button class="btn btn-cinza" data-del="'+uid+'">Excluir</button>';
+      html += '</div>';
+    }
+    if(!html) html = '<div class="muted">Nenhuma equipe cadastrada.</div>';
+    listaEl.innerHTML = html;
+
+    listaEl.querySelectorAll("[data-uid]").forEach(function(el){
+      el.onclick = function(){ abrirQR(this.getAttribute("data-uid")); };
+    });
+    listaEl.querySelectorAll("[data-del]").forEach(function(el){
+      el.onclick = function(){
+        var uid = this.getAttribute("data-del");
+        if(!confirm("Excluir esta equipe?")) return;
+        db.ref("equipes/"+uid).remove();
+        db.ref("passagens").orderByKey().once("value", function(snap){
+          snap.forEach(function(dia){
+            db.ref("passagens/"+dia.key+"/"+uid).remove();
+          });
+        });
+      };
+    });
+
+    if(!hashTratado){
+      var hash = location.hash;
+      hashTratado = true;
+      if(hash.indexOf("#qr=") === 0){
+        abrirQR(hash.slice(4));
+        history.replaceState(null, "", location.pathname);
+      }
+    }
+  });
+
+  function abrirQR(uid){
+    db.ref("equipes/"+uid).once("value", function(s){
+      if(!s.exists()) return;
+      var t = s.val();
+      uidAtual = uid;
+      var url = urlEquipe(uid);
+      modalNome.textContent = t.nome || "Equipe";
+      var qr = qrcode(0, "M");
+      qr.addData(url);
+      qr.make();
+      qrDiv.innerHTML = '<img src="'+qr.createDataURL(6, 8)+'" alt="QR">';
+      qrUrlEl.textContent = url;
+      modal.classList.add("aberto");
+    });
+  }
+
+  document.getElementById("btnFechar").onclick = function(){
+    modal.classList.remove("aberto");
+  };
+  modal.onclick = function(e){
+    if(e.target === modal) modal.classList.remove("aberto");
+  };
+
+  document.getElementById("btnPrint").onclick = function(){
+    if(!uidAtual) return;
+    var nome = modalNome.textContent;
+    var url = urlEquipe(uidAtual);
+    var qr = qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    var dataUrl = qr.createDataURL(6, 8);
+    var w = window.open("", "_blank");
+    if(!w){ alert("Permita pop-ups para imprimir."); return; }
+    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>QR - '+esc(nome)+'</title></head>');
+    w.document.write('<body style="text-align:center;font-family:sans-serif;padding:40px">');
+    w.document.write('<h2 style="text-transform:uppercase;letter-spacing:2px">'+esc(nome)+'</h2>');
+    w.document.write('<img src="'+dataUrl+'" style="width:280px;margin:20px 0">');
+    w.document.write('<p style="word-break:break-all;color:#666;font-size:12px">'+esc(url)+'</p>');
+    w.document.write('</body></html>');
+    w.document.close();
+    w.focus();
+    w.print();
+  };
+
+  function esc(s){
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portaria · Confirmar passagem</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="leitor-page">
+  <div class="leitor-card" id="card"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script>
+(function(){
+  var card = document.getElementById("card");
+  var uid = new URLSearchParams(window.location.search).get("id");
+
+  function inicio(){
+    return '<div class="leitor-marca">Portaria</div>';
+  }
+
+  if(!uid){
+    card.innerHTML = inicio() + '<div class="faixa faixa-erro">QR invalido</div><p class="muted">Nenhuma equipe identificada.</p>';
+    return;
+  }
+
+  db.ref("equipes/"+uid).once("value", function(s){
+    if(!s.exists()){
+      card.innerHTML = inicio() + '<div class="faixa faixa-erro">Equipe nao encontrada</div><p class="muted">Este QR nao esta vinculado a nenhuma equipe ativa.</p>';
+      return;
+    }
+
+    var t = s.val();
+    var hoje = hojeStr();
+    var hora = horaAgora();
+    var agendadoHoje = t.dias ? !!t.dias[diaSemanaNum()] : true;
+
+    db.ref("passagens/"+hoje+"/"+uid).set({
+      horaPrevista: t.horaPrevista || "",
+      horaPassagem: hora,
+      ts: Date.now()
+    }).then(function(){
+      var delta = diffMins(t.horaPrevista, hora);
+      var deltaHtml = "";
+      if(delta !== null){
+        var dtxt = delta === 0 ? "no horario" : (delta > 0 ? "+"+delta+" min de atraso" : Math.abs(delta)+" min antes");
+        var dcls = Math.abs(delta) <= 5 ? "dentrou" : "fora";
+        deltaHtml = '<span class="delta '+dcls+'" style="display:inline-block">'+dtxt+'</span>';
+      }
+
+      var aviso = agendadoHoje
+        ? '<div class="selo">Equipe passou pela portaria</div>'
+        : '<div class="faixa faixa-info">Equipe sem saida prevista para hoje</div>';
+
+      card.innerHTML = inicio()
+        + '<div class="nome-g">'+esc(t.nome)+'</div>'
+        + '<div class="placa-tag">'+esc(t.placa||"-")+(t.modelo ? " &middot; "+esc(t.modelo) : "")+'</div>'
+        + aviso
+        + '<div class="big-hora">'+hora+'</div>'
+        + '<p class="muted">Hora prevista: '+esc(t.horaPrevista||"N/D")+'</p>'
+        + deltaHtml
+        + '<p class="muted" style="margin-top:16px">'+formatarData(new Date())+'</p>'
+        + '<div style="margin-top:16px"><a class="btn btn-cinza" href="dashboard.html">Abrir painel</a></div>';
+    }).catch(function(){
+      card.innerHTML = inicio() + '<div class="faixa faixa-erro">Falha ao registrar</div><p class="muted">Verifique a internet e as regras do Firebase.</p>';
+    });
+  }, function(){
+    card.innerHTML = inicio() + '<div class="faixa faixa-erro">Sem conexao</div><p class="muted">Verifique a internet e as regras do Firebase.</p>';
+  });
+
+  function esc(s){
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+})();
+</script>
+</body>
+</html>

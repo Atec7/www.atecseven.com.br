@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portaria · Painel de Saidas</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div>
+    <h1>Portaria · Saidas</h1>
+    <div class="sub">Equipes e veiculos</div>
+  </div>
+  <a class="btn btn-amarelo" href="cadastro.html">Cadastrar equipe</a>
+</header>
+
+<div class="datebar">
+  <button class="seta" id="btnPrev">&#8249;</button>
+  <input type="date" id="dataInput">
+  <button class="seta" id="btnNext">&#8250;</button>
+  <span class="data-atual mono" id="dataLabel">-</span>
+</div>
+
+<div class="chips">
+  <span class="chip">Deve sair <b id="nDeve">0</b></span>
+  <span class="chip chip-passaram">Ja passou <b id="nSaiu">0</b></span>
+  <span class="chip chip-pendentes">Pendentes <b id="nPend">0</b></span>
+</div>
+
+<div class="legenda">
+  <span><i class="q q-passou"></i>Ja passou</span>
+  <span><i class="q q-pend"></i>Aguardando</span>
+  <span><i class="q q-atra"></i>Atrasada</span>
+  <span><i class="q q-folga"></i>Sem saida hoje</span>
+</div>
+
+<main id="grid" class="grid"></main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script>
+(function(){
+  var dtFiltro = new Date();
+  var equipes = {};
+  var passagens = {};
+  var passOff = null;
+
+  var grid  = document.getElementById("grid");
+  var label = document.getElementById("dataLabel");
+  var input = document.getElementById("dataInput");
+  var nDeve = document.getElementById("nDeve");
+  var nSaiu = document.getElementById("nSaiu");
+  var nPend = document.getElementById("nPend");
+
+  document.getElementById("btnPrev").onclick = function(){ dtFiltro.setDate(dtFiltro.getDate()-1); atualizarData(); };
+  document.getElementById("btnNext").onclick = function(){ dtFiltro.setDate(dtFiltro.getDate()+1); atualizarData(); };
+
+  input.addEventListener("change", function(){
+    var p = this.value.split("-");
+    dtFiltro = new Date(+p[0], +p[1]-1, +p[2]);
+    dtFiltro.setHours(12);
+    atualizarData();
+  });
+
+  function atualizarData(){
+    input.value = hojeStr(dtFiltro);
+    label.textContent = formatarData(dtFiltro);
+    subscrever();
+  }
+
+  function subscrever(){
+    var hoje = hojeStr(dtFiltro);
+    if(passOff){ passOff(); passOff = null; }
+    passOff = db.ref("passagens/"+hoje).on("value", function(s){
+      passagens = s.val() || {};
+      render();
+    }, erro);
+  }
+
+  db.ref("equipes").on("value", function(s){
+    equipes = s.val() || {};
+    render();
+  }, erro);
+
+  function erro(){
+    grid.innerHTML = '<div class="vazio">Sem conexao com o banco. Verifique a internet e as regras do Firebase.</div>';
+  }
+
+  atualizarData();
+
+  function render(){
+    var hoje = hojeStr(dtFiltro);
+    var dia  = diaSemanaNum(dtFiltro);
+    var agora = horaAgora();
+    var html = "";
+    var deveSair = 0, jaSaiu = 0;
+
+    var lista = [];
+    for(var uid in equipes){
+      var t = equipes[uid];
+      var agendado = t.dias ? !!t.dias[dia] : true;
+      var p = passagens[uid];
+      var saido = !!(p && p.horaPassagem);
+      if(agendado) deveSair++;
+      if(saido) jaSaiu++;
+      lista.push({uid:uid, t:t, agendado:agendado, p:p, saido:saido});
+    }
+
+    lista.sort(function(a,b){
+      if(a.agendado && !b.agendado) return -1;
+      if(!a.agendado && b.agendado) return 1;
+      return (a.t.horaPrevista||"99:99").localeCompare(b.t.horaPrevista||"99:99");
+    });
+
+    for(var i=0;i<lista.length;i++){
+      var e = lista[i];
+      html += cardHtml(e.uid, e.t, e.p, e.saido, e.agendado, hoje, agora);
+    }
+
+    if(!lista.length){
+      html = '<div class="vazio">Nenhuma equipe cadastrada ainda. <a href="cadastro.html" style="color:#f5c518">Cadastrar agora</a>.</div>';
+    }
+
+    grid.innerHTML = html;
+    nDeve.textContent = deveSair;
+    nSaiu.textContent = jaSaiu;
+    nPend.textContent = Math.max(0, deveSair - jaSaiu);
+    bind();
+  }
+
+  function cardHtml(uid, t, pass, saido, agendado, hoje, agora){
+    var nome = t.nome || "SEM NOME";
+    var placa = t.placa || "-";
+    var modelo = t.modelo || "";
+    var resp = t.responsavel || "";
+    var prev = t.horaPrevista || "--:--";
+
+    var cls = "card";
+    if(agendado && !saido){
+      cls += (prev !== "--:--" && prev <= agora) ? " atrasada" : " pendente";
+    } else if(agendado && saido){
+      cls += " passou";
+    } else {
+      cls += " folga";
+    }
+
+    var h = '<article class="'+cls+'">';
+    h += '<div class="nome">'+esc(nome)+'</div>';
+    h += '<div class="placa-tag">'+esc(placa)+'</div>';
+    if(modelo) h += '<div class="mtd">'+esc(modelo)+'</div>';
+    if(resp) h += '<div class="resp">'+esc(resp)+'</div>';
+
+    if(agendado){
+      if(saido && pass){
+        h += '<div class="hora"><span class="tm">'+esc(pass.horaPassagem)+'</span><small>passou &middot; prevista '+esc(prev)+'</small></div>';
+        var delta = diffMins(prev, pass.horaPassagem);
+        if(delta !== null){
+          var dtxt = delta === 0 ? "no horario" : (delta > 0 ? "+"+delta+" min atraso" : Math.abs(delta)+" min antes");
+          var dcls = Math.abs(delta) <= 5 ? "dentrou" : "fora";
+          h += '<span class="delta '+dcls+'">'+dtxt+'</span>';
+        }
+      } else {
+        h += '<div class="hora"><span class="tm">'+esc(prev)+'</span><small>'+((prev !== "--:--" && prev <= agora) ? "hora vencida" : "saida prevista")+'</small></div>';
+      }
+    } else {
+      h += '<div class="resp">sem saida prevista</div>';
+    }
+
+    h += '<div class="acoes">';
+    if(agendado && !saido){
+      h += '<button class="btn btn-amarelo" data-act="registrar" data-uid="'+uid+'" data-prev="'+esc(prev)+'" data-hoje="'+hoje+'">Marcar saida</button>';
+    }
+    if(saido){
+      h += '<button class="btn btn-cinza" data-act="desfazer" data-uid="'+uid+'" data-hoje="'+hoje+'">Desfazer</button>';
+    }
+    h += '<button class="btn btn-cinza" data-act="qr" data-uid="'+uid+'">QR</button>';
+    h += '</div></article>';
+    return h;
+  }
+
+  function bind(){
+    grid.querySelectorAll("[data-act]").forEach(function(el){
+      el.onclick = function(){
+        var uid = this.getAttribute("data-uid");
+        var act = this.getAttribute("data-act");
+        if(act === "registrar"){
+          db.ref("passagens/"+this.getAttribute("data-hoje")+"/"+uid).set({
+            horaPrevista: this.getAttribute("data-prev") || "",
+            horaPassagem: horaAgora(),
+            ts: Date.now()
+          });
+        }
+        if(act === "desfazer"){
+          db.ref("passagens/"+this.getAttribute("data-hoje")+"/"+uid).remove();
+        }
+        if(act === "qr"){
+          window.location.href = "cadastro.html#qr="+uid;
+        }
+      };
+    });
+  }
+
+  function esc(s){
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+})();
+</script>
+</body>
+</html>

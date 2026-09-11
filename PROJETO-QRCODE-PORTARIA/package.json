@@ -1,0 +1,9 @@
+{
+  "name": "portaria-equipes",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de controle de portaria com QR Code para equipes",
+  "scripts": {
+    "start": "npx serve . -p 3000 -s"
+  }
+}
