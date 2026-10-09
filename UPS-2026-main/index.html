@@ -1,0 +1,1614 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Sistema UPS - Classificação de Equipes</title>
+  <meta name="description" content="Classificação de equipes e acompanhamento de serviços em tempo real, com funcionamento offline.">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="UPS">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" media="print" onload="this.media='all'">
+  <script>
+    // Aplica o tema antes de pintar a página (evita "piscar" claro → escuro)
+    (function() {
+      var t = null;
+      try { t = localStorage.getItem('ups_theme'); } catch (e) {}
+      // Padrão: tema claro (o escuro só se o usuário escolher)
+      if (t !== 'light' && t !== 'dark') t = 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --primary: #2563eb; --primary-light: #3b82f6; --primary-dark: #1d4ed8; --primary-bg: #eff6ff; --primary-ring: rgba(37,99,235,0.16);
+      --secondary: #64748b; --bg: #f3f5f9; --card: #ffffff; --surface-2: #f8fafc; --input-bg: #ffffff;
+      --text: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+      --border: #e2e8f0; --border-light: #eef2f6;
+      --success: #16a34a; --success-bg: #f0fdf4; --danger: #dc2626; --danger-bg: #fef2f2;
+      --warning: #d97706; --warning-bg: #fffbeb; --info: #2563eb;
+      --money: #059669; --money-bg: #ecfdf5;
+      --shadow-sm: 0 1px 2px rgba(15,23,42,0.05);
+      --shadow: 0 1px 3px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04);
+      --shadow-md: 0 4px 10px -2px rgba(15,23,42,0.08), 0 2px 4px -2px rgba(15,23,42,0.05);
+      --shadow-lg: 0 12px 28px -6px rgba(15,23,42,0.16), 0 4px 8px -4px rgba(15,23,42,0.06);
+      --radius-sm: 8px; --radius: 12px; --radius-lg: 16px; --radius-xl: 20px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      --transition: 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+      --overlay: rgba(15,23,42,0.55);
+      color-scheme: light;
+    }
+    :root[data-theme="dark"] {
+      --primary: #3b82f6; --primary-light: #60a5fa; --primary-dark: #2563eb; --primary-bg: rgba(59,130,246,0.14); --primary-ring: rgba(96,165,250,0.25);
+      --secondary: #94a3b8; --bg: #0b1120; --card: #111a2d; --surface-2: #0f1729; --input-bg: #0d1526;
+      --text: #e5e9f0; --text-secondary: #a3b0c2; --text-muted: #66758c;
+      --border: #22304a; --border-light: #1a2540;
+      --success: #22c55e; --success-bg: rgba(34,197,94,0.12); --danger: #f87171; --danger-bg: rgba(248,113,113,0.12);
+      --warning: #fbbf24; --warning-bg: rgba(251,191,36,0.12); --info: #60a5fa;
+      --money: #34d399; --money-bg: rgba(52,211,153,0.12);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow: 0 1px 3px rgba(0,0,0,0.35);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.35);
+      --shadow-lg: 0 14px 32px rgba(0,0,0,0.5);
+      --overlay: rgba(2,6,23,0.7);
+      color-scheme: dark;
+    }
+    html { height: 100%; -webkit-text-size-adjust: 100%; }
+    body {
+      min-height: 100%; font-family: var(--font); background: var(--bg); color: var(--text);
+      font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24; font-size: 20px; vertical-align: middle; line-height: 1; }
+    button { font-family: var(--font); }
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+    /* ===== Loading / Toast ===== */
+    #loadingOverlay { position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 80%, transparent); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.3s, visibility 0.3s; }
+    #loadingOverlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    .loader { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .loader-spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    .loader-text { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #toastContainer { position: fixed; top: 16px; right: 16px; z-index: 10000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; max-width: 380px; }
+    .toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: var(--radius); background: var(--card); color: var(--text); box-shadow: var(--shadow-lg); border: 1px solid var(--border); border-left: 4px solid var(--primary); animation: toastIn 0.3s ease; font-size: 13px; font-weight: 500; }
+    .toast.removing { animation: toastOut 0.25s ease forwards; }
+    .toast .material-symbols-outlined { font-size: 20px; flex-shrink: 0; }
+    .toast-success { border-left-color: var(--success); } .toast-success .material-symbols-outlined { color: var(--success); }
+    .toast-error { border-left-color: var(--danger); } .toast-error .material-symbols-outlined { color: var(--danger); }
+    .toast-warning { border-left-color: var(--warning); } .toast-warning .material-symbols-outlined { color: var(--warning); }
+    .toast-info { border-left-color: var(--info); } .toast-info .material-symbols-outlined { color: var(--info); }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(-8px) scale(0.97); } to { opacity: 1; transform: none; } }
+    @keyframes toastOut { to { opacity: 0; transform: translateY(-8px) scale(0.97); } }
+
+    /* ===== Layout ===== */
+    .view { display: none; padding: 16px 20px 80px; max-width: 1320px; margin: 0 auto; animation: fadeIn 0.25s ease; }
+    .view.active { display: block; }
+    #teamView { max-width: 720px; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    /* ===== Buttons ===== */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; min-height: 36px; border: 1px solid transparent; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; transition: background var(--transition), box-shadow var(--transition), color var(--transition), border-color var(--transition), transform 0.1s; user-select: none; white-space: nowrap; color: var(--text); background: transparent; }
+    .btn .material-symbols-outlined { font-size: 18px; }
+    .btn:active { transform: scale(0.97); } .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-primary { background: var(--primary); color: #fff; } .btn-primary:hover { background: var(--primary-dark); box-shadow: var(--shadow-md); }
+    .btn-danger { background: var(--danger-bg); color: var(--danger); } .btn-danger:hover { background: var(--danger); color: #fff; }
+    .btn-success { background: var(--success); color: #fff; } .btn-success:hover { filter: brightness(0.95); box-shadow: var(--shadow-md); }
+    .btn-money { background: var(--money); color: #fff; } .btn-money:hover { filter: brightness(0.95); box-shadow: var(--shadow-md); }
+    .btn-outline { background: var(--card); color: var(--text); border-color: var(--border); } .btn-outline:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-bg); }
+    .btn-ghost { background: transparent; color: var(--text-secondary); } .btn-ghost:hover { background: var(--border-light); color: var(--text); }
+    .btn-sm { padding: 6px 11px; min-height: 32px; font-size: 12px; } .btn-xs { padding: 3px 8px; min-height: 26px; font-size: 11px; }
+    .btn-block { width: 100%; } .btn-lg { min-height: 48px; font-size: 15px; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text-secondary); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all var(--transition); flex-shrink: 0; }
+    .icon-btn:hover { color: var(--primary); border-color: var(--primary); background: var(--primary-bg); }
+    .icon-btn .material-symbols-outlined { font-size: 19px; }
+
+    /* ===== Cards / Forms ===== */
+    .card { background: var(--card); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); border: 1px solid var(--border-light); margin-bottom: 14px; }
+    .card-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: var(--text); }
+    .card-title .material-symbols-outlined { color: var(--primary); font-size: 20px; }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .card-head .card-title { margin-bottom: 0; }
+    .card-subtitle { font-size: 12.5px; color: var(--text-secondary); margin-top: -6px; margin-bottom: 14px; }
+    .section-label { margin: 18px 0 8px; font-size: 11.5px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .form-group { margin-bottom: 14px; }
+    .form-group > label, .field-label { display: block; font-size: 11.5px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.4px; }
+    .form-row { display: flex; gap: 12px; } .form-row .form-group { flex: 1; min-width: 0; }
+    input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; font-family: var(--font); transition: border-color var(--transition), box-shadow var(--transition); background: var(--input-bg); color: var(--text); min-height: 40px; }
+    input[type="checkbox"], input[type="radio"] { width: auto; min-height: 0; accent-color: var(--primary); }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
+    input::placeholder { color: var(--text-muted); } input[type="color"] { height: 40px; padding: 4px; cursor: pointer; }
+    input[readonly] { background: var(--surface-2); color: var(--text-secondary); cursor: default; }
+    select { cursor: pointer; }
+    .msg { display: none; padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 13px; font-weight: 500; }
+    .msg.error { display: flex; align-items: center; gap: 8px; background: var(--danger-bg); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); }
+    .msg.success { display: flex; align-items: center; gap: 8px; background: var(--success-bg); color: var(--success); border: 1px solid color-mix(in srgb, var(--success) 25%, transparent); }
+    .msg.warning { display: flex; align-items: center; gap: 8px; background: var(--warning-bg); color: var(--warning); border: 1px solid color-mix(in srgb, var(--warning) 25%, transparent); }
+    .info-box { font-size: 12.5px; color: var(--text-secondary); padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); display: flex; align-items: center; gap: 8px; min-height: 42px; flex: 1; }
+
+    .badge { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; font-size: 20px; font-weight: 800; color: #fff; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+    .badge-sm { width: 30px; height: 30px; font-size: 14px; } .badge-lg { width: 56px; height: 56px; font-size: 26px; }
+    .badge-xs { width: 24px; height: 24px; font-size: 11px; box-shadow: none; }
+
+    /* ===== Login ===== */
+    #loginView { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 20px; background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #60a5fa 100%); position: relative; }
+    #loginView:not(.active) { display: none; }
+    #loginView::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(ellipse at 20% 50%, rgba(255,255,255,0.10) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(255,255,255,0.08) 0%, transparent 50%); }
+    .login-card { width: 100%; max-width: 380px; padding: 32px 28px 26px; position: relative; background: var(--card); border-radius: var(--radius-xl); box-shadow: 0 24px 64px rgba(2,6,23,0.3); animation: loginIn 0.5s ease; }
+    @keyframes loginIn { from { opacity: 0; transform: translateY(20px) scale(0.97); } to { opacity: 1; transform: none; } }
+    .login-theme { position: absolute; top: 14px; right: 14px; }
+    .login-logo { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, var(--primary), var(--primary-light)); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; box-shadow: 0 6px 16px rgba(37,99,235,0.35); }
+    .login-logo .material-symbols-outlined { font-size: 28px; color: #fff; }
+    .login-header { text-align: center; margin-bottom: 24px; }
+    .login-header h1 { font-size: 20px; font-weight: 800; color: var(--text); letter-spacing: -0.2px; }
+    .login-header p { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
+    .login-input { padding: 12px 42px 12px 42px !important; min-height: 46px; }
+    .login-input-wrapper { position: relative; }
+    .login-input-wrapper > .material-symbols-outlined { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 19px; pointer-events: none; }
+    .pass-toggle { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+    .pass-toggle:hover { color: var(--text); background: var(--border-light); }
+    .check-row { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
+    .login-footer { text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 18px; }
+
+    /* ===== Topbar ===== */
+    .topbar { display: flex; align-items: center; justify-content: space-between; background: var(--card); padding: 10px 14px; border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--border-light); margin-bottom: 12px; gap: 12px; }
+    .topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .topbar-avatar { width: 38px; height: 38px; border-radius: 11px; background: linear-gradient(135deg, var(--primary), var(--primary-light)); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .topbar-avatar .material-symbols-outlined { color: #fff; font-size: 20px; }
+    .topbar-titles { min-width: 0; }
+    .topbar-titles h2 { font-size: 15px; font-weight: 800; letter-spacing: -0.1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topbar-info { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topbar-info .material-symbols-outlined { font-size: 14px; }
+    .topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+    /* ===== Tabs ===== */
+    .nav-tabs { display: flex; gap: 4px; background: var(--card); padding: 4px; border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--border-light); margin-bottom: 12px; overflow-x: auto; scrollbar-width: none; position: sticky; top: 8px; z-index: 600; scroll-behavior: smooth; }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tab { flex: 1 0 auto; padding: 8px 12px; text-align: center; border: none; background: transparent; border-radius: var(--radius-sm); font-size: 12.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer; transition: all var(--transition); white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; }
+    .nav-tab:hover { background: var(--border-light); color: var(--text); }
+    .nav-tab.active { background: var(--primary); color: #fff; box-shadow: 0 2px 8px rgba(37,99,235,0.3); }
+    .nav-tab .material-symbols-outlined { font-size: 18px; }
+    .tab-content { display: none; animation: fadeIn 0.25s ease; }
+    .tab-content.active { display: block; }
+
+    /* ===== Toolbar: período + filtros ===== */
+    .toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; background: var(--card); padding: 10px 12px; border-radius: var(--radius); box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); margin-bottom: 12px; }
+    .toolbar-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .toolbar-label { font-size: 11.5px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px; }
+    .toolbar-label .material-symbols-outlined { font-size: 17px; color: var(--primary); }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip { border: 1px solid var(--border); background: var(--card); color: var(--text-secondary); padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all var(--transition); white-space: nowrap; min-height: 30px; display: inline-flex; align-items: center; gap: 5px; }
+    .chip:hover { border-color: var(--primary); color: var(--primary); }
+    .chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .chip .chip-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+    .chip .chip-count { font-weight: 800; color: var(--text); }
+    .chip.active .chip-count { color: #fff; }
+    .date-range { display: flex; align-items: center; gap: 6px; }
+    .date-range input { width: 145px; min-height: 34px; padding: 5px 9px; font-size: 13px; }
+    .date-range span { color: var(--text-muted); font-size: 12px; }
+    .is-supervisor .preset-wide { display: none; }
+
+    .filter-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .filter-main { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; }
+    .search-box { position: relative; flex: 1; min-width: 0; display: block; }
+    .search-box .material-symbols-outlined { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 18px; color: var(--text-muted); pointer-events: none; }
+    .search-box input { padding: 7px 10px 7px 34px; min-height: 36px; font-size: 13px; }
+    .filter-fields { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .filter-fields select { width: auto; min-width: 140px; max-width: 220px; min-height: 36px; padding: 6px 10px; font-size: 13px; }
+    .filter-fields select.is-set { border-color: var(--primary); background: var(--primary-bg); color: var(--primary); font-weight: 600; }
+    .filter-toggle { display: none; }
+    .filter-count { display: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--primary); color: #fff; font-size: 10.5px; font-weight: 700; align-items: center; justify-content: center; }
+    .filter-count.show { display: inline-flex; }
+    .result-info { font-size: 12px; color: var(--text-muted); margin: -4px 0 10px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .result-info strong { color: var(--text-secondary); }
+    .link-btn { background: none; border: none; color: var(--primary); font-weight: 600; font-size: 12px; cursor: pointer; padding: 0; }
+    .link-btn:hover { text-decoration: underline; }
+    .segmented-sm { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 2px; gap: 2px; }
+    .segmented-sm button { border: none; background: transparent; color: var(--text-secondary); padding: 4px 9px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; min-height: 30px; }
+    .segmented-sm button.active { background: var(--card); color: var(--primary); box-shadow: var(--shadow-sm); }
+    .segmented-sm .material-symbols-outlined { font-size: 17px; }
+
+    /* ===== KPIs ===== */
+    .stats-overview { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .stat-box { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); min-width: 0; }
+    .stat-box > div:last-child { min-width: 0; }
+    .stat-box .stat-box-value { font-size: 18px; font-weight: 800; line-height: 1.25; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -0.2px; }
+    .stat-box .stat-box-value.wrap { white-space: normal; font-size: 13px; line-height: 1.3; }
+    .stat-box .stat-box-label { font-size: 10.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
+    .stat-box .stat-box-sub { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stat-box-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .stat-box-icon .material-symbols-outlined { font-size: 19px; color: #fff; }
+    .stat-box-icon.teams { background: linear-gradient(135deg,#6366f1,#8b5cf6); }
+    .stat-box-icon.online { background: linear-gradient(135deg,#22c55e,#16a34a); }
+    .stat-box-icon.ups { background: linear-gradient(135deg,#3b82f6,#2563eb); }
+    .stat-box-icon.money { background: linear-gradient(135deg,#10b981,#047857); }
+    .stat-box-icon.services { background: linear-gradient(135deg,#f59e0b,#d97706); }
+    .stat-box-icon.grade { background: linear-gradient(135deg,#ec4899,#db2777); }
+    .stat-box-icon.goal { background: linear-gradient(135deg,#14b8a6,#0d9488); }
+    .stat-box-icon.avg { background: linear-gradient(135deg,#64748b,#475569); }
+
+    .progress { width: 100%; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .progress > span { display: block; height: 100%; border-radius: inherit; transition: width 0.6s ease; }
+    .progress-lg { height: 8px; }
+    .progress-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; font-size: 10.5px; color: var(--text-muted); gap: 6px; }
+    .progress-meta strong { font-weight: 700; }
+
+    /* ===== Ranking ===== */
+    .ranking-list { display: flex; flex-direction: column; gap: 8px; }
+    .ranking-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); cursor: pointer; transition: box-shadow var(--transition), border-color var(--transition), transform var(--transition); position: relative; overflow: hidden; }
+    .ranking-item:hover { box-shadow: var(--shadow-md); border-color: var(--border); }
+    .ranking-pos { font-size: 15px; min-width: 30px; text-align: center; font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .ranking-info { flex: 1; min-width: 0; }
+    .ranking-name { font-weight: 700; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ranking-name small { font-size: 11.5px; color: var(--text-muted); font-weight: 500; }
+    .ranking-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; align-items: center; }
+    .ranking-status { font-size: 11px; }
+    .ranking-extra { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 4px 14px; margin-top: 6px; }
+    .ranking-stats { text-align: right; flex-shrink: 0; min-width: 96px; }
+    .ranking-ups { font-size: 15px; font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; }
+    .ranking-money { font-size: 12px; color: var(--money); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .ranking-count, .ranking-grade { font-size: 11px; color: var(--text-muted); }
+    .ranking-bar { position: absolute; bottom: 0; left: 0; height: 3px; width: 100%; background: var(--border-light); }
+    .ranking-bar-fill { height: 100%; border-radius: 0 2px 0 0; transition: width 0.6s ease; }
+    .ranking-chevron { color: var(--text-muted); transition: transform var(--transition); }
+    .ranking-item.open .ranking-chevron { transform: rotate(180deg); }
+    .acc-card { padding: 0; overflow: hidden; margin-bottom: 8px; }
+    .acc-card > .ranking-item { border: none; border-radius: 0; box-shadow: none; }
+    .acc-body { display: none; padding: 0 14px 14px; border-top: 1px solid var(--border-light); }
+    .acc-body.open { display: block; padding-top: 12px; }
+
+    .tag { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .tag-active { background: var(--success-bg); color: var(--success); }
+    .tag-inactive { background: var(--danger-bg); color: var(--danger); }
+    .tag-neutral { background: var(--border-light); color: var(--text-secondary); }
+    .tag-primary { background: var(--primary-bg); color: var(--primary); }
+    .tag-warning { background: var(--warning-bg); color: var(--warning); }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+    .status-online { color: var(--success); } .status-online .status-dot { background: var(--success); box-shadow: 0 0 0 3px var(--success-bg); }
+    .status-offline { color: var(--text-muted); } .status-offline .status-dot { background: var(--text-muted); }
+    .status-label { font-size: 11.5px; font-weight: 500; }
+
+    /* ===== Tables ===== */
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border-light); border-radius: var(--radius-sm); }
+    .table-wrap::-webkit-scrollbar { height: 6px; }
+    .table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+    table thead th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.4px; background: var(--surface-2); border-bottom: 1px solid var(--border); white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+    table thead th.sortable { cursor: pointer; user-select: none; }
+    table thead th.sortable:hover { color: var(--primary); }
+    table thead th.sorted { color: var(--primary); }
+    table tbody tr { transition: background var(--transition); }
+    table tbody tr:hover { background: var(--surface-2); }
+    table tbody tr.clickable { cursor: pointer; }
+    table tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
+    table tbody tr:last-child td { border-bottom: none; }
+    th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    td.ups { font-weight: 700; color: var(--primary); } td.money { font-weight: 600; color: var(--money); }
+    td.muted { color: var(--text-muted); }
+    table .actions { display: flex; gap: 6px; justify-content: flex-end; }
+    .show-more { display: flex; justify-content: center; margin-top: 10px; }
+
+    /* ===== Team view ===== */
+    .hero { display: flex; gap: 16px; padding: 18px; background: linear-gradient(135deg, var(--primary-dark), var(--primary-light)); color: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); margin-bottom: 14px; align-items: center; }
+    .hero .badge { border: 3px solid rgba(255,255,255,0.85); }
+    .hero .classe-label { color: rgba(255,255,255,0.8); }
+    .hero .info { flex: 1; min-width: 0; }
+    .hero .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; opacity: 0.85; }
+    .hero .total { font-size: 32px; font-weight: 800; line-height: 1.1; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+    .hero .total small { font-size: 14px; font-weight: 600; opacity: 0.85; }
+    .hero .hero-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline; margin-top: 2px; }
+    .hero .total-money { font-size: 15px; font-weight: 700; }
+    .hero .meta { font-size: 12px; opacity: 0.85; }
+    .hero .hero-progress { margin-top: 10px; }
+    .hero .progress { background: rgba(255,255,255,0.25); }
+    .hero .progress-meta { color: rgba(255,255,255,0.85); }
+    .classe-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+    .badge-wrap { display: flex; flex-direction: column; align-items: center; }
+
+    .segmented { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .segmented button { border: 1px solid var(--border); background: var(--card); color: var(--text-secondary); border-radius: var(--radius-sm); padding: 10px 6px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: all var(--transition); min-height: 58px; }
+    .segmented button .material-symbols-outlined { font-size: 21px; }
+    .segmented button:hover { border-color: var(--primary); color: var(--primary); }
+    .segmented button.active { border-color: var(--primary); background: var(--primary-bg); color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
+
+    .activities-selection { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px; background: var(--surface-2); display: flex; flex-direction: column; gap: 4px; }
+    .activity-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; }
+    .activity-item label { cursor: pointer; font-size: 13px; }
+    .activity-option { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--card); border: 1px solid var(--border-light); cursor: pointer; transition: all var(--transition); }
+    .activity-option:hover { border-color: var(--primary); }
+    .activity-option.selected { border-color: var(--primary); background: var(--primary-bg); box-shadow: 0 0 0 1px var(--primary) inset; }
+    .activity-option input { flex-shrink: 0; width: 18px; height: 18px; }
+    .activity-option .act-name { flex: 1; font-size: 13.5px; font-weight: 600; min-width: 0; }
+    .activity-option .act-values { font-size: 11.5px; color: var(--text-muted); text-align: right; white-space: nowrap; }
+    .activity-option .act-values b { color: var(--primary); }
+    .dynamic-quantities { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .dynamic-quantities:empty { display: none; }
+    .qty-input-row { display: flex; align-items: center; gap: 10px; background: var(--surface-2); padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-light); }
+    .qty-input-row label { flex: 1; font-size: 13px; font-weight: 600; margin: 0; }
+    .stepper { display: flex; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--input-bg); }
+    .stepper button { width: 40px; height: 40px; border: none; background: transparent; color: var(--primary); font-size: 20px; font-weight: 700; cursor: pointer; }
+    .stepper button:hover { background: var(--primary-bg); }
+    .stepper input { width: 56px; border: none; border-radius: 0; text-align: center; padding: 0; font-weight: 700; min-height: 40px; }
+    .stepper input:focus { box-shadow: none; }
+    .calc-display { background: var(--primary-bg); border-radius: var(--radius-sm); padding: 12px; margin: 12px 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .calc-display .calc-item { text-align: center; min-width: 0; }
+    .calc-display .calc-item .calc-value { font-size: 17px; font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .calc-display .calc-item .calc-label { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
+    .calc-display .calc-item .calc-value.money { color: var(--money); }
+
+    .service-list { max-height: 460px; overflow-y: auto; }
+    .service-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: var(--radius-sm); transition: background var(--transition); }
+    .service-item:hover { background: var(--surface-2); }
+    .service-item + .service-item { border-top: 1px solid var(--border-light); }
+    .service-item .srv-icon { width: 34px; height: 34px; border-radius: 9px; background: var(--primary-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .service-item .srv-icon .material-symbols-outlined { color: var(--primary); font-size: 17px; }
+    .service-item .srv-body { flex: 1; min-width: 0; }
+    .service-item .srv-body .name { font-weight: 600; font-size: 13px; display: block; }
+    .service-item .srv-body .detail { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; display: block; }
+    .service-item .srv-values { text-align: right; flex-shrink: 0; }
+    .service-item .srv-values .ups { font-weight: 800; color: var(--primary); font-size: 13px; display: block; }
+    .service-item .srv-values .money { font-size: 11.5px; color: var(--money); font-weight: 600; display: block; }
+    .service-item .del-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; border-radius: 8px; transition: all var(--transition); opacity: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .service-item:hover .del-btn { opacity: 1; }
+    .service-item .del-btn:hover { background: var(--danger-bg); color: var(--danger); }
+    @media (hover: none) { .service-item .del-btn { opacity: 1; } }
+    .grade-display { font-size: 11px; color: var(--text-secondary); background: var(--border-light); padding: 1px 7px; border-radius: 4px; font-weight: 600; display: inline-block; margin-bottom: 2px; }
+
+    /* ===== Catálogo / regras ===== */
+    .rules-grid { display: grid; gap: 8px; margin-bottom: 12px; }
+    .rule-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface-2); border-radius: var(--radius); border: 1px solid var(--border-light); margin-bottom: 8px; }
+    .rule-card .fields { flex: 1; display: flex; gap: 12px; flex-wrap: wrap; }
+    .rule-card .fields .form-group { flex: 1; min-width: 90px; margin-bottom: 0; }
+    .rule-card .fields .form-group label { font-size: 10px; margin-bottom: 3px; }
+    .rule-card .fields .form-group input { padding: 7px 10px; font-size: 13px; min-height: 36px; }
+    .service-card-grid { display: grid; gap: 8px; }
+    .service-card-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--card); border-radius: var(--radius); border: 1px solid var(--border-light); box-shadow: var(--shadow-sm); transition: box-shadow var(--transition); }
+    .service-card-item:hover { box-shadow: var(--shadow); }
+    .service-card-item .sc-icon { width: 36px; height: 36px; border-radius: 9px; background: var(--primary-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .service-card-item .sc-icon .material-symbols-outlined { color: var(--primary); font-size: 18px; }
+    .service-card-item .sc-body { flex: 1; min-width: 0; }
+    .service-card-item .sc-body .sc-name { font-weight: 700; font-size: 13px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .service-card-item .sc-body .sc-detail { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .service-card-item .sc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .day-picker { display: flex; gap: 6px; flex-wrap: wrap; }
+    .day-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); transition: all var(--transition); color: var(--text-secondary); background: var(--card); user-select: none; }
+    .day-chip:hover { border-color: var(--primary); }
+    .day-chip:has(input:checked) { border-color: var(--primary); background: var(--primary-bg); color: var(--primary); }
+    .grade-input { width: 80px !important; }
+
+    /* ===== Charts ===== */
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+    .chart-grid .card { margin-bottom: 0; }
+    .chart-bars { display: flex; flex-direction: column; gap: 8px; }
+    .chart-row { display: grid; grid-template-columns: minmax(90px, 34%) 1fr auto; align-items: center; gap: 10px; }
+    .chart-label { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+    .chart-track { height: 14px; background: transparent; position: relative; }
+    .chart-fill { height: 100%; background: var(--primary); border-radius: 0 4px 4px 0; transition: width 0.8s ease; min-width: 3px; }
+    .chart-fill.money { background: var(--money); }
+    .chart-row:hover .chart-fill { filter: brightness(1.1); }
+    .chart-value { min-width: 48px; font-size: 12px; font-weight: 700; color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .chart-value small { font-weight: 500; color: var(--text-muted); }
+    .col-chart-wrap { overflow-x: auto; padding-bottom: 4px; }
+    .col-chart { display: flex; align-items: flex-end; gap: 2px; height: 190px; min-width: 100%; border-bottom: 1px solid var(--border); position: relative; padding-top: 18px; padding-right: 40px; }
+    .col-chart .col { flex: 1 0 14px; max-width: 46px; height: 100%; display: flex; align-items: flex-end; justify-content: center; position: relative; cursor: default; }
+    .col-chart .col .bar { width: 72%; min-height: 2px; background: var(--primary); border-radius: 4px 4px 0 0; transition: height 0.6s ease, filter var(--transition); }
+    .col-chart .col:hover .bar { filter: brightness(1.15); }
+    .col-chart .col.zero .bar { background: var(--border); }
+    .col-chart .col .tip { position: absolute; bottom: calc(100% - 14px); left: 50%; transform: translate(-50%, -6px); background: var(--text); color: var(--card); font-size: 11px; padding: 6px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.12s; z-index: 5; line-height: 1.35; box-shadow: var(--shadow-md); }
+    .col-chart .col:hover .tip { opacity: 1; }
+    .col-chart .gridline { position: absolute; left: 0; right: 40px; border-top: 1px dashed var(--border-light); pointer-events: none; }
+    .col-chart .gridline span { position: absolute; right: -40px; top: -7px; width: 36px; text-align: right; font-size: 10px; color: var(--text-muted); }
+    .col-axis { display: flex; gap: 2px; min-width: 100%; margin-top: 4px; padding-right: 40px; }
+    .col-axis span { flex: 1 0 14px; max-width: 46px; font-size: 10px; color: var(--text-muted); text-align: center; white-space: nowrap; overflow: hidden; }
+
+    /* ===== Kanban ===== */
+    .kanban-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+    .kanban-column { background: var(--surface-2); border-radius: var(--radius); border: 1px solid var(--border-light); overflow: hidden; max-height: 70vh; display: flex; flex-direction: column; }
+    .kanban-column-header { padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid; flex-shrink: 0; background: var(--card); }
+    .kanban-column-header .col-label { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+    .kanban-column-header .col-count { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 20px; background: var(--border-light); color: var(--text-secondary); }
+    .kanban-column-body { padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; flex: 1; }
+    .kanban-card { background: var(--card); border-radius: var(--radius-sm); padding: 9px 11px; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); transition: box-shadow var(--transition); }
+    .kanban-card:hover { box-shadow: var(--shadow-md); }
+    .kanban-card .card-header { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .kanban-card .card-name { font-weight: 700; font-size: 12.5px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+    .kanban-card .card-avg { font-size: 11.5px; font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .kanban-card .card-toggle { background: none; border: none; cursor: pointer; padding: 2px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); flex-shrink: 0; }
+    .kanban-card .card-toggle .material-symbols-outlined { font-size: 18px; transition: transform 0.2s ease; }
+    .kanban-card.collapsed .card-toggle .material-symbols-outlined { transform: rotate(-90deg); }
+    .kanban-card .card-info { font-size: 11px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+    .kanban-card .card-info span { display: flex; align-items: center; gap: 4px; }
+    .kanban-card .card-info .material-symbols-outlined { font-size: 13px; }
+    .kanban-card.collapsed .card-info { display: none; }
+    .kanban-empty { text-align: center; padding: 16px 8px; color: var(--text-muted); font-size: 12px; }
+    .kanban-empty .material-symbols-outlined { font-size: 26px; display: block; margin-bottom: 4px; opacity: 0.5; }
+    .kanban-section-title { font-size: 13.5px; font-weight: 700; margin: 18px 0 10px; display: flex; align-items: center; gap: 6px; color: var(--text); }
+    .kanban-section-title .material-symbols-outlined { font-size: 19px; color: var(--primary); }
+
+    /* ===== Map ===== */
+    .map-wrap { position: relative; border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--border-light); }
+    .map-container { height: calc(100vh - 290px); min-height: 360px; width: 100%; background: var(--surface-2); }
+    .leaflet-container { height: 100%; width: 100%; font-family: var(--font) !important; }
+    .leaflet-popup-content-wrapper { border-radius: var(--radius-lg) !important; box-shadow: var(--shadow-lg) !important; }
+    .leaflet-popup-content { margin: 14px 16px !important; min-width: 230px; color: #0f172a; }
+    .custom-popup .popup-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .popup-services { max-height: 180px; overflow-y: auto; font-size: 12.5px; }
+    .popup-services table { width: 100%; border-collapse: collapse; }
+    .popup-services th { text-align: left; font-size: 10.5px; color: #64748b; padding: 3px 6px; border-bottom: 1px solid #eef2f6; font-weight: 700; background: none; position: static; }
+    .popup-services td { padding: 3px 6px; border-bottom: 1px solid #f8fafc; }
+    .popup-total { font-size: 13px; font-weight: 700; text-align: center; padding: 8px 12px; margin-top: 8px; border-radius: var(--radius-sm); }
+    .custom-marker { background: transparent !important; border: none !important; box-shadow: none !important; }
+    .map-fullscreen-btn { position: absolute; top: 10px; right: 54px; z-index: 1000; background: #fff; border: none; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; color: #334155; }
+    .map-legend { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+    /* ===== Modal ===== */
+    .modal-overlay { position: fixed; inset: 0; background: var(--overlay); display: flex; align-items: center; justify-content: center; z-index: 10000; backdrop-filter: blur(4px); padding: 16px; animation: fadeIn 0.2s ease; }
+    .modal-content { background: var(--card); color: var(--text); width: 100%; max-width: 640px; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); animation: modalIn 0.28s ease; overflow: hidden; max-height: 90vh; display: flex; flex-direction: column; border: 1px solid var(--border-light); }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: none; } }
+    .modal-header { padding: 14px 18px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; gap: 10px; }
+    .modal-header h2 { font-size: 15px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .modal-header h2 .material-symbols-outlined { color: var(--primary); }
+    .modal-close-btn { width: 34px; height: 34px; border: none; background: var(--border-light); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); transition: all var(--transition); flex-shrink: 0; }
+    .modal-close-btn:hover { background: var(--danger-bg); color: var(--danger); }
+    .modal-team-hero { display: flex; align-items: center; gap: 12px; padding: 16px 18px 0; }
+    .modal-team-hero .hero-badge { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 900; color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.2); flex-shrink: 0; }
+    .modal-team-hero .hero-info { flex: 1; min-width: 0; }
+    .modal-team-hero .hero-name { font-size: 17px; font-weight: 800; color: var(--text); }
+    .modal-team-hero .hero-address { font-size: 12px; color: var(--text-muted); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+    .modal-body { padding: 16px 18px 18px; overflow-y: auto; flex: 1; }
+    .modal-footer { display: flex; gap: 8px; margin-top: 14px; }
+    .modal-footer .btn { flex: 1; }
+    .modal-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+    .stat-card { background: var(--surface-2); padding: 10px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-light); text-align: center; min-width: 0; }
+    .stat-card .stat-icon { font-size: 18px; margin-bottom: 2px; display: block; color: var(--primary); }
+    .stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 2px; }
+    .stat-value { font-size: 18px; font-weight: 800; color: var(--primary); line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stat-value.money { color: var(--money); } .stat-value.classe { font-size: 22px; }
+    .goal-box { margin-bottom: 18px; padding: 12px 14px; background: var(--money-bg); border-radius: var(--radius-sm); border: 1px solid color-mix(in srgb, var(--money) 25%, transparent); }
+    .modal-details h3 { font-size: 11.5px; font-weight: 700; margin-bottom: 8px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .modal-srv-table td.date { white-space: nowrap; font-size: 12px; color: var(--text-secondary); }
+    .modal-srv-table td.srv { font-weight: 600; }
+
+    .empty-state { text-align: center; padding: 28px 14px; color: var(--text-secondary); }
+    .empty-state .material-symbols-outlined { font-size: 36px; color: var(--text-muted); margin-bottom: 6px; display: block; }
+    .empty-state p { font-size: 13px; }
+
+    .celebration-overlay { position: fixed; inset: 0; background: var(--overlay); display: flex; align-items: center; justify-content: center; z-index: 20000; pointer-events: none; opacity: 0; transition: opacity 0.5s; }
+    .celebration-card { background: var(--card); color: var(--text); padding: 30px; border-radius: var(--radius-xl); text-align: center; transform: scale(0.5); transition: transform 0.5s; box-shadow: 0 0 50px rgba(255,215,0,0.5); max-width: 90vw; }
+    .celebration-overlay.active { opacity: 1; }
+    .celebration-overlay.active .celebration-card { transform: scale(1); }
+    .celebration-title { font-size: 34px; font-weight: 900; color: #f59e0b; margin-bottom: 12px; }
+    .celebration-details { font-size: 17px; }
+
+    /* ===== Sync / install / update ===== */
+    .sync-chip { position: fixed; bottom: calc(14px + env(safe-area-inset-bottom)); right: 14px; z-index: 9990; display: flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 20px; font-size: 11.5px; font-weight: 600; background: var(--card); color: var(--text); box-shadow: var(--shadow-lg); border: 1px solid var(--border); cursor: pointer; user-select: none; transition: all var(--transition); }
+    .sync-chip:hover { transform: translateY(-1px); }
+    .sync-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .sync-online .sync-dot { background: var(--success); }
+    .sync-offline .sync-dot { background: var(--text-muted); }
+    .sync-pending .sync-dot { background: var(--warning); animation: pulse 1.2s ease infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+    .install-banner { position: fixed; bottom: calc(58px + env(safe-area-inset-bottom)); right: 14px; z-index: 9980; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius-lg); font-size: 12px; background: var(--card); color: var(--text); box-shadow: var(--shadow-lg); border: 1px solid var(--border); max-width: 360px; animation: modalIn 0.3s ease; }
+    .install-banner-icon { width: 36px; height: 36px; border-radius: 50%; background: var(--primary-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .install-banner-icon .material-symbols-outlined { color: var(--primary); font-size: 19px; }
+    .install-banner-text { flex: 1; display: flex; flex-direction: column; }
+    .install-banner-text strong { font-size: 12.5px; }
+    .install-banner-text span { font-size: 11.5px; color: var(--text-muted); }
+    .install-help-step { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 8px; background: var(--surface-2); }
+    .install-help-step b { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+    .install-help-step span { font-size: 13px; color: var(--text); line-height: 1.5; }
+    .update-modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.85); display: none; align-items: center; justify-content: center; z-index: 30000; backdrop-filter: blur(6px); padding: 16px; }
+    .update-modal-overlay.active { display: flex; }
+    .update-modal-card { background: var(--card); color: var(--text); width: 100%; max-width: 420px; border-radius: var(--radius-lg); box-shadow: 0 25px 60px rgba(0,0,0,0.35); text-align: center; padding: 28px 24px; animation: modalIn 0.3s ease; }
+    .update-modal-icon { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 50%; background: var(--primary-bg); display: flex; align-items: center; justify-content: center; }
+    .update-modal-icon .material-symbols-outlined { font-size: 32px; color: var(--primary); }
+    .update-modal-card h2 { font-size: 18px; font-weight: 800; margin-bottom: 8px; }
+    .update-modal-card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.6; }
+    .update-modal-card .btn { width: 100%; padding: 12px; font-size: 14px; }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* ===== Responsivo ===== */
+    @media (max-width: 1024px) {
+      .view { padding: 12px 14px 80px; }
+      .hide-md { display: none !important; }
+    }
+    @media (max-width: 760px) {
+      .filter-toggle { display: inline-flex; }
+      .filter-bar .filter-fields { display: none; width: 100%; }
+      .filter-bar.open .filter-fields { display: grid; grid-template-columns: 1fr 1fr; }
+      .filter-bar.open .filter-fields select { max-width: none; width: 100%; min-width: 0; }
+      .filter-bar.open .filter-fields .btn { grid-column: 1 / -1; }
+      .chart-grid { grid-template-columns: 1fr; }
+      .toolbar { padding: 10px; }
+      .toolbar-group.period-dates { width: 100%; }
+      .date-range { width: 100%; }
+      .date-range input { flex: 1; width: auto; min-width: 0; }
+      .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; width: 100%; padding-bottom: 2px; }
+      .chips::-webkit-scrollbar { display: none; }
+    }
+    @media (max-width: 640px) {
+      body { font-size: 14px; }
+      input, select, textarea { font-size: 16px; } /* evita zoom automático no iOS */
+      .search-box input, .filter-fields select, .date-range input { font-size: 16px; }
+      .view { padding: 10px 10px 84px; }
+      .card { padding: 14px 12px; border-radius: var(--radius); }
+      .form-row { flex-direction: column; gap: 0; }
+      .rule-card { flex-direction: column; align-items: stretch; } .rule-card .fields { width: 100%; }
+      .topbar { padding: 8px 10px; gap: 8px; position: sticky; top: 0; z-index: 650; border-radius: 0 0 var(--radius) var(--radius); margin: -10px -10px 10px; }
+      .topbar-avatar { width: 34px; height: 34px; }
+      .topbar-titles h2 { font-size: 14px; }
+      .btn-label { display: none; }
+      .nav-tabs { top: 58px; }
+      .nav-tab { padding: 7px 10px; font-size: 12px; }
+      .stats-overview { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .stat-box { padding: 10px; gap: 9px; }
+      .stat-box-icon { width: 32px; height: 32px; }
+      .stat-box-icon .material-symbols-outlined { font-size: 17px; }
+      .stat-box .stat-box-value { font-size: 15px; }
+      .ranking-item { padding: 10px; gap: 8px; }
+      .ranking-pos { min-width: 22px; font-size: 13px; }
+      .ranking-stats { min-width: 78px; }
+      .ranking-ups { font-size: 13.5px; }
+      .ranking-extra { grid-template-columns: 1fr; }
+      .map-container { height: 62vh; min-height: 300px; }
+      table { font-size: 12px; }
+      table thead th, table tbody td { padding: 8px 9px; }
+      .login-card { padding: 28px 20px 22px; }
+      .calc-display { grid-template-columns: repeat(2, 1fr); }
+      .hero { padding: 14px; gap: 12px; }
+      .hero .total { font-size: 28px; }
+      .modal-overlay { padding: 0; align-items: flex-end; }
+      .modal-content { max-height: 94vh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; animation: sheetIn 0.28s ease; }
+      @keyframes sheetIn { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+      .modal-team-hero { padding: 12px 14px 0; gap: 10px; }
+      .modal-team-hero .hero-badge { width: 42px; height: 42px; font-size: 18px; }
+      .modal-team-hero .hero-name { font-size: 15px; }
+      .modal-body { padding: 12px 14px calc(16px + env(safe-area-inset-bottom)); }
+      .modal-header { padding: 12px 14px; }
+      .modal-stats-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+      .stat-value { font-size: 16px; }
+      #toastContainer { left: 10px; right: 10px; top: 10px; max-width: none; align-items: stretch; }
+      .sync-chip { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); padding: 6px 10px; font-size: 11px; }
+      .install-banner { left: 10px; right: 10px; max-width: none; bottom: calc(52px + env(safe-area-inset-bottom)); }
+      .service-card-item { flex-wrap: wrap; }
+      .kanban-column { max-height: none; }
+      .hide-sm { display: none !important; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }
+    }
+    @media print {
+      .nav-tabs, .topbar-right, .sync-chip, .install-banner, .toolbar, .filter-bar { display: none !important; }
+      body { background: #fff; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="loadingOverlay">
+  <div class="loader">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">Carregando...</div>
+  </div>
+</div>
+
+<div id="toastContainer" role="status" aria-live="polite"></div>
+
+<div id="syncChip" class="sync-chip sync-offline" onclick="window.OfflineDB &amp;&amp; OfflineDB.requestSync()" title="Status da sincronização. Clique para sincronizar agora.">
+  <span class="sync-dot" id="syncDot"></span>
+  <span id="syncText">Conectando...</span>
+</div>
+
+<div id="installBanner" class="install-banner" style="display:none;">
+  <div class="install-banner-icon"><span class="material-symbols-outlined">download</span></div>
+  <div class="install-banner-text">
+    <strong>Instale o Sistema UPS</strong>
+    <span>Use o app como um programa, mesmo sem internet.</span>
+  </div>
+  <button class="btn btn-primary btn-sm" id="installBtn" onclick="installApp()">Instalar</button>
+</div>
+
+<!-- ========== MODAL DE AJUDA PARA INSTALAR ========== -->
+<div id="installHelpModal" class="modal-overlay" style="display:none;">
+  <div class="modal-content" style="max-width:440px;">
+    <div class="modal-header">
+      <h2><span class="material-symbols-outlined">phone_iphone</span> Instalar no celular</h2>
+      <button class="modal-close-btn" onclick="closeInstallHelp()" aria-label="Fechar"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="modal-body">
+      <p id="installHelpIntro" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;line-height:1.5;"></p>
+      <div id="installHelpSteps"></div>
+      <button class="btn btn-primary btn-block" onclick="closeInstallHelp()" style="margin-top:16px;">Entendi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== MODAL DE ATUALIZAÇÃO OBRIGATÓRIA ========== -->
+<div id="updateModal" class="update-modal-overlay">
+  <div class="update-modal-card">
+    <div class="update-modal-icon"><span class="material-symbols-outlined">system_update</span></div>
+    <h2>Nova versão disponível</h2>
+    <p>Uma nova versão do Sistema UPS foi publicada (v<span id="updateVersionText">?</span>).<br>
+       Para continuar usando o app, é necessário atualizar agora.</p>
+    <button class="btn btn-primary" id="updateNowBtn" onclick="applyUpdate()">
+      <span class="material-symbols-outlined">refresh</span> Atualizar agora
+    </button>
+  </div>
+</div>
+
+<!-- ========== LOGIN ========== -->
+<div id="loginView" class="active">
+  <div class="login-card">
+    <button class="icon-btn login-theme" onclick="toggleTheme()" title="Alternar tema claro/escuro" aria-label="Alternar tema"><span class="material-symbols-outlined theme-icon">dark_mode</span></button>
+    <div class="login-logo"><span class="material-symbols-outlined">monitoring</span></div>
+    <div class="login-header">
+      <h1>Sistema UPS</h1>
+      <p>Classificação e desempenho de equipes</p>
+    </div>
+    <div id="loginMsg" class="msg"></div>
+    <div class="form-group">
+      <label for="loginUser">Usuário</label>
+      <div class="login-input-wrapper">
+        <span class="material-symbols-outlined">person</span>
+        <input type="text" class="login-input" id="loginUser" placeholder="Seu nome de usuário" autocomplete="username" autocapitalize="characters" spellcheck="false">
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="loginPass">Senha</label>
+      <div class="login-input-wrapper">
+        <span class="material-symbols-outlined">lock</span>
+        <input type="password" class="login-input" id="loginPass" placeholder="Sua senha" autocomplete="current-password">
+        <button type="button" class="pass-toggle" onclick="togglePassword('loginPass', this)" aria-label="Mostrar senha"><span class="material-symbols-outlined">visibility</span></button>
+      </div>
+    </div>
+    <label class="check-row" for="rememberMe">
+      <input type="checkbox" id="rememberMe"> Lembrar usuário e senha
+    </label>
+    <button type="button" class="btn btn-primary btn-block btn-lg" onclick="doLogin()">
+      <span class="material-symbols-outlined">login</span> Entrar
+    </button>
+    <div class="login-footer">Funciona offline · os dados sincronizam quando houver conexão</div>
+  </div>
+</div>
+
+<!-- ========== TEAM VIEW ========== -->
+<div id="teamView" class="view">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-avatar"><span class="material-symbols-outlined">group</span></div>
+      <div class="topbar-titles">
+        <h2 id="teamUserName">Equipe</h2>
+        <span class="topbar-info"><span class="material-symbols-outlined">calendar_today</span><span id="teamDate"></span> · Setor <strong id="teamSectorLabel">—</strong></span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema"><span class="material-symbols-outlined theme-icon">dark_mode</span></button>
+      <button class="icon-btn" onclick="logout()" title="Sair" aria-label="Sair"><span class="material-symbols-outlined">logout</span></button>
+    </div>
+  </div>
+  <div class="hero" id="teamSummary">
+    <div class="badge-wrap">
+      <div class="classe-label">Classe</div>
+      <div class="badge badge-lg" id="teamBadge">-</div>
+    </div>
+    <div class="info">
+      <div class="label">Produção de hoje</div>
+      <div class="hero-row">
+        <div class="total"><span id="teamTotal">0</span> <small>UPS</small></div>
+        <div class="total-money" id="teamTotalMoney">R$ 0,00</div>
+      </div>
+      <div class="meta"><span id="teamCount">0 serviços</span></div>
+      <div id="teamGoalSection" class="hero-progress" style="display:none;">
+        <div class="progress-meta"><span>Meta: <span id="teamGoalValue">R$ 0,00</span></span><strong id="teamGoalPercent">0%</strong></div>
+        <div class="progress progress-lg"><span id="teamGoalBar" style="width:0%;background:#fff;"></span></div>
+      </div>
+      <div id="teamPerdasGoals" style="display:none;"></div>
+      <div id="teamShiftSection" class="hero-progress" style="display:none;">
+        <div class="progress-meta"><span>Turno: <span id="teamShiftTimes">—</span></span><strong id="teamShiftLabel">—</strong></div>
+        <div class="progress progress-lg"><span id="teamShiftBar" style="width:0%;background:#fff;"></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="material-symbols-outlined">add_circle</span> Novo registro</div>
+    <div id="teamFormMsg" class="msg"></div>
+
+    <div class="form-group" id="teamPhaseGroup" style="display:none;">
+      <span class="field-label">Tipo de ligação</span>
+      <div class="segmented" id="teamPhaseSeg">
+        <button type="button" data-phase="mono" onclick="setTeamPhase('mono')"><span class="material-symbols-outlined">counter_1</span>MONO</button>
+        <button type="button" data-phase="bi" onclick="setTeamPhase('bi')"><span class="material-symbols-outlined">counter_2</span>BI</button>
+        <button type="button" data-phase="tri" onclick="setTeamPhase('tri')"><span class="material-symbols-outlined">counter_3</span>TRI</button>
+      </div>
+      <input type="hidden" id="teamPhase" value="">
+    </div>
+
+    <div class="form-group" id="teamTypeGroup">
+      <span class="field-label">Tipo de registro</span>
+      <div class="segmented" id="teamTypeSeg">
+        <button type="button" data-type="miscellany" class="active" onclick="setTeamEntryType('miscellany')"><span class="material-symbols-outlined">category</span>Miscelânea</button>
+        <button type="button" data-type="emergency" onclick="setTeamEntryType('emergency')"><span class="material-symbols-outlined">emergency</span>Emergência</button>
+        <button type="button" data-type="commercial" onclick="setTeamEntryType('commercial')"><span class="material-symbols-outlined">storefront</span>Comercial</button>
+      </div>
+      <input type="hidden" id="teamEntryType" value="miscellany">
+    </div>
+
+    <div class="form-group">
+      <label for="teamGrade">Número da nota (referência)</label>
+      <input type="number" id="teamGrade" placeholder="Ex: 123" step="1" max="99999999" inputmode="numeric" oninput="onTeamGradeChange()">
+    </div>
+
+    <div class="form-group">
+      <span class="field-label">Atividade</span>
+      <label class="search-box" id="teamActivitySearchWrap" style="display:none;margin-bottom:8px;">
+        <span class="material-symbols-outlined">search</span>
+        <input type="search" id="teamActivitySearch" placeholder="Buscar atividade..." oninput="filterTeamActivities()">
+      </label>
+      <div id="teamActivitiesList" class="activities-selection"></div>
+    </div>
+
+    <div id="teamDynamicQuantities" class="dynamic-quantities"></div>
+
+    <div class="calc-display" id="teamCalcDisplay" style="display:none;">
+      <div class="calc-item"><div class="calc-value" id="teamCalcUps">0</div><div class="calc-label">UPS</div></div>
+      <div class="calc-item"><div class="calc-value" id="teamCalcQty">0</div><div class="calc-label">Qtd</div></div>
+      <div class="calc-item" id="teamCalcMoneyItem"><div class="calc-value money" id="teamCalcMoney">R$ 0,00</div><div class="calc-label">Valor</div></div>
+      <div class="calc-item"><div class="calc-value" id="teamCalcGrade">0</div><div class="calc-label">Nota</div></div>
+    </div>
+
+    <button class="btn btn-success btn-block btn-lg" onclick="addTeamService()">
+      <span class="material-symbols-outlined">check_circle</span> Adicionar registro
+    </button>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="material-symbols-outlined">today</span> Registros de hoje</div>
+    <div id="teamServiceList"><div class="empty-state"><span class="material-symbols-outlined">assignment</span><p>Nenhum registro hoje</p></div></div>
+  </div>
+</div>
+
+<!-- ========== ADMIN VIEW ========== -->
+<div id="adminView" class="view">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-avatar"><span class="material-symbols-outlined">monitoring</span></div>
+      <div class="topbar-titles">
+        <h2>Acompanhamento UPS</h2>
+        <span class="topbar-info"><span class="hide-sm">Tempo real · Informação e Performance ·</span><span class="material-symbols-outlined">calendar_today</span><span id="adminDate"></span><span id="adminRoleLabel"></span></span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-money btn-sm" onclick="exportData()" title="Exportar CSV do período"><span class="material-symbols-outlined">download</span><span class="btn-label">Exportar</span></button>
+      <button class="icon-btn" onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema"><span class="material-symbols-outlined theme-icon">dark_mode</span></button>
+      <button class="icon-btn" onclick="logout()" title="Sair" aria-label="Sair"><span class="material-symbols-outlined">logout</span></button>
+    </div>
+  </div>
+  <div class="nav-tabs" id="adminTabs" role="tablist">
+    <button class="nav-tab active" data-tab="tabPainel"><span class="material-symbols-outlined">dashboard</span> Painel STC</button>
+    <button class="nav-tab" data-tab="tabPerdas"><span class="material-symbols-outlined">electric_meter</span> Perdas</button>
+    <button class="nav-tab" data-tab="tabEstatisticas"><span class="material-symbols-outlined">insights</span> Estatísticas</button>
+    <button class="nav-tab" data-tab="tabSupervisores"><span class="material-symbols-outlined">supervisor_account</span> Supervisores</button>
+    <button class="nav-tab" data-tab="tabClassificacao"><span class="material-symbols-outlined">workspace_premium</span> Classificação</button>
+    <button class="nav-tab" data-tab="tabMapa"><span class="material-symbols-outlined">map</span> Mapa</button>
+    <button class="nav-tab" data-tab="tabAuditoria"><span class="material-symbols-outlined">fact_check</span> Auditoria</button>
+    <button class="nav-tab" data-tab="tabApontamento"><span class="material-symbols-outlined">assignment_late</span> Apontamento</button>
+    <button class="nav-tab" data-tab="tabEquipes"><span class="material-symbols-outlined">groups</span> Equipes</button>
+    <button class="nav-tab" data-tab="tabUsuarios"><span class="material-symbols-outlined">manage_accounts</span> Usuários</button>
+    <button class="nav-tab" data-tab="tabServicos"><span class="material-symbols-outlined">build</span> Serviços</button>
+    <button class="nav-tab" data-tab="tabRegras"><span class="material-symbols-outlined">tune</span> Regras</button>
+  </div>
+
+  <!-- Período global (Painel, Estatísticas, Supervisores, Mapa) -->
+  <div class="toolbar" id="adminPeriodBar">
+    <div class="toolbar-group">
+      <span class="toolbar-label"><span class="material-symbols-outlined">date_range</span> Período</span>
+      <div class="chips" id="adminPresets">
+        <button class="chip" data-preset="today" onclick="setRangePreset('admin','today')">Hoje</button>
+        <button class="chip" data-preset="yesterday" onclick="setRangePreset('admin','yesterday')">Ontem</button>
+        <button class="chip preset-wide" data-preset="7d" onclick="setRangePreset('admin','7d')">7 dias</button>
+        <button class="chip preset-wide" data-preset="month" onclick="setRangePreset('admin','month')">Este mês</button>
+        <button class="chip preset-wide" data-preset="lastmonth" onclick="setRangePreset('admin','lastmonth')">Mês anterior</button>
+      </div>
+    </div>
+    <div class="toolbar-group period-dates">
+      <div class="date-range">
+        <input type="date" id="adminStartDate" aria-label="Data inicial">
+        <span>até</span>
+        <input type="date" id="adminEndDate" aria-label="Data final">
+      </div>
+    </div>
+  </div>
+
+  <!-- PAINEL -->
+  <div class="tab-content active" id="tabPainel">
+    <div class="filter-bar" id="painelFilterBar">
+      <div class="filter-main">
+        <label class="search-box"><span class="material-symbols-outlined">search</span><input type="search" id="pfSearch" placeholder="Buscar equipe..." oninput="onPainelFilter()"></label>
+        <button class="btn btn-outline btn-sm filter-toggle" onclick="toggleFilterBar('painelFilterBar')"><span class="material-symbols-outlined">tune</span> Filtros <span class="filter-count" id="pfCount"></span></button>
+      </div>
+      <div class="filter-fields">
+        <select id="pfSupervisor" onchange="onPainelFilter()" aria-label="Supervisor"><option value="">Todos supervisores</option></select>
+        <select id="pfProcess" onchange="onPainelFilter()" aria-label="Processo"><option value="">Todos processos</option></select>
+        <select id="pfClass" onchange="onPainelFilter()" aria-label="Classe"><option value="">Todas classes</option></select>
+        <select id="pfStatus" onchange="onPainelFilter()" aria-label="Status">
+          <option value="">Todos status</option>
+          <option value="online">Online</option>
+          <option value="offline">Offline</option>
+        </select>
+        <select id="pfGoal" onchange="onPainelFilter()" aria-label="Meta">
+          <option value="">Meta: todas</option>
+          <option value="hit">Meta atingida</option>
+          <option value="below">Abaixo da meta</option>
+          <option value="none">Sem meta definida</option>
+          <option value="idle">Sem produção</option>
+        </select>
+        <select id="pfSort" onchange="onPainelFilter()" aria-label="Ordenar">
+          <option value="ups">Ordenar: UPS</option>
+          <option value="money">Ordenar: R$</option>
+          <option value="count">Ordenar: serviços</option>
+          <option value="goal">Ordenar: % da meta</option>
+          <option value="name">Ordenar: nome</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="clearPainelFilters()"><span class="material-symbols-outlined">filter_alt_off</span> Limpar</button>
+      </div>
+    </div>
+    <div id="adminPainelContent"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><p>Carregando...</p></div></div>
+  </div>
+
+  <!-- PERDAS -->
+  <div class="tab-content" id="tabPerdas">
+    <div class="filter-bar" id="perdasFilterBar">
+      <div class="filter-main">
+        <label class="search-box"><span class="material-symbols-outlined">search</span><input type="search" id="lfSearch" placeholder="Buscar equipe de perdas..." oninput="renderPerdasFiltered()"></label>
+        <button class="btn btn-outline btn-sm filter-toggle" onclick="toggleFilterBar('perdasFilterBar')"><span class="material-symbols-outlined">tune</span> Filtros <span class="filter-count" id="lfCount"></span></button>
+      </div>
+      <div class="filter-fields">
+        <select id="lfSupervisor" onchange="renderPerdasFiltered()" aria-label="Supervisor"><option value="">Todos supervisores</option></select>
+        <select id="lfProcess" onchange="renderPerdasFiltered()" aria-label="Processo"><option value="">Todos processos</option></select>
+        <select id="lfClass" onchange="renderPerdasFiltered()" aria-label="Classe"><option value="">Todas classes</option></select>
+        <select id="lfStatus" onchange="renderPerdasFiltered()" aria-label="Status">
+          <option value="">Todos status</option>
+          <option value="online">Online</option>
+          <option value="offline">Offline</option>
+        </select>
+        <select id="lfGoal" onchange="renderPerdasFiltered()" aria-label="Meta">
+          <option value="">Meta: todas</option>
+          <option value="hit">Metas atingidas</option>
+          <option value="below">Abaixo da meta</option>
+          <option value="none">Sem meta definida</option>
+          <option value="idle">Sem produção</option>
+        </select>
+        <select id="lfSort" onchange="renderPerdasFiltered()" aria-label="Ordenar">
+          <option value="ups">Ordenar: UPS</option>
+          <option value="fiscalizacao">Ordenar: fiscalizações</option>
+          <option value="normalizacao">Ordenar: normalizações</option>
+          <option value="fraude">Ordenar: fraudes</option>
+          <option value="goal">Ordenar: % das metas</option>
+          <option value="count">Ordenar: lançamentos</option>
+          <option value="name">Ordenar: nome</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="clearPerdasFilters()"><span class="material-symbols-outlined">filter_alt_off</span> Limpar</button>
+      </div>
+    </div>
+    <div id="perdasContent"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><p>Carregando...</p></div></div>
+  </div>
+
+  <!-- ESTATÍSTICAS -->
+  <div class="tab-content" id="tabEstatisticas">
+    <div class="filter-bar" id="statsFilterBar">
+      <div class="filter-main">
+        <span class="toolbar-label"><span class="material-symbols-outlined">insights</span> Análise do período</span>
+        <button class="btn btn-outline btn-sm filter-toggle" onclick="toggleFilterBar('statsFilterBar')"><span class="material-symbols-outlined">tune</span> Filtros <span class="filter-count" id="sfCount"></span></button>
+      </div>
+      <div class="filter-fields">
+        <select id="sfSector" onchange="loadStatistics()" aria-label="Setor"><option value="">Todos os setores</option><option value="STC">STC</option><option value="PERDAS">PERDAS</option></select>
+        <select id="sfTeam" onchange="loadStatistics()" aria-label="Equipe"><option value="">Todas equipes</option></select>
+        <select id="sfSupervisor" onchange="loadStatistics()" aria-label="Supervisor"><option value="">Todos supervisores</option></select>
+        <select id="sfProcess" onchange="loadStatistics()" aria-label="Processo"><option value="">Todos processos</option></select>
+        <select id="sfType" onchange="loadStatistics()" aria-label="Tipo de registro">
+          <option value="">Todos os tipos</option>
+          <option value="miscellany">Miscelânea</option>
+          <option value="emergency">Emergência</option>
+          <option value="commercial">Comercial</option>
+          <option value="perdas">Perdas</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="clearFilters(['sfSector', 'sfTeam','sfSupervisor','sfProcess','sfType'], loadStatistics)"><span class="material-symbols-outlined">filter_alt_off</span> Limpar</button>
+      </div>
+    </div>
+    <div id="statsContent"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><p>Carregando...</p></div></div>
+  </div>
+
+  <!-- SUPERVISORES -->
+  <div class="tab-content" id="tabSupervisores">
+    <div class="filter-bar">
+      <div class="filter-main">
+        <label class="search-box"><span class="material-symbols-outlined">search</span><input type="search" id="svSearch" placeholder="Buscar supervisor ou equipe..." oninput="renderSupervisoresFiltered()"></label>
+      </div>
+      <div class="filter-fields" style="display:flex;">
+        <select id="svSort" onchange="renderSupervisoresFiltered()" aria-label="Ordenar">
+          <option value="ups">Ordenar: UPS</option>
+          <option value="money">Ordenar: R$</option>
+          <option value="avg">Ordenar: média por equipe</option>
+          <option value="goal">Ordenar: % da meta</option>
+          <option value="teams">Ordenar: nº de equipes</option>
+          <option value="name">Ordenar: nome</option>
+        </select>
+      </div>
+    </div>
+    <div id="supervisoresContent"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><p>Carregando...</p></div></div>
+  </div>
+
+  <!-- CLASSIFICAÇÃO -->
+  <div class="tab-content" id="tabClassificacao">
+    <div class="card">
+      <div class="card-title"><span class="material-symbols-outlined">workspace_premium</span> Classificação das Equipes</div>
+      <p class="card-subtitle">Média de UPS por dia com registro, organizada por classe conforme as regras do SISREMA.</p>
+      <div class="toolbar" style="box-shadow:none;background:var(--surface-2);">
+        <div class="toolbar-group">
+          <div class="chips" id="classificacaoPresets">
+            <button class="chip" data-preset="today" onclick="setRangePreset('classificacao','today')">Hoje</button>
+            <button class="chip preset-wide" data-preset="7d" onclick="setRangePreset('classificacao','7d')">7 dias</button>
+            <button class="chip preset-wide" data-preset="month" onclick="setRangePreset('classificacao','month')">Este mês</button>
+            <button class="chip preset-wide" data-preset="lastmonth" onclick="setRangePreset('classificacao','lastmonth')">Mês anterior</button>
+          </div>
+        </div>
+        <div class="toolbar-group period-dates">
+          <div class="date-range">
+            <input type="date" id="classificacaoStartDate" aria-label="Data inicial"><span>até</span><input type="date" id="classificacaoEndDate" aria-label="Data final">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="loadClassificacao()"><span class="material-symbols-outlined">search</span> Consultar</button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <div class="filter-main">
+          <label class="search-box"><span class="material-symbols-outlined">search</span><input type="search" id="cfSearch" placeholder="Buscar equipe..." oninput="renderClassificacaoFiltered()"></label>
+        </div>
+        <div class="filter-fields" style="display:flex;">
+          <select id="cfSupervisor" onchange="renderClassificacaoFiltered()" aria-label="Supervisor"><option value="">Todos supervisores</option></select>
+        </div>
+      </div>
+      <div id="classificacaoMsg" class="msg"></div>
+      <div id="classificacaoContent"><div class="empty-state"><span class="material-symbols-outlined">workspace_premium</span><p>Selecione um período e clique em Consultar</p></div></div>
+    </div>
+  </div>
+
+  <!-- MAPA -->
+  <div class="tab-content" id="tabMapa">
+    <div class="filter-bar">
+      <div class="filter-fields" style="display:flex;">
+        <select id="mapfSupervisor" onchange="renderMapFiltered()" aria-label="Supervisor"><option value="">Todos supervisores</option></select>
+        <select id="mapfClass" onchange="renderMapFiltered()" aria-label="Classe"><option value="">Todas classes</option></select>
+        <select id="mapfStatus" onchange="renderMapFiltered()" aria-label="Status">
+          <option value="">Todos status</option>
+          <option value="online">Online</option>
+          <option value="offline">Offline</option>
+        </select>
+      </div>
+      <div class="map-legend" id="mapLegend"></div>
+    </div>
+    <div class="map-wrap">
+      <button class="map-fullscreen-btn" onclick="toggleFullscreen()" title="Tela cheia" aria-label="Tela cheia">
+        <span class="material-symbols-outlined">fullscreen</span>
+      </button>
+      <div class="map-container" id="map"></div>
+    </div>
+  </div>
+
+  <!-- AUDITORIA -->
+  <div class="tab-content" id="tabAuditoria">
+    <div class="card">
+      <div class="card-title"><span class="material-symbols-outlined">fact_check</span> Auditoria de Lançamentos</div>
+      <p class="card-subtitle">Consulte e edite os lançamentos de atividade das equipes por período.</p>
+      <div class="toolbar" style="box-shadow:none;background:var(--surface-2);">
+        <div class="toolbar-group">
+          <div class="chips" id="auditoriaPresets">
+            <button class="chip" data-preset="today" onclick="setRangePreset('auditoria','today')">Hoje</button>
+            <button class="chip" data-preset="yesterday" onclick="setRangePreset('auditoria','yesterday')">Ontem</button>
+            <button class="chip preset-wide" data-preset="7d" onclick="setRangePreset('auditoria','7d')">7 dias</button>
+            <button class="chip preset-wide" data-preset="month" onclick="setRangePreset('auditoria','month')">Este mês</button>
+          </div>
+        </div>
+        <div class="toolbar-group period-dates">
+          <div class="date-range">
+            <input type="date" id="auditoriaStartDate" aria-label="Data inicial"><span>até</span><input type="date" id="auditoriaEndDate" aria-label="Data final">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="loadAuditoria()"><span class="material-symbols-outlined">search</span> Consultar</button>
+        </div>
+      </div>
+      <div class="filter-bar" id="auditoriaFilterBar">
+        <div class="filter-main">
+          <label class="search-box"><span class="material-symbols-outlined">search</span><input type="search" id="afSearch" placeholder="Buscar serviço, equipe ou nota..." oninput="renderAuditoriaFiltered(true)"></label>
+          <button class="btn btn-outline btn-sm filter-toggle" onclick="toggleFilterBar('auditoriaFilterBar')"><span class="material-symbols-outlined">tune</span> Filtros <span class="filter-count" id="afCount"></span></button>
+        </div>
+        <div class="filter-fields">
+          <select id="afTeam" onchange="renderAuditoriaFiltered(true)" aria-label="Equipe"><option value="">Todas equipes</option></select>
+          <select id="afType" onchange="renderAuditoriaFiltered(true)" aria-label="Tipo">
+            <option value="">Todos os tipos</option>
+            <option value="miscellany">Miscelânea</option>
+            <option value="emergency">Emergência</option>
+            <option value="commercial">Comercial</option>
+            <option value="perdas">Perdas</option>
+          </select>
+          <select id="afEdited" onchange="renderAuditoriaFiltered(true)" aria-label="Edição">
+            <option value="">Editados e originais</option>
+            <option value="edited">Somente editados</option>
+            <option value="original">Somente originais</option>
+          </select>
+        </div>
+      </div>
+      <div id="auditoriaMsg" class="msg"></div>
+      <div id="auditoriaContent"><div class="empty-state"><span class="material-symbols-outlined">fact_check</span><p>Selecione um período e clique em Consultar</p></div></div>
+    </div>
+  </div>
+
+  <!-- APONTAMENTO -->
+  <div class="tab-content" id="tabApontamento">
+    <div class="card">
+      <div class="card-title"><span class="material-symbols-outlined">assignment_late</span> Apontamento de Turno</div>
+      <p class="card-subtitle">Registre o motivo quando uma equipe prevista para abrir não abriu o turno.</p>
+      <div class="toolbar" style="box-shadow:none;background:var(--surface-2);">
+        <div class="toolbar-group">
+          <div class="chips" id="apontamentoPresets">
+            <button class="chip" data-preset="today" onclick="setRangePreset('apontamento','today')">Hoje</button>
+            <button class="chip" data-preset="yesterday" onclick="setRangePreset('apontamento','yesterday')">Ontem</button>
+            <button class="chip preset-wide" data-preset="7d" onclick="setRangePreset('apontamento','7d')">7 dias</button>
+            <button class="chip preset-wide" data-preset="month" onclick="setRangePreset('apontamento','month')">Este mês</button>
+          </div>
+        </div>
+        <div class="toolbar-group period-dates">
+          <div class="date-range">
+            <input type="date" id="apontamentoStartDate" aria-label="Data inicial"><span>até</span><input type="date" id="apontamentoEndDate" aria-label="Data final">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="loadApontamentos()"><span class="material-symbols-outlined">search</span> Consultar</button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <div class="filter-main">
+          <label class="search-box"><span class="material-symbols-outlined">search</span><input type="search" id="apfSearch" placeholder="Buscar equipe..." oninput="renderApontamentosFiltered()"></label>
+        </div>
+        <div class="filter-fields" style="display:flex;">
+          <select id="apfReason" onchange="renderApontamentosFiltered()" aria-label="Motivo">
+            <option value="">Todos</option>
+            <option value="pending">Sem motivo informado</option>
+            <option value="done">Com motivo informado</option>
+          </select>
+        </div>
+      </div>
+      <div id="apontamentoMsg" class="msg"></div>
+      <div id="apontamentoContent"><div class="empty-state"><span class="material-symbols-outlined">assignment_late</span><p>Selecione um período e clique em Consultar</p></div></div>
+    </div>
+  </div>
+
+  <!-- EQUIPES -->
+  <div class="tab-content" id="tabEquipes">
+    <div class="card" id="newTeamCard">
+      <div class="card-title"><span class="material-symbols-outlined">group_add</span> Nova Equipe</div>
+      <div id="teamFormMsgAdmin" class="msg"></div>
+      <div class="form-row">
+        <div class="form-group"><label for="newTeamName">Nome da equipe</label><input type="text" id="newTeamName" placeholder="Nome da equipe"></div>
+        <div class="form-group"><label for="newTeamPass">Senha</label><input type="text" id="newTeamPass" placeholder="Senha de acesso"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label for="newTeamSector">Setor</label>
+          <select id="newTeamSector" onchange="onTeamSectorFormChange('new')">
+            <option value="">— Selecione o setor —</option>
+            <option value="STC">STC</option>
+            <option value="PERDAS">PERDAS</option>
+          </select>
+        </div>
+        <div class="form-group"><label for="newTeamProcess">Processo</label>
+          <select id="newTeamProcess"><option value="">— Selecione o processo —</option></select>
+        </div>
+        <div class="form-group"><label for="newTeamSupervisor">Supervisor (conta)</label>
+          <select id="newTeamSupervisor"><option value="">— Sem supervisor —</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" id="newTeamGoalGroup"><label for="newTeamGoal">Meta financeira (R$)</label><input type="number" id="newTeamGoal" placeholder="0,00" min="0" step="0.01" inputmode="decimal"></div>
+        <div class="form-group"><label for="newTeamShiftStart">Início do turno</label><input type="time" id="newTeamShiftStart"></div>
+        <div class="form-group"><label for="newTeamShiftEnd">Fim do turno</label><input type="time" id="newTeamShiftEnd"></div>
+      </div>
+      <div class="form-group" id="newTeamPerdasGoals" style="display:none;">
+        <span class="field-label">Metas de PERDAS (quantidade de execuções)</span>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0;"><label for="newTeamGoalFisc">Fiscalização</label><input type="number" id="newTeamGoalFisc" placeholder="0" min="0" step="1" inputmode="numeric"></div>
+          <div class="form-group" style="margin-bottom:0;"><label for="newTeamGoalNorm">Normalização</label><input type="number" id="newTeamGoalNorm" placeholder="0" min="0" step="1" inputmode="numeric"></div>
+          <div class="form-group" style="margin-bottom:0;"><label for="newTeamGoalFraude">Fraude</label><input type="number" id="newTeamGoalFraude" placeholder="0" min="0" step="1" inputmode="numeric"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <span class="field-label">Dias da semana (previsão de abertura)</span>
+        <div id="newTeamDays" class="day-picker">
+          <label class="day-chip"><input type="checkbox" name="teamDay" value="0"> Dom</label>
+          <label class="day-chip"><input type="checkbox" name="teamDay" value="1"> Seg</label>
+          <label class="day-chip"><input type="checkbox" name="teamDay" value="2"> Ter</label>
+          <label class="day-chip"><input type="checkbox" name="teamDay" value="3"> Qua</label>
+          <label class="day-chip"><input type="checkbox" name="teamDay" value="4"> Qui</label>
+          <label class="day-chip"><input type="checkbox" name="teamDay" value="5"> Sex</label>
+          <label class="day-chip"><input type="checkbox" name="teamDay" value="6"> Sáb</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <span class="field-label">Localização</span>
+        <div style="display:flex;gap:8px;align-items:stretch;">
+          <div id="newTeamLocation" class="info-box">
+            <span class="material-symbols-outlined" id="locationIcon" style="font-size:18px;color:var(--text-muted);">my_location</span>
+            <span id="locationText">Aguardando captura automática...</span>
+          </div>
+          <button type="button" class="icon-btn" onclick="captureLocationForTeam()" title="Detectar localização novamente" style="height:auto;width:44px;">
+            <span class="material-symbols-outlined">gps_fixed</span>
+          </button>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="createTeam()"><span class="material-symbols-outlined">add</span> Criar equipe</button>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title"><span class="material-symbols-outlined">list_alt</span> Equipes cadastradas</div>
+      </div>
+      <div class="filter-bar">
+        <div class="filter-main">
+          <label class="search-box"><span class="material-symbols-outlined">search</span><input type="search" id="eqSearch" placeholder="Buscar equipe..." oninput="renderTeamsList(userCache)"></label>
+        </div>
+        <div class="filter-fields" style="display:flex;">
+          <select id="eqSector" onchange="renderTeamsList(userCache)" aria-label="Setor"><option value="">Todos os setores</option><option value="STC">STC</option><option value="PERDAS">PERDAS</option></select>
+        <select id="eqProcess" onchange="renderTeamsList(userCache)" aria-label="Processo"><option value="">Todos processos</option></select>
+          <select id="eqSupervisor" onchange="renderTeamsList(userCache)" aria-label="Supervisor"><option value="">Todos supervisores</option></select>
+        </div>
+      </div>
+      <div id="teamsList"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><p>Carregando...</p></div></div>
+    </div>
+  </div>
+
+  <!-- USUÁRIOS -->
+  <div class="tab-content" id="tabUsuarios">
+    <div class="card" id="newUserCard">
+      <div class="card-title"><span class="material-symbols-outlined">person_add</span> Novo Usuário / Supervisor</div>
+      <p class="card-subtitle">Crie contas de supervisor ou de usuário com visualização livre e vincule as equipes que a conta poderá consultar.</p>
+      <div id="userFormMsg" class="msg"></div>
+      <div class="form-row">
+        <div class="form-group"><label for="newUserName">Nome de usuário</label><input type="text" id="newUserName" placeholder="Ex: carlos.silva" autocomplete="off"></div>
+        <div class="form-group"><label for="newUserPass">Senha</label><input type="text" id="newUserPass" placeholder="Senha de acesso" autocomplete="off"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="newUserRole">Perfil</label>
+          <select id="newUserRole">
+            <option value="supervisor">Supervisor — visão restrita</option>
+            <option value="user">Usuário — visualização com período livre</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <span class="field-label">Equipes vinculadas (visualização)</span>
+          <div id="newUserTeams" class="activities-selection" style="max-height:160px;">
+            <div class="empty-state" style="padding:8px;">Carregando equipes...</div>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="createUser()"><span class="material-symbols-outlined">add</span> Cadastrar usuário</button>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="material-symbols-outlined">manage_accounts</span> Usuários e Supervisores</div>
+      <div class="filter-bar">
+        <div class="filter-main">
+          <label class="search-box"><span class="material-symbols-outlined">search</span><input type="search" id="usSearch" placeholder="Buscar usuário..." oninput="loadUsersList()"></label>
+        </div>
+      </div>
+      <div id="usersList"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><p>Carregando...</p></div></div>
+    </div>
+    <div class="card" id="maintenanceCard">
+      <div class="card-title"><span class="material-symbols-outlined">cleaning_services</span> Manutenção de dados</div>
+      <p class="card-subtitle">Remova localizações antigas que nunca são lidas e aplique a retenção local de serviços e cache.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="cleanupLocationHistory()"><span class="material-symbols-outlined">delete_sweep</span> Limpar localização antiga (&gt;30 dias)</button>
+        <button class="btn btn-outline btn-sm" onclick="cleanupLocalRetention()"><span class="material-symbols-outlined">storage</span> Aplicar retenção local</button>
+        <button class="btn btn-outline btn-sm" onclick="refreshCachedData()"><span class="material-symbols-outlined">refresh</span> Refrescar cache imediato</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SERVIÇOS -->
+  <div class="tab-content" id="tabServicos">
+    <div class="card" id="newCatalogCard">
+      <div class="card-title"><span class="material-symbols-outlined">note_add</span> Novo Serviço</div>
+      <div id="catalogFormMsg" class="msg"></div>
+      <div class="form-row">
+        <div class="form-group"><label for="catalogName">Nome da atividade</label><input type="text" id="catalogName" placeholder="Ex: Instalação"></div>
+        <div class="form-group"><label for="catalog_sector">Setor</label>
+          <select id="catalog_sector" onchange="onCatalogSectorChange('catalog')">
+            <option value="">— Selecione o setor —</option>
+            <option value="STC">STC</option>
+            <option value="PERDAS">PERDAS</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" id="catalog_stc">
+        <div class="form-group"><label for="catalogUps">Valor UPS (por unidade)</label><input type="number" id="catalogUps" placeholder="10" min="0" step="0.1" inputmode="decimal"></div>
+        <div class="form-group"><label for="catalogMoney">Valor R$ (por unidade)</label><input type="number" id="catalogMoney" placeholder="50,00" min="0" step="0.01" inputmode="decimal"></div>
+      </div>
+      <div id="catalog_perdas" style="display:none;">
+        <p class="card-subtitle" style="margin:0 0 8px;">PERDAS não tem valor em dinheiro. Informe o UPS por unidade para cada tipo de ligação.</p>
+        <div class="form-row">
+          <div class="form-group"><label for="catalogUpsMono">UPS MONO</label><input type="number" id="catalogUpsMono" placeholder="0" min="0" step="0.1" inputmode="decimal"></div>
+          <div class="form-group"><label for="catalogUpsBi">UPS BI</label><input type="number" id="catalogUpsBi" placeholder="0" min="0" step="0.1" inputmode="decimal"></div>
+          <div class="form-group"><label for="catalogUpsTri">UPS TRI</label><input type="number" id="catalogUpsTri" placeholder="0" min="0" step="0.1" inputmode="decimal"></div>
+        </div>
+        <div class="form-group">
+          <span class="field-label">A execução desta atividade conta como (metas das equipes de PERDAS)</span>
+          <div class="day-picker">
+            <label class="day-chip"><input type="checkbox" id="catalog_cat_fiscalizacao"> FISCALIZAÇÃO</label>
+            <label class="day-chip"><input type="checkbox" id="catalog_cat_normalizacao"> NORMALIZAÇÃO</label>
+            <label class="day-chip"><input type="checkbox" id="catalog_cat_fraude"> FRAUDE</label>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="createCatalogService()"><span class="material-symbols-outlined">add</span> Cadastrar serviço</button>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="material-symbols-outlined">build</span> Serviços cadastrados</div>
+      <div class="filter-bar">
+        <div class="filter-main">
+          <label class="search-box"><span class="material-symbols-outlined">search</span><input type="search" id="ctSearch" placeholder="Buscar serviço..." oninput="loadCatalogList()"></label>
+        </div>
+        <div class="filter-fields" style="display:flex;">
+          <select id="ctSector" onchange="loadCatalogList()" aria-label="Setor">
+            <option value="">Todos os setores</option>
+            <option value="STC">STC</option>
+            <option value="PERDAS">PERDAS</option>
+          </select>
+          <select id="ctActive" onchange="loadCatalogList()" aria-label="Situação">
+            <option value="">Ativos e inativos</option>
+            <option value="active">Somente ativos</option>
+            <option value="inactive">Somente inativos</option>
+          </select>
+        </div>
+      </div>
+      <div id="catalogList"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><p>Carregando...</p></div></div>
+    </div>
+  </div>
+
+  <!-- REGRAS -->
+  <div class="tab-content" id="tabRegras">
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title"><span class="material-symbols-outlined">tune</span> Regras de Classificação</div>
+        <button class="btn btn-outline btn-sm" id="rulesAddActions" onclick="addRule()"><span class="material-symbols-outlined">add</span> Adicionar regra</button>
+      </div>
+      <p class="card-subtitle">Defina os intervalos de UPS para cada classe. Salve após alterar.</p>
+      <div id="rulesFormMsg" class="msg"></div>
+      <div id="rulesContainer"></div>
+      <button class="btn btn-primary btn-block" id="rulesSaveBtn" onclick="saveRules()"><span class="material-symbols-outlined">save</span> Salvar regras</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== MONITOR / USUÁRIO VIEW ========== -->
+<div id="monitorView" class="view">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-avatar"><span class="material-symbols-outlined">supervisor_account</span></div>
+      <div class="topbar-titles">
+        <h2 id="monUserName">Monitor</h2>
+        <span class="topbar-info"><span class="material-symbols-outlined">calendar_today</span><span id="monPeriod"></span></span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-money btn-sm" onclick="exportMonitorData()" title="Exportar CSV do período"><span class="material-symbols-outlined">download</span><span class="btn-label">Exportar</span></button>
+      <button class="icon-btn" onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema"><span class="material-symbols-outlined theme-icon">dark_mode</span></button>
+      <button class="icon-btn" onclick="logout()" title="Sair" aria-label="Sair"><span class="material-symbols-outlined">logout</span></button>
+    </div>
+  </div>
+  <div id="monFilters" class="toolbar" style="display:none;">
+    <div class="toolbar-group">
+      <span class="toolbar-label"><span class="material-symbols-outlined">date_range</span> Período</span>
+      <div class="chips" id="monPresets">
+        <button class="chip" data-preset="today" onclick="setRangePreset('mon','today')">Hoje</button>
+        <button class="chip" data-preset="yesterday" onclick="setRangePreset('mon','yesterday')">Ontem</button>
+        <button class="chip" data-preset="7d" onclick="setRangePreset('mon','7d')">7 dias</button>
+        <button class="chip" data-preset="month" onclick="setRangePreset('mon','month')">Este mês</button>
+        <button class="chip" data-preset="lastmonth" onclick="setRangePreset('mon','lastmonth')">Mês anterior</button>
+      </div>
+    </div>
+    <div class="toolbar-group period-dates">
+      <div class="date-range">
+        <input type="date" id="monStartDate" onchange="loadMonitorView()" aria-label="Data inicial">
+        <span>até</span>
+        <input type="date" id="monEndDate" onchange="loadMonitorView()" aria-label="Data final">
+      </div>
+    </div>
+  </div>
+  <div id="monLockBanner" class="msg warning" style="display:none;">
+    <span class="material-symbols-outlined">lock</span>
+    <span>Visão restrita ao <strong>mês vigente</strong>. O acesso a períodos anteriores está bloqueado para supervisores.</span>
+  </div>
+  <div id="monSummaries"></div>
+  <div class="filter-bar" id="monFilterBar">
+    <div class="filter-main">
+      <label class="search-box"><span class="material-symbols-outlined">search</span><input type="search" id="mfSearch" placeholder="Buscar equipe..." oninput="renderMonitorFiltered()"></label>
+      <button class="btn btn-outline btn-sm filter-toggle" onclick="toggleFilterBar('monFilterBar')"><span class="material-symbols-outlined">tune</span> Filtros <span class="filter-count" id="mfCount"></span></button>
+    </div>
+    <div class="filter-fields">
+      <select id="mfClass" onchange="renderMonitorFiltered()" aria-label="Classe"><option value="">Todas classes</option></select>
+      <select id="mfGoal" onchange="renderMonitorFiltered()" aria-label="Meta">
+        <option value="">Meta: todas</option>
+        <option value="hit">Meta atingida</option>
+        <option value="below">Abaixo da meta</option>
+        <option value="none">Sem meta definida</option>
+        <option value="idle">Sem produção</option>
+      </select>
+      <select id="mfSort" onchange="renderMonitorFiltered()" aria-label="Ordenar">
+        <option value="ups">Ordenar: UPS</option>
+        <option value="money">Ordenar: R$</option>
+        <option value="count">Ordenar: serviços</option>
+        <option value="goal">Ordenar: % da meta</option>
+        <option value="name">Ordenar: nome</option>
+      </select>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="material-symbols-outlined">leaderboard</span> Desempenho das equipes</div>
+    <div id="monTeamsContent"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><p>Carregando...</p></div></div>
+  </div>
+</div>
+
+<!-- ========== MODAL DETALHES DA EQUIPE ========== -->
+<div id="teamModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeTeamModal()">
+  <div class="modal-content" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2><span class="material-symbols-outlined">badge</span> Detalhes da equipe</h2>
+      <button class="modal-close-btn" onclick="closeTeamModal()" aria-label="Fechar"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="modal-team-hero" id="modalHero">
+      <div class="hero-badge" id="modalHeroBadge">-</div>
+      <div class="hero-info">
+        <div class="hero-name" id="modalTeamName">Equipe</div>
+        <div class="hero-address" id="modalHeroAddress"><span class="material-symbols-outlined" style="font-size:14px;">location_on</span> <span id="modalAddressText">—</span></div>
+        <div id="modalSupervisorLine" style="display:none;font-size:12px;color:var(--text-secondary);margin-top:4px;"><span class="material-symbols-outlined" style="font-size:14px;">supervisor_account</span> Supervisor: <strong id="modalSupervisorName">—</strong></div>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-stats-grid" id="modalStatsGrid">
+        <div class="stat-card"><span class="material-symbols-outlined stat-icon">bolt</span><div class="stat-label">Total UPS</div><div class="stat-value" id="modalTotalUps">0</div></div>
+        <div class="stat-card"><span class="material-symbols-outlined stat-icon" style="color:var(--money);">payments</span><div class="stat-label" id="modalMoneyLabel">Total ganho</div><div class="stat-value money" id="modalTotalMoney">R$ 0,00</div></div>
+        <div class="stat-card"><span class="material-symbols-outlined stat-icon">assignment</span><div class="stat-label">Serviços</div><div class="stat-value" id="modalSrvCount">0</div></div>
+        <div class="stat-card"><span class="material-symbols-outlined stat-icon">military_tech</span><div class="stat-label">Classe</div><div class="stat-value classe" id="modalClass">-</div></div>
+      </div>
+      <div id="modalPerdasGoals" class="goal-box" style="display:none;gap:10px;"></div>
+      <div id="modalGoalSection" class="goal-box" style="display:none;">
+        <div class="progress-meta" style="font-size:12px;"><span>Meta: <span id="modalGoalValue">R$ 0,00</span></span><strong id="modalGoalPercent" style="color:var(--money);">0%</strong></div>
+        <div class="progress progress-lg"><span id="modalGoalBar" style="width:0%;background:var(--money);"></span></div>
+      </div>
+      <div class="modal-details"><h3><span class="material-symbols-outlined" style="font-size:16px;">receipt_long</span> Serviços no período</h3><div id="modalServiceList"></div></div>
+    </div>
+  </div>
+</div>
+
+<div id="celebrationOverlay" class="celebration-overlay">
+  <div class="celebration-card">
+    <div class="celebration-title">🏆 CLASSE A! 🏆</div>
+    <div id="celebrationDetails" class="celebration-details"></div>
+  </div>
+</div>
+
+<!-- ========== MODAL EDITAR LANÇAMENTO (AUDITORIA) ========== -->
+<div id="editServiceModal" class="modal-overlay" style="display:none;">
+  <div class="modal-content" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2><span class="material-symbols-outlined">edit_note</span> Editar lançamento</h2>
+      <button class="modal-close-btn" onclick="closeEditServiceModal()" aria-label="Fechar"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="modal-body">
+      <div id="editServiceMsg" class="msg"></div>
+      <input type="hidden" id="editServiceId">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="editServiceUserId">Equipe</label>
+          <select id="editServiceUserId"></select>
+        </div>
+        <div class="form-group">
+          <label for="editServiceType">Tipo de registro</label>
+          <select id="editServiceType">
+            <option value="miscellany">Miscelânea</option>
+            <option value="emergency">Emergência</option>
+            <option value="commercial">Comercial</option>
+            <option value="perdas">Perdas</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="editServiceGrade">Número da nota</label>
+          <input type="number" id="editServiceGrade" placeholder="Ex: 123" step="1" max="99999999" inputmode="numeric">
+        </div>
+        <div class="form-group">
+          <label for="editServiceQty">Quantidade</label>
+          <input type="number" id="editServiceQty" placeholder="1" min="1" step="1" inputmode="numeric">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="editServiceUps">Valor UPS total</label>
+          <input type="number" id="editServiceUps" placeholder="0" min="0" step="0.5" inputmode="decimal">
+        </div>
+        <div class="form-group">
+          <label for="editServiceMoney">Valor R$ total</label>
+          <input type="number" id="editServiceMoney" placeholder="0,00" min="0" step="0.01" inputmode="decimal">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="editServiceName">Nome do serviço</label>
+        <input type="text" id="editServiceName" placeholder="Nome do serviço">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="editServiceDate">Data (automática)</label>
+          <input type="date" id="editServiceDate" readonly>
+        </div>
+        <div class="form-group">
+          <label for="editServiceTime">Horário (automático)</label>
+          <input type="time" id="editServiceTime" readonly>
+        </div>
+      </div>
+      <div class="form-group">
+        <span class="field-label">Localização (automática)</span>
+        <div id="editServiceLocation" class="info-box">
+          <span class="material-symbols-outlined" style="font-size:16px;color:var(--text-muted);">location_on</span>
+          <span id="editServiceLocationText">Capturando...</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeEditServiceModal()">Cancelar</button>
+        <button class="btn btn-success" onclick="saveEditService()"><span class="material-symbols-outlined">save</span> Salvar alterações</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== MODAL EDITAR USUÁRIO/SUPERVISOR ========== -->
+<div id="editUserModal" class="modal-overlay" style="display:none;">
+  <div class="modal-content" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2><span class="material-symbols-outlined">manage_accounts</span> Editar usuário</h2>
+      <button class="modal-close-btn" onclick="closeEditUserModal()" aria-label="Fechar"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="modal-body">
+      <div id="editUserMsg" class="msg"></div>
+      <input type="hidden" id="editUserId">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="editUserName">Nome de usuário</label>
+          <input type="text" id="editUserName">
+        </div>
+        <div class="form-group">
+          <label for="editUserRole">Perfil</label>
+          <select id="editUserRole">
+            <option value="supervisor">Supervisor — visão restrita</option>
+            <option value="user">Usuário — período livre</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="editUserPass">Nova senha (deixe em branco para manter)</label>
+        <input type="text" id="editUserPass" placeholder="Deixe vazio para manter a senha">
+      </div>
+      <div class="form-group">
+        <span class="field-label">Equipes vinculadas (visualização)</span>
+        <div id="editUserTeams" class="activities-selection" style="max-height:180px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeEditUserModal()">Cancelar</button>
+        <button class="btn btn-success" onclick="saveEditUser()"><span class="material-symbols-outlined">save</span> Salvar alterações</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== MODAL EDITAR EQUIPE ========== -->
+<div id="editTeamModal" class="modal-overlay" style="display:none;">
+  <div class="modal-content" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2><span class="material-symbols-outlined">edit</span> Editar equipe</h2>
+      <button class="modal-close-btn" onclick="closeEditTeamModal()" aria-label="Fechar"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="modal-body">
+      <div id="editTeamMsg" class="msg"></div>
+      <input type="hidden" id="editTeamId">
+      <div class="form-group">
+        <label for="editTeamName">Nome da equipe</label>
+        <input type="text" id="editTeamName" placeholder="Nome da equipe">
+      </div>
+      <div class="form-group">
+        <label for="editTeamSector">Setor</label>
+        <select id="editTeamSector" onchange="onTeamSectorFormChange('edit')">
+          <option value="STC">STC</option>
+          <option value="PERDAS">PERDAS</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="editTeamProcess">Processo</label>
+          <select id="editTeamProcess"><option value="">— Selecione o processo —</option></select>
+        </div>
+        <div class="form-group">
+          <label for="editTeamSupervisor">Supervisor (conta)</label>
+          <select id="editTeamSupervisor"><option value="">— Sem supervisor —</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" id="editTeamGoalGroup">
+          <label for="editTeamGoal">Meta financeira (R$)</label>
+          <input type="number" id="editTeamGoal" placeholder="0,00" min="0" step="0.01" inputmode="decimal">
+        </div>
+        <div class="form-group">
+          <label for="editTeamShiftStart">Início do turno</label>
+          <input type="time" id="editTeamShiftStart">
+        </div>
+        <div class="form-group">
+          <label for="editTeamShiftEnd">Fim do turno</label>
+          <input type="time" id="editTeamShiftEnd">
+        </div>
+      </div>
+      <div class="form-group" id="editTeamPerdasGoals" style="display:none;">
+        <span class="field-label">Metas de PERDAS (quantidade de execuções)</span>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0;"><label for="editTeamGoalFisc">Fiscalização</label><input type="number" id="editTeamGoalFisc" placeholder="0" min="0" step="1" inputmode="numeric"></div>
+          <div class="form-group" style="margin-bottom:0;"><label for="editTeamGoalNorm">Normalização</label><input type="number" id="editTeamGoalNorm" placeholder="0" min="0" step="1" inputmode="numeric"></div>
+          <div class="form-group" style="margin-bottom:0;"><label for="editTeamGoalFraude">Fraude</label><input type="number" id="editTeamGoalFraude" placeholder="0" min="0" step="1" inputmode="numeric"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <span class="field-label">Dias da semana (previsão de abertura)</span>
+        <div id="editTeamDays" class="day-picker">
+          <label class="day-chip"><input type="checkbox" name="editTeamDay" value="0"> Dom</label>
+          <label class="day-chip"><input type="checkbox" name="editTeamDay" value="1"> Seg</label>
+          <label class="day-chip"><input type="checkbox" name="editTeamDay" value="2"> Ter</label>
+          <label class="day-chip"><input type="checkbox" name="editTeamDay" value="3"> Qua</label>
+          <label class="day-chip"><input type="checkbox" name="editTeamDay" value="4"> Qui</label>
+          <label class="day-chip"><input type="checkbox" name="editTeamDay" value="5"> Sex</label>
+          <label class="day-chip"><input type="checkbox" name="editTeamDay" value="6"> Sáb</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="editTeamPass">Nova senha (deixe em branco para manter a atual)</label>
+        <input type="text" id="editTeamPass" placeholder="Deixe vazio para manter a senha atual">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeEditTeamModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveEditTeam()"><span class="material-symbols-outlined">save</span> Salvar alterações</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+// ===== Registro do Service Worker (instalação offline) =====
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('sw.js').then(function(reg) {
+      if (!navigator.serviceWorker.controller) {
+        // primeira carga: garante que o SW assume o controle para o cache funcionar
+        return reg.update();
+      }
+    }).catch(function(err) {
+      console.warn('Falha ao registrar service worker:', err);
+    });
+  });
+}
+</script>
+</body>
+</html>
