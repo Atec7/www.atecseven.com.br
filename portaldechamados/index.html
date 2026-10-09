@@ -1,15 +1,5 @@
 <!DOCTYPE html>
-<!--
-  SevenDesk · Atecseven Service Portal
-  Página de acesso (iframe) — publique este arquivo no seu site ou hospedagem.
 
-  COMO USAR
-  1. Cole abaixo, em APP_URL, a URL do App da Web (termina em /exec).
-  2. Publique este arquivo em  https://www.atecseven.com.br/portaldechamados/
-     (renomeie para index.html dentro da pasta "portaldechamados").
-  3. Os links dos e-mails já apontam para esse endereço (Configurações → URL_PORTAL).
-     Os botões dos e-mails abrem o portal por aqui, sem o aviso do Google.
--->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -58,9 +48,7 @@
 <iframe id="app" title="SevenDesk · Portal de Chamados" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>
 
 <script>
-  /* ▼▼▼ COLE AQUI A URL DO APP DA WEB (Implantar → Gerenciar implantações → URL que termina em /exec) ▼▼▼ */
-  const APP_URL = 'COLE_AQUI_A_URL_DO_APP_DA_WEB/exec';
-  /* ▲▲▲ ─────────────────────────────────────────────────────────────────────────────────────────── ▲▲▲ */
+  const APP_URL = 'https://script.google.com/macros/s/AKfycbz5nsSvYnMd3X0gZ2rGO8QvwRc3xcPkKM7ydqiv8PHbIYw7rWtdSBHC9QjjuOZslw5j/exec';
 
   (function () {
     const loader = document.getElementById('loader');
@@ -90,8 +78,6 @@
       loader.classList.add('out');
       setTimeout(() => loader.remove(), 450);
     };
-    // O portal avisa quando está pronto (tela de login ou sistema aberto), quando está demorando
-    // (conferindo a estrutura após uma atualização) e quando ocorre um erro (que passa a ser exibido).
     let fallback = null;
     const later = ms => { clearTimeout(fallback); fallback = setTimeout(show, ms); };
     window.addEventListener('message', e => {
@@ -100,15 +86,12 @@
       if (!/(\.googleusercontent\.com|script\.google\.com)$/.test(host)) return;
       const d = e.data;
       if (!d || typeof d !== 'object' || !d.sevendesk) return;
-      // Pronto, erro ou demora: mostra o portal (ele exibe a própria mensagem de andamento ou de erro).
       if (d.sevendesk === 'ready' || d.sevendesk === 'error' || d.sevendesk === 'slow') show();
       if (d.sevendesk === 'reload') location.reload();
     });
-    // Segurança: se o portal não avisar nada (versão antiga ou falha de rede), mostra o que houver.
     frame.addEventListener('load', () => later(4000));
     frame.src = src;
 
-    // Limpa os parâmetros da barra de endereço depois de repassá-los (evita reabrir a mesma ação ao recarregar).
     if (pass.toString() && history.replaceState) history.replaceState(null, '', location.pathname);
   })();
 </script>
