@@ -38,8 +38,6 @@
   #loader p { margin: 0 auto; font-size: 14px; opacity: .85; max-width: 360px; line-height: 1.5; padding: 0 16px; }
   .bar { width: 180px; height: 4px; margin: 22px auto 0; border-radius: 4px; background: rgba(255,255,255,.18); overflow: hidden; }
   .bar span { display: block; width: 40%; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #00C2E0, #fff); animation: slide 1.2s ease-in-out infinite; }
-  #slow { display: none; margin-top: 18px; font-size: 13px; opacity: .85; }
-  #slow a { color: #7DE6F5; }
   @keyframes pulse { 50% { transform: scale(.93); opacity: .8; } }
   @keyframes slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(260%); } }
   .setup { max-width: 520px; padding: 28px; border-radius: 18px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); text-align: left; line-height: 1.6; font-size: 14px; }
@@ -54,14 +52,14 @@
     <h1>SevenDesk</h1>
     <p id="ldmsg">Portal de Chamados · Atecseven</p>
     <div class="bar"><span></span></div>
-    <div id="slow">Está demorando mais que o normal… <a id="direct" href="#" target="_top">abrir o portal diretamente</a></div>
   </div>
 </div>
 
 <iframe id="app" title="SevenDesk · Portal de Chamados" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>
 
 <script>
-  const APP_URL = 'https://script.google.com/macros/s/AKfycby9VfNx6DCW82J-VtKxpn8SbAXP2lztXmOqtR06JdalSFfpVV7ObnXjTNGycm1UVHWF/exec';
+  /* ▼▼▼ COLE AQUI A URL DO APP DA WEB (Implantar → Gerenciar implantações → URL que termina em /exec) ▼▼▼ */
+  const APP_URL = 'COLE_AQUI_A_URL_DO_APP_DA_WEB/exec';
   /* ▲▲▲ ─────────────────────────────────────────────────────────────────────────────────────────── ▲▲▲ */
 
   (function () {
@@ -78,11 +76,11 @@
       return;
     }
 
+    // Repassa ao portal os parâmetros dos links de e-mail (chamados, orçamentos e cobranças).
     const params = new URLSearchParams(location.search);
     const pass = new URLSearchParams();
     ['ticket', 'orc', 'fat', 'acao', 'nota'].forEach(k => { if (params.get(k)) pass.set(k, params.get(k)); });
     const src = base + (pass.toString() ? '?' + pass.toString() : '');
-    document.getElementById('direct').href = src;
 
     let shown = false;
     const show = () => {
@@ -92,6 +90,8 @@
       loader.classList.add('out');
       setTimeout(() => loader.remove(), 450);
     };
+    // O portal avisa quando está pronto (tela de login ou sistema aberto), quando está demorando
+    // (conferindo a estrutura após uma atualização) e quando ocorre um erro (que passa a ser exibido).
     let fallback = null;
     const later = ms => { clearTimeout(fallback); fallback = setTimeout(show, ms); };
     window.addEventListener('message', e => {
@@ -100,17 +100,15 @@
       if (!/(\.googleusercontent\.com|script\.google\.com)$/.test(host)) return;
       const d = e.data;
       if (!d || typeof d !== 'object' || !d.sevendesk) return;
-      if (d.sevendesk === 'ready' || d.sevendesk === 'error') show();
-      if (d.sevendesk === 'slow') {
-        document.getElementById('ldmsg').innerHTML = 'Preparando o portal…<br><small>Após uma atualização, a estrutura é conferida automaticamente. Pode levar até 1 minuto.</small>';
-        later(150000);
-      }
+      // Pronto, erro ou demora: mostra o portal (ele exibe a própria mensagem de andamento ou de erro).
+      if (d.sevendesk === 'ready' || d.sevendesk === 'error' || d.sevendesk === 'slow') show();
       if (d.sevendesk === 'reload') location.reload();
     });
-    frame.addEventListener('load', () => later(20000));
-    setTimeout(() => { if (!shown) document.getElementById('slow').style.display = 'block'; }, 20000);
+    // Segurança: se o portal não avisar nada (versão antiga ou falha de rede), mostra o que houver.
+    frame.addEventListener('load', () => later(4000));
     frame.src = src;
 
+    // Limpa os parâmetros da barra de endereço depois de repassá-los (evita reabrir a mesma ação ao recarregar).
     if (pass.toString() && history.replaceState) history.replaceState(null, '', location.pathname);
   })();
 </script>
