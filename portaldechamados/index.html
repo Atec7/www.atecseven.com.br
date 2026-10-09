@@ -5,10 +5,10 @@
 
   COMO USAR
   1. Cole abaixo, em APP_URL, a URL do App da Web (termina em /exec).
-  2. Publique este arquivo, por exemplo em  https://www.atecseven.com.br/chamados/
-     (renomeie para index.html dentro da pasta "chamados").
-  3. Na planilha, aba Configurações → URL_PORTAL, coloque o endereço desta página.
-     Assim os botões dos e-mails abrem o portal por aqui, sem o aviso do Google.
+  2. Publique este arquivo em  https://www.atecseven.com.br/portaldechamados/
+     (renomeie para index.html dentro da pasta "portaldechamados").
+  3. Os links dos e-mails já apontam para esse endereço (Configurações → URL_PORTAL).
+     Os botões dos e-mails abrem o portal por aqui, sem o aviso do Google.
 -->
 <html lang="pt-BR">
 <head>
@@ -35,7 +35,7 @@
   #loader.out { opacity: 0; pointer-events: none; }
   #loader img { width: 96px; height: 96px; border-radius: 50%; box-shadow: 0 18px 40px -12px rgba(0,194,224,.55); animation: pulse 1.6s ease-in-out infinite; }
   #loader h1 { margin: 22px 0 4px; font-size: 22px; letter-spacing: -.3px; font-weight: 800; }
-  #loader p { margin: 0; font-size: 14px; opacity: .8; }
+  #loader p { margin: 0 auto; font-size: 14px; opacity: .85; max-width: 360px; line-height: 1.5; padding: 0 16px; }
   .bar { width: 180px; height: 4px; margin: 22px auto 0; border-radius: 4px; background: rgba(255,255,255,.18); overflow: hidden; }
   .bar span { display: block; width: 40%; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #00C2E0, #fff); animation: slide 1.2s ease-in-out infinite; }
   #slow { display: none; margin-top: 18px; font-size: 13px; opacity: .85; }
@@ -52,7 +52,7 @@
   <div>
     <img src="https://www.atecseven.com.br/logo2.png" alt="Atecseven">
     <h1>SevenDesk</h1>
-    <p>Portal de Chamados · Atecseven</p>
+    <p id="ldmsg">Portal de Chamados · Atecseven</p>
     <div class="bar"><span></span></div>
     <div id="slow">Está demorando mais que o normal… <a id="direct" href="#" target="_top">abrir o portal diretamente</a></div>
   </div>
@@ -61,12 +61,14 @@
 <iframe id="app" title="SevenDesk · Portal de Chamados" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>
 
 <script>
-  const APP_URL = 'https://script.google.com/macros/s/AKfycbx2NxMUInPihXklZMB4RqNBmPoTISr1-VYkLlcx2f3_pJuywKCQXwmoXC1dGuui3EL5/exec';
+  const APP_URL = 'https://script.google.com/macros/s/AKfycby9VfNx6DCW82J-VtKxpn8SbAXP2lztXmOqtR06JdalSFfpVV7ObnXjTNGycm1UVHWF/exec';
+  /* ▲▲▲ ─────────────────────────────────────────────────────────────────────────────────────────── ▲▲▲ */
 
   (function () {
     const loader = document.getElementById('loader');
     const frame = document.getElementById('app');
-    const configured = /^https:\/\/script\.google\.com\/.+\/exec$/.test(APP_URL);
+    const base = String(APP_URL).trim().split('?')[0].replace(/\/+$/, '');
+    const configured = /^https:\/\/script\.google\.com\/.+\/exec$/.test(base);
 
     if (!configured) {
       loader.querySelector('div').innerHTML =
@@ -76,11 +78,10 @@
       return;
     }
 
-    // Repassa ao portal os parâmetros dos links de e-mail (?ticket=SD-2026-00001&acao=avaliar&nota=5).
     const params = new URLSearchParams(location.search);
     const pass = new URLSearchParams();
-    ['ticket', 'acao', 'nota'].forEach(k => { if (params.get(k)) pass.set(k, params.get(k)); });
-    const src = APP_URL + (pass.toString() ? '?' + pass.toString() : '');
+    ['ticket', 'orc', 'fat', 'acao', 'nota'].forEach(k => { if (params.get(k)) pass.set(k, params.get(k)); });
+    const src = base + (pass.toString() ? '?' + pass.toString() : '');
     document.getElementById('direct').href = src;
 
     let shown = false;
@@ -91,12 +92,25 @@
       loader.classList.add('out');
       setTimeout(() => loader.remove(), 450);
     };
-    frame.addEventListener('load', () => setTimeout(show, 600));
-    setTimeout(() => { document.getElementById('slow').style.display = 'block'; }, 12000);
-    setTimeout(show, 25000);
+    let fallback = null;
+    const later = ms => { clearTimeout(fallback); fallback = setTimeout(show, ms); };
+    window.addEventListener('message', e => {
+      let host = '';
+      try { host = new URL(e.origin).hostname; } catch (x) { return; }
+      if (!/(\.googleusercontent\.com|script\.google\.com)$/.test(host)) return;
+      const d = e.data;
+      if (!d || typeof d !== 'object' || !d.sevendesk) return;
+      if (d.sevendesk === 'ready' || d.sevendesk === 'error') show();
+      if (d.sevendesk === 'slow') {
+        document.getElementById('ldmsg').innerHTML = 'Preparando o portal…<br><small>Após uma atualização, a estrutura é conferida automaticamente. Pode levar até 1 minuto.</small>';
+        later(150000);
+      }
+      if (d.sevendesk === 'reload') location.reload();
+    });
+    frame.addEventListener('load', () => later(20000));
+    setTimeout(() => { if (!shown) document.getElementById('slow').style.display = 'block'; }, 20000);
     frame.src = src;
 
-    // Limpa os parâmetros da barra de endereço depois de repassá-los (evita reabrir a mesma ação ao recarregar).
     if (pass.toString() && history.replaceState) history.replaceState(null, '', location.pathname);
   })();
 </script>
