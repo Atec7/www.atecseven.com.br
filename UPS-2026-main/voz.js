@@ -23,7 +23,7 @@
 
   var GLOBAL_DEFAULTS = {
     enabled: false,
-    rules: { classA: true, fimTurno: true, semAbertura: true, parada: true, offline: false, encerrado: false },
+    rules: { classA: true, metaFin: true, fimTurno: true, semAbertura: true, parada: true, offline: false, encerrado: false },
     fimTurnoMin: 60,
     semAberturaMin: 60,
     paradaMin: 120,
@@ -352,6 +352,8 @@
     var r = gcfg.rules;
 
     if (r.classA && top && isTop) events.push({ rule: 'classA', key: 'classA', name: name, ups: ups, cls: cls.class });
+    var goal = Number(team.goal_money) || 0;
+    if (r.metaFin && goal > 0 && info.money >= goal) events.push({ rule: 'metaFin', key: 'metaFin', name: name, money: info.money, goal: goal });
 
     if (sp.enabled && sp.status === 'durante') {
       var startMs = shiftStartMs(team);
@@ -392,6 +394,12 @@
           'Que ótimo! A equipe ' + e.name + ' entrou na ' + classWords(e.cls) + ', com ' + upsWords(e.ups) + '.'
         ]);
         return 'Boa notícia! ' + numWord(n, 'equipe chegou', 'equipes chegaram') + ' à ' + classWords(e.cls) + ' hoje: ' + joinNames(names) + '. Parabéns a todos!';
+      case 'metaFin':
+        if (n === 1) return pick([
+          'Boa notícia! A equipe ' + e.name + ' bateu a meta financeira do dia, com ' + moneyWords(e.money) + ' de uma meta de ' + moneyWords(e.goal) + '. Parabéns!',
+          'Parabéns, equipe ' + e.name + '! Meta financeira do dia alcançada: ' + moneyWords(e.money) + ' de ' + moneyWords(e.goal) + '.'
+        ]);
+        return 'Boa notícia! ' + numWord(n, 'equipe bateu', 'equipes bateram') + ' a meta financeira do dia: ' + joinNames(names) + '. Parabéns a todos!';
       case 'fimTurno':
         if (n === 1) return pick([
           'Atenção. A equipe ' + e.name + ' está a ' + durationWords(e.remaining) + ' do fim do turno, e ainda está na ' + classWords(e.cls) + ', com ' + upsWords(e.ups) + '. Faltam ' + upsWords(e.missing) + ' para a classe ' + e.top + '.',
@@ -420,7 +428,7 @@
     }
     return '';
   }
-  var RULE_ORDER = ['semAbertura', 'parada', 'fimTurno', 'offline', 'encerrado', 'classA'];
+  var RULE_ORDER = ['semAbertura', 'parada', 'fimTurno', 'offline', 'encerrado', 'classA', 'metaFin'];
 
   // ---------- Déficit por setor ----------
   // Considera as equipes do setor em turno agora (ou sem horário cadastrado)
@@ -686,6 +694,7 @@
 
             '<div class="vz-section">Alertas</div>' +
             ruleRow('classA', 'Equipe alcançou a classe A', null) +
+            ruleRow('metaFin', 'Equipe bateu a meta financeira do dia', null) +
             ruleRow('fimTurno', 'Perto do fim do turno em classe B ou inferior', 'fimTurnoMin', 'faltando') +
             ruleRow('semAbertura', 'Sem lançamento após a previsão de abertura', 'semAberturaMin', 'após') +
             ruleRow('parada', 'Equipe parada (sem novo lançamento)', 'paradaMin', 'há') +
