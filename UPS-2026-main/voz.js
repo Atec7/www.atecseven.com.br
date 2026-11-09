@@ -17,6 +17,9 @@
   var DEFICIT_KEY = 'ups_voice_deficit';
   var synth = window.speechSynthesis || null;
   var supported = !!(synth && window.SpeechSynthesisUtterance);
+  var audioOk = typeof Audio !== 'undefined';
+  function canSpeak() { return supported || audioOk; }
+  var gen = 0; // incrementa ao parar, para interromper a fila em andamento
 
   var GLOBAL_DEFAULTS = {
     enabled: false,
@@ -48,7 +51,7 @@
   function saveLocal() { lsSet(LOCAL_KEY, lcfg); }
 
   function canEditGlobal() { return typeof isAdmin === 'function' && isAdmin(); }
-  function active() { return supported && gcfg.enabled && !lcfg.muted; }
+  function active() { return canSpeak() && gcfg.enabled && !lcfg.muted; }
 
   // Lê a configuração global (cache de 60s compartilhado com o app)
   function refreshGlobal() {
@@ -100,9 +103,21 @@
       .sort(function(a, b) { return scoreVoice(b) - scoreVoice(a); });
     return voices;
   }
+  // Voz online do Google: funciona em qualquer navegador/aparelho
+  var GOOGLE = '__google__';
+  function hasNaturalVoice() {
+    if (!voices.length) loadVoices();
+    return !!(voices[0] && scoreVoice(voices[0]) >= 90);
+  }
+  // 'google' ou 'browser'. Automático: voz neural do navegador (Edge) se existir; senão Google.
+  function engine() {
+    if (!supported || lcfg.voiceURI === GOOGLE) return 'google';
+    if (lcfg.voiceURI && voices.some(function(v) { return v.voiceURI === lcfg.voiceURI; })) return 'browser';
+    return hasNaturalVoice() ? 'browser' : 'google';
+  }
   function currentVoice() {
     if (!voices.length) loadVoices();
-    if (lcfg.voiceURI) {
+    if (lcfg.voiceURI && lcfg.voiceURI !== GOOGLE) {
       var found = voices.find(function(v) { return v.voiceURI === lcfg.voiceURI; });
       if (found) return found;
     }
@@ -162,7 +177,53 @@
     var parts = text.match(/[^.!?;]+[.!?;]?/g) || [text];
     return parts.map(function(p) { return p.trim(); }).filter(Boolean);
   }
+  // Divide em trechos de até ~180 caracteres (limite do serviço do Google)
+  function chunkText(text, max) {
+    var out = [];
+    var rest = text;
+    while (rest.length > max) {
+      var cut = rest.lastIndexOf(',', max);
+      if (cut < max * 0.4) cut = rest.lastIndexOf(' ', max);
+      if (cut <= 0) cut = max;
+      out.push(rest.slice(0, cut + 1).trim());
+      rest = rest.slice(cut + 1).trim();
+    }
+    if (rest) out.push(rest);
+    return out;
+  }
+  var currentAudio = null;
+  function playGoogle(text) {
+    return new Promise(function(resolve, reject) {
+      var url = 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=pt-BR&ttsspeed=1&q=' + encodeURIComponent(text);
+      var a = new Audio();
+      currentAudio = a;
+      a.preload = 'auto';
+      a.volume = Math.max(0, Math.min(1, Number(lcfg.volume)));
+      try { a.preservesPitch = true; } catch (e) {}
+      a.onended = function() { resolve(); };
+      a.onerror = function() { reject(new Error('audio')); };
+      a.src = url;
+      a.playbackRate = Number(lcfg.rate) || 1;
+      var p = a.play();
+      if (p && p.catch) p.catch(reject);
+      setTimeout(resolve, Math.max(10000, text.length * 200));
+    });
+  }
+  function speakGoogle(text) {
+    var chain = Promise.resolve();
+    chunkText(humanize(text), 180).forEach(function(part) {
+      chain = chain.then(function() { return playGoogle(part); });
+    });
+    return chain;
+  }
   function speakNow(text) {
+    if (engine() === 'google') {
+      // Se o serviço online falhar (sem internet/bloqueio), usa a voz do navegador
+      return speakGoogle(text).catch(function() { return supported ? speakBrowser(text) : null; });
+    }
+    return speakBrowser(text);
+  }
+  function speakBrowser(text) {
     return new Promise(function(resolve) {
       var u = new SpeechSynthesisUtterance(humanize(text));
       var v = currentVoice();
@@ -179,30 +240,34 @@
     });
   }
   function processQueue() {
-    if (speaking || !queue.length || !supported) return;
+    if (speaking || !queue.length || !canSpeak()) return;
     speaking = true;
     var item = queue.shift();
+    var myGen = gen;
     clearInterval(keepAlive);
-    keepAlive = setInterval(function() { if (synth.speaking && !synth.paused) { synth.pause(); synth.resume(); } }, 10000);
+    if (supported) keepAlive = setInterval(function() { if (synth.speaking && !synth.paused) { synth.pause(); synth.resume(); } }, 10000);
     var chain = chime();
     splitSentences(item).forEach(function(s) {
-      chain = chain.then(function() { return speakNow(s); }).then(function() {
+      chain = chain.then(function() { return myGen === gen ? speakNow(s) : null; }).then(function() {
         return new Promise(function(r) { setTimeout(r, 180); });
       });
     });
     chain.then(function() {
+      if (myGen !== gen) return;
       clearInterval(keepAlive);
       speaking = false;
       setTimeout(processQueue, 700);
     });
   }
   function say(text) {
-    if (!supported || !text) return;
+    if (!canSpeak() || !text) return;
     queue.push(text);
     processQueue();
   }
   function stop() {
+    gen++;
     queue = [];
+    if (currentAudio) { try { currentAudio.pause(); } catch (e) {} currentAudio = null; }
     if (supported) synth.cancel();
     clearInterval(keepAlive);
     speaking = false;
@@ -508,23 +573,23 @@
 
   // ---------- Teste ----------
   function test() {
-    if (!supported) { notify('Este navegador não suporta voz. Use o Microsoft Edge ou o Google Chrome.', 'error'); return; }
+    if (!canSpeak()) { notify('Este navegador não suporta áudio.', 'error'); return; }
     stop();
-    var v = currentVoice();
-    var who = v ? v.name.replace(/Microsoft\s*/i, '').replace(/\s*\(.*\)/, '').replace(/Online|Natural/gi, '').replace(/\s*-\s*.*$/, '').trim() : '';
+    var v = engine() === 'browser' ? currentVoice() : null;
+    var who = v ? v.name.replace(/Microsoft\s*/i, '').replace(/\s*\(.*\)/, '').replace(/Online|Natural/gi, '').replace(/\s*-\s*.*$/, '').trim() : 'online do Google';
     say('Olá! ' + (who ? 'Eu sou a voz ' + who + ', ' : 'Esta é a voz ') + 'dos alertas do Sistema UPS. ' +
       'Atenção. A equipe Exemplo está a quarenta minutos do fim do turno, e ainda está na classe B. ' +
       'Boa notícia! A equipe Modelo acaba de alcançar a classe A. Parabéns ao time!');
   }
   function previewCurrent() {
-    if (!supported) return test();
+    if (!canSpeak()) return test();
     stop();
     var evs = collect(currentTeams(), todayStr());
     if (!evs.length) say('Tudo tranquilo por aqui. No momento, nenhuma equipe está em situação de alerta.');
     else speakEvents(evs);
   }
   function previewDeficit() {
-    if (!supported) return test();
+    if (!canSpeak()) return test();
     stop();
     var teams = currentTeams(), today = todayStr();
     var a = stcDeficitText(teams, today), b = perdasDeficitText(teams, today);
@@ -549,12 +614,17 @@
     var sel = $id('vzVoice');
     if (!sel) return;
     loadVoices();
-    var cur = currentVoice();
-    if (!voices.length) { sel.innerHTML = '<option value="">Nenhuma voz em português encontrada</option>'; return; }
-    sel.innerHTML = voices.map(function(v) {
+    var sv = lcfg.voiceURI || '';
+    var autoLabel = 'Automática — ' + (hasNaturalVoice() ? 'voz neural deste navegador' : 'voz online do Google');
+    var opts = [
+      '<option value=""' + (sv === '' ? ' selected' : '') + '>' + autoLabel + '</option>',
+      '<option value="' + GOOGLE + '"' + (sv === GOOGLE ? ' selected' : '') + '>★ Google online — pt-BR (qualquer aparelho)</option>'
+    ];
+    voices.forEach(function(v) {
       var label = (scoreVoice(v) >= 90 ? '★ ' : '') + v.name + ' (' + v.lang + ')';
-      return '<option value="' + v.voiceURI.replace(/"/g, '&quot;') + '"' + (cur && cur.voiceURI === v.voiceURI ? ' selected' : '') + '>' + label.replace(/</g, '&lt;') + '</option>';
-    }).join('');
+      opts.push('<option value="' + v.voiceURI.replace(/"/g, '&quot;') + '"' + (sv === v.voiceURI ? ' selected' : '') + '>' + label.replace(/</g, '&lt;') + '</option>');
+    });
+    sel.innerHTML = opts.join('');
   }
 
   function ruleRow(key, label, minKey, minLabel) {

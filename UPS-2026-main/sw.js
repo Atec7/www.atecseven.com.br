@@ -4,7 +4,7 @@
 // Ao publicar uma nova versão, altere VERSION (mesmo valor de version.json
 // e de APP_VERSION em app.js). O cache é versionado para forçar recarga.
 // =====================================================================
-var VERSION = '1.4.6';
+var VERSION = '1.4.7';
 var CACHE = 'ups-system-' + VERSION;
 var SHELL = [
   './',
@@ -78,6 +78,9 @@ self.addEventListener('fetch', function(e) {
   }
 
   var isSameOrigin = url.origin === self.location.origin;
+
+  // Áudio da voz online (Google): direto da rede, sem passar pelo cache
+  if (url.hostname.indexOf('translate.google') !== -1 || req.destination === 'audio') return;
 
   // version.json nunca entra em cache (precisa ser sempre fresco)
   if (url.pathname.indexOf('version.json') !== -1) return;

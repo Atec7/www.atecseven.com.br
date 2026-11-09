@@ -3,7 +3,7 @@ var DB_BASE_URL = 'https://babearia-jhosuan-default-rtdb.firebaseio.com';
 
 // Versão atual do app. Ao publicar uma nova versão, atualize ESTE valor,
 // o VERSION em sw.js e o "version" em version.json (devem ser iguais).
-var APP_VERSION = '1.4.6';
+var APP_VERSION = '1.4.7';
 
 // ===== UTILITIES =====
 var currentUser = null;
