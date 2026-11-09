@@ -578,6 +578,14 @@ function doLogin() {
       var u = users[keys[i]];
       if (u.username === username && u.password === password) {
         found = { id: keys[i], username: u.username, role: u.role || 'equipe', shift_start: u.shift_start || '', shift_end: u.shift_end || '', authorized_teams: u.authorized_teams || {}, sector: sectorOf(u) };
+        // Supervisor/usuário sem nenhuma equipe vinculada (existente) entra como administrador
+        if (found.role === 'supervisor' || found.role === 'user') {
+          var auth = found.authorized_teams;
+          var hasTeam = Object.keys(auth).some(function(tid) {
+            return auth[tid] && users[tid] && isTeamUser(users[tid]);
+          });
+          if (!hasTeam) { found.originalRole = found.role; found.role = 'admin'; }
+        }
         break;
       }
     }
