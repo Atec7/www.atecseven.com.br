@@ -495,6 +495,12 @@ function isSupervisor() {
   return !!(currentUser && currentUser.role === 'supervisor');
 }
 
+// Admin edita qualquer lançamento; supervisor só os das equipes vinculadas a ele.
+function canEditTeamService(userId) {
+  if (isAdmin()) return true;
+  return isSupervisor() && !!userId && canViewTeam(userId);
+}
+
 function ensureAdmin() {
   if (isAdmin()) return true;
   toast('Ação restrita ao administrador', 'error');
@@ -4064,7 +4070,7 @@ function renderAuditoriaFiltered(resetLimit) {
   var isSup = isSupervisor();
   var shown = services.slice(0, auditoriaLimit);
   html += '<div class="table-wrap"><table><thead><tr>' +
-    '<th>Data</th><th>Equipe</th><th>Serviço</th><th class="hide-sm">Tipo</th><th class="num">Qtd</th><th class="num">UPS</th><th class="num">R$</th><th class="num">Nota</th>' + (isSup ? '' : '<th></th>') +
+    '<th>Data</th><th>Equipe</th><th>Serviço</th><th class="hide-sm">Tipo</th><th class="num">Qtd</th><th class="num">UPS</th><th class="num">R$</th><th class="num">Nota</th><th></th>' +
     '</tr></thead><tbody>';
   shown.forEach(function(s) {
     var teamName = userMap[s.user_id] || 'Desconhecido';
@@ -4078,10 +4084,10 @@ function renderAuditoriaFiltered(resetLimit) {
       '<td class="num ups">' + fmtUps(s.ups_value || 0) + '</td>' +
       '<td class="num money">' + fmtMoney(s.total_money || 0) + '</td>' +
       '<td class="num">' + (s.grade > 0 ? s.grade : '-') + '</td>' +
-      (isSup ? '' : '<td><div class="actions">' +
-      '<button class="btn btn-sm btn-outline" onclick="editAuditoriaService(\'' + s.id + '\')" title="Editar"><span class="material-symbols-outlined">edit</span></button>' +
-      '<button class="btn btn-sm btn-danger" onclick="deleteAuditoriaService(\'' + s.id + '\')" title="Excluir"><span class="material-symbols-outlined">delete</span></button>' +
-      '</div></td>') +
+      '<td><div class="actions">' +
+      (canEditTeamService(s.user_id) ? '<button class="btn btn-sm btn-outline" onclick="editAuditoriaService(\'' + s.id + '\')" title="Editar"><span class="material-symbols-outlined">edit</span></button>' : '') +
+      (isSup ? '' : '<button class="btn btn-sm btn-danger" onclick="deleteAuditoriaService(\'' + s.id + '\')" title="Excluir"><span class="material-symbols-outlined">delete</span></button>') +
+      '</div></td>' +
       '</tr>';
   });
   html += '</tbody></table></div>';
@@ -4093,13 +4099,15 @@ function renderAuditoriaFiltered(resetLimit) {
 
 
 function editAuditoriaService(serviceId) {
-  if (!ensureAdmin()) return;
+  if (!isAdmin() && !isSupervisor()) { toast('Ação não permitida', 'error'); return; }
   loading(true);
   Promise.all([fbOnce('services/' + serviceId), fbOnce('users')]).then(function(results) {
     loading(false);
     var service = results[0];
     if (!service) { toast('Lançamento não encontrado', 'error'); return; }
-    var users = toArray(results[1]).filter(isTeamUser);
+    if (!canEditTeamService(service.user_id)) { toast('Você só pode editar lançamentos das suas equipes', 'error'); return; }
+    var users = toArray(results[1]).filter(function(u) { return isTeamUser(u) && canEditTeamService(u.id); });
+    window._editServiceOrigUser = service.user_id;
     $('editServiceId').value = serviceId;
     var userSelect = $('editServiceUserId');
     userSelect.innerHTML = '';
@@ -4146,7 +4154,10 @@ function editAuditoriaService(serviceId) {
 }
 
 function saveEditService() {
-  if (!ensureAdmin()) return;
+  if (!canEditTeamService(window._editServiceOrigUser) || !canEditTeamService($('editServiceUserId').value)) {
+    showMsg('editServiceMsg', 'error', 'Você só pode editar lançamentos das suas equipes');
+    return;
+  }
   var id = $('editServiceId').value;
   var userId = $('editServiceUserId').value;
   var type = $('editServiceType').value;
