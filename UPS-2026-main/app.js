@@ -3,7 +3,7 @@ var DB_BASE_URL = 'https://babearia-jhosuan-default-rtdb.firebaseio.com';
 
 // Versão atual do app. Ao publicar uma nova versão, atualize ESTE valor,
 // o VERSION em sw.js e o "version" em version.json (devem ser iguais).
-var APP_VERSION = '1.4.4';
+var APP_VERSION = '1.4.6';
 
 // ===== UTILITIES =====
 var currentUser = null;
@@ -1694,6 +1694,7 @@ function getClassification(totalUps) {
 
 // ===== LOGOUT =====
 function logout() {
+  if (window.VoiceAlerts) VoiceAlerts.stop();
   if (refreshInterval) clearInterval(refreshInterval);
   if (window.heartbeatInterval) clearInterval(window.heartbeatInterval);
   stopLocationTracking();
@@ -1831,6 +1832,7 @@ function loadMonitorServices(teams, start, end) {
     fillSelect('mfClass', classOptions(), 'Todas classes');
     renderMonitorSummary(monitorData);
     renderMonitorFiltered();
+    if (window.VoiceAlerts) VoiceAlerts.check(monitorData, { start: start, end: end });
   }).catch(function(err) {
     loading(false);
     console.error('Erro ao carregar serviços do monitor:', err);
@@ -2432,6 +2434,7 @@ function loadPainel(start, end) {
   getAllTeamsSummaryForPeriod(start, end).then(function(data) {
     painelPeriod = { start: start, end: end };
     renderPainel(data);
+    if (window.VoiceAlerts) VoiceAlerts.check(data, painelPeriod);
   }).catch(function(err) {
     console.error('Erro ao carregar painel:', err);
   });

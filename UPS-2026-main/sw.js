@@ -4,13 +4,14 @@
 // Ao publicar uma nova versão, altere VERSION (mesmo valor de version.json
 // e de APP_VERSION em app.js). O cache é versionado para forçar recarga.
 // =====================================================================
-var VERSION = '1.4.4';
+var VERSION = '1.4.6';
 var CACHE = 'ups-system-' + VERSION;
 var SHELL = [
   './',
   './index.html',
   './app.js',
   './db.js',
+  './voz.js',
   './manifest.json',
   './version.json',
   './sw.js',

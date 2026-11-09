@@ -791,6 +791,7 @@
     </div>
     <div class="topbar-right">
       <button class="btn btn-money btn-sm" onclick="exportData()" title="Exportar CSV do período"><span class="material-symbols-outlined">download</span><span class="btn-label">Exportar</span></button>
+      <button class="icon-btn vz-btn" onclick="VoiceAlerts.open()" title="Alertas por voz" aria-label="Alertas por voz"><span class="material-symbols-outlined">record_voice_over</span></button>
       <button class="icon-btn" onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema"><span class="material-symbols-outlined theme-icon">dark_mode</span></button>
       <button class="icon-btn" onclick="logout()" title="Sair" aria-label="Sair"><span class="material-symbols-outlined">logout</span></button>
     </div>
@@ -1306,6 +1307,7 @@
     </div>
     <div class="topbar-right">
       <button class="btn btn-money btn-sm" onclick="exportMonitorData()" title="Exportar CSV do período"><span class="material-symbols-outlined">download</span><span class="btn-label">Exportar</span></button>
+      <button class="icon-btn vz-btn" onclick="VoiceAlerts.open()" title="Alertas por voz" aria-label="Alertas por voz"><span class="material-symbols-outlined">record_voice_over</span></button>
       <button class="icon-btn" onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema"><span class="material-symbols-outlined theme-icon">dark_mode</span></button>
       <button class="icon-btn" onclick="logout()" title="Sair" aria-label="Sair"><span class="material-symbols-outlined">logout</span></button>
     </div>
@@ -1595,6 +1597,7 @@
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="db.js"></script>
 <script src="app.js"></script>
+<script src="voz.js"></script>
 <script>
 // ===== Registro do Service Worker (instalação offline) =====
 if ('serviceWorker' in navigator) {
