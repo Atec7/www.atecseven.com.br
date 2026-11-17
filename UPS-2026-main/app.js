@@ -4078,12 +4078,17 @@ function renderAuditoriaFiltered(resetLimit) {
   var isSup = isSupervisor();
   var shown = services.slice(0, auditoriaLimit);
   html += '<div class="table-wrap"><table><thead><tr>' +
-    '<th>Data</th><th>Equipe</th><th>Serviço</th><th class="hide-sm">Tipo</th><th class="num">Qtd</th><th class="num">UPS</th><th class="num">R$</th><th class="num">Nota</th><th></th>' +
+    '<th>Cadastro</th><th>Última edição</th><th>Equipe</th><th>Serviço</th><th class="hide-sm">Tipo</th><th class="num">Qtd</th><th class="num">UPS</th><th class="num">R$</th><th class="num">Nota</th><th></th>' +
     '</tr></thead><tbody>';
   shown.forEach(function(s) {
     var teamName = userMap[s.user_id] || 'Desconhecido';
     html += '<tr>' +
       '<td style="white-space:nowrap;font-size:12px;">' + formatDateBr(s.date) + (s.time ? '<br><span style="color:var(--text-muted);">' + s.time.slice(0, 5) + '</span>' : '') + '</td>' +
+      '<td style="white-space:nowrap;font-size:12px;">' + (s.edited_at
+        ? new Date(s.edited_at).toLocaleDateString('pt-BR') + '<br><span style="color:var(--text-muted);">' +
+          new Date(s.edited_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) +
+          (s.edited_by ? ' · ' + escapeHtml(s.edited_by) : '') + '</span>'
+        : '<span style="color:var(--text-muted);">—</span>') + '</td>' +
       '<td><strong>' + escapeHtml(teamName) + '</strong></td>' +
       '<td style="font-size:12px;">' + escapeHtml(s.service_name || '') +
       (s.edited_at ? ' <span class="tag tag-warning" title="Editado por ' + escapeHtml(s.edited_by || '') + ' em ' + new Date(s.edited_at).toLocaleString('pt-BR') + '">editado</span>' : '') + '</td>' +
@@ -4132,29 +4137,17 @@ function editAuditoriaService(serviceId) {
     $('editServiceUps').value = service.ups_value || 0;
     $('editServiceMoney').value = service.total_money || 0;
     $('editServiceName').value = service.service_name || '';
-    var now = new Date();
-    $('editServiceDate').value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-    $('editServiceTime').value = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
-    $('editServiceLocationText').textContent = 'Capturando localização...';
+    // Data, horário e local do cadastro são fixos: a edição não os altera
+    $('editServiceDate').value = service.date || '';
+    $('editServiceTime').value = service.time || '';
+    $('editServiceLocationText').textContent = service.address ||
+      (service.latitude && service.longitude ? service.latitude + ', ' + service.longitude : 'Sem localização registrada');
+    var lastEdit = $('editServiceLastEdit');
+    if (lastEdit) lastEdit.textContent = service.edited_at
+      ? new Date(service.edited_at).toLocaleString('pt-BR') + (service.edited_by ? ' por ' + service.edited_by : '')
+      : 'Nunca editado';
     clearMsg('editServiceMsg');
     $('editServiceModal').style.display = 'flex';
-    window._editServiceLat = '';
-    window._editServiceLng = '';
-    window._editServiceCity = '';
-    window._editServiceAddress = '';
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(function(pos) {
-        window._editServiceLat = pos.coords.latitude;
-        window._editServiceLng = pos.coords.longitude;
-        reverseGeocode(pos.coords.latitude, pos.coords.longitude, function(addr) {
-          window._editServiceAddress = addr;
-          window._editServiceCity = (addr.split(',')[1] || addr.split(',')[0] || '').trim();
-          $('editServiceLocationText').textContent = addr;
-        });
-      }, function(err) {
-        $('editServiceLocationText').textContent = 'Não foi possível obter localização';
-      }, { enableHighAccuracy: true, timeout: 10000 });
-    }
   }).catch(function(err) {
     loading(false);
     toast('Erro: ' + err.message, 'error');
@@ -4174,8 +4167,6 @@ function saveEditService() {
   var ups = parseFloat($('editServiceUps').value) || 0;
   var money = parseFloat($('editServiceMoney').value) || 0;
   var serviceName = $('editServiceName').value.trim();
-  var date = $('editServiceDate').value;
-  var time = $('editServiceTime').value;
 
   if (!userId) { showMsg('editServiceMsg', 'error', 'Selecione uma equipe'); return; }
   if (!serviceName) { showMsg('editServiceMsg', 'error', 'Informe o nome do serviço'); return; }
@@ -4193,12 +4184,7 @@ function saveEditService() {
     ups_per_unit: upsPerUnit,
     money_per_unit: moneyPerUnit,
     service_name: serviceName,
-    date: date,
-    time: time,
-    latitude: window._editServiceLat || '',
-    longitude: window._editServiceLng || '',
-    city: window._editServiceCity || '',
-    address: window._editServiceAddress || '',
+    // date/time/localização NÃO são enviados: permanecem os do cadastro
     edited_by: currentUser ? currentUser.username : '',
     edited_at: nowTimestamp()
   };
