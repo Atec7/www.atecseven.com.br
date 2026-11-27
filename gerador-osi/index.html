@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gerador de mensagem OSI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/*
+VOICE: ferramenta de campo, direta, sem enfeite
+IDEA: painel de controle de uma subestação — leitura grande, controles firmes
+PICTURE: a própria mensagem gerada, ao vivo, como visor do painel
+COLOUR and TYPE: aço #d5dbe0, preto, branco, vermelho alarme #e8251a; Inter Tight + Inter
+LAYOUT: entradas à esquerda, visor à direita; empilha no celular
+*/
+:root{color-scheme:light dark;
+--bg:light-dark(#d5dbe0,#16191c);--panel:light-dark(#ffffff,#1f2327);--ink:light-dark(#0d0f11,#eef1f3);
+--mute:light-dark(#4a535b,#9aa4ad);--line:light-dark(#b9c2ca,#33393f);--red:#e8251a;
+--screen:light-dark(#0d0f11,#0a0c0d);--screenInk:#e9f2ea}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(18px,4vw,48px) max(4vw,14px);max-width:1240px;margin:0 auto}
+h1{font:700 clamp(26px,4vw,40px)/1.05 "Inter Tight",Inter,sans-serif;margin:0 0 6px;text-wrap:balance}
+.sub{color:var(--mute);margin:0 0 20px;font-size:15px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:18px;align-items:start}
+@media(max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+@media(max-width:420px){.row{grid-template-columns:minmax(0,1fr)}}
+label{display:block;font-weight:600;font-size:14px;margin:0 0 6px}
+.field{margin-bottom:14px}
+input,textarea{width:100%;font:16px/1.4 Inter,system-ui,sans-serif;color:var(--ink);background:var(--bg);
+border:1px solid var(--line);border-radius:10px;padding:11px 12px;min-height:46px}
+textarea{min-height:220px;resize:vertical;font-size:14px;white-space:pre;overflow:auto}
+input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.hint{font-size:13px;color:var(--mute);margin:6px 0 0}
+.btns{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+button,.btn{font:600 16px/1 Inter,sans-serif;min-height:46px;padding:0 18px;border-radius:10px;border:1px solid var(--line);
+background:var(--panel);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.primary{background:var(--red);border-color:var(--red);color:#fff}
+.wa{background:#1f8f4e;border-color:#1f8f4e;color:#fff}
+.screen{background:var(--screen);color:var(--screenInk);border-radius:14px;padding:16px;border:1px solid #000}
+.screenHead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.lamp{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#b7c2b9}
+.lamp i{width:10px;height:10px;border-radius:50%;background:#3ad46b;box-shadow:0 0 8px #3ad46b}
+.lamp.off i{background:var(--red);box-shadow:0 0 8px var(--red)}
+pre{margin:0;font:14px/1.55 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;min-height:260px;max-height:70vh;overflow:auto}
+.stats{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{background:#1d2226;color:#cfd8d1;border-radius:999px;padding:5px 11px;font-size:13px}
+.warn{color:#ffb3ad}
+.toast{font-size:14px;color:var(--mute);min-height:20px;margin-top:8px}
+@media(prefers-reduced-motion:no-preference){.flash{animation:f .5s}@keyframes f{from{background:#203a28}}}
+</style>
+</head>
+<body>
+<div class="band">
+  <h1>Gerador de mensagem OSI</h1>
+  <p class="sub">Cole a tabela de anomalias, preencha a OSI e a data e copie a mensagem pronta.</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="row">
+        <div class="field">
+          <label for="osi">OSI</label>
+          <input id="osi" inputmode="numeric" placeholder="6001533675" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="data">Data da visita</label>
+          <input id="data" type="date">
+        </div>
+      </div>
+      <div class="field">
+        <label for="tabela">Tabela (Anomalia, Poste, Latitude, Longitude)</label>
+        <textarea id="tabela" spellcheck="false" placeholder="Cole aqui, direto do Excel"></textarea>
+        <p class="hint">Aceita com ou sem cabeçalho. Latitude e longitude são opcionais: sem elas, a parte de localização não aparece.</p>
+      </div>
+      <div class="btns">
+        <button id="exemplo" type="button">Colar exemplo</button>
+        <button id="limpar" type="button">Limpar</button>
+      </div>
+    </div>
+
+    <div class="screen">
+      <div class="screenHead">
+        <span class="lamp" id="lamp"><i></i><span id="lampTxt">Aguardando dados</span></span>
+      </div>
+      <pre id="saida" aria-live="polite"></pre>
+      <div class="stats" id="stats"></div>
+      <div class="btns">
+        <button id="copiar" class="primary" type="button">Copiar mensagem</button>
+        <a id="whats" class="btn wa" href="#" target="_blank" rel="noopener">Enviar no WhatsApp</a>
+      </div>
+      <div class="toast" id="toast"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const osi=$('osi'),data=$('data'),tab=$('tabela'),saida=$('saida');
+const EXEMPLO=`Anomalia\tPoste\tLatitude\tLongitude
+ Isolador pino RD 13,8kV fortem quebr ou trinc\t16577966\t-17,27887539\t-50,49939305
+ Isolador pino RD 13,8kV fortem quebr ou trinc\t9521872\t-17,24229901\t-50,49041442
+ Isolador pino RD 13,8kV fortem quebr ou trinc\t16582226\t-17,26854691\t-50,48985313`;
+
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+
+function hoje(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
+function fmtData(v){if(!v)return'';const[a,m,d]=v.split('-');return`${d}/${m}/${a}`}
+
+// corrige acentos quebrados (ex.: "Ãrvore" -> "Árvore")
+const MOJI=[['Ã¡','á'],['Ã©','é'],['Ã­','í'],['Ã³','ó'],['Ãº','ú'],['Ã£','ã'],['Ãµ','õ'],['Ã§','ç'],['Ãª','ê'],['Ã¢','â'],['Ã´','ô'],['Ã ','à'],
+['Ã‰','É'],['Ã“','Ó'],['Ãš','Ú'],['Ã‡','Ç'],['Ãƒ','Ã'],['Ã•','Õ'],['ÃŠ','Ê'],['Ã‚','Â'],['Ã”','Ô'],['Âº','º'],['Âª','ª'],['Â°','°']];
+function fixText(s){s=s.replace(/\u0081/g,'');for(const[a,b]of MOJI)s=s.split(a).join(b);
+  return s.replace(/Ã(?=[a-zà-ú])/g,'Á').replace(/Ã(?=[A-ZÀ-Ú])/g,'Í')}
+
+const num=s=>s.trim().replace(/\s/g,'').replace(',','.');
+const isCoord=s=>/^-?\d{1,3}[.,]\d+$/.test(s.trim());
+const isPoste=s=>/^\d{5,10}[Xx]?$/.test(s.trim());
+
+function parseLinha(l){
+  if(!l.trim())return null;
+  let cols=l.split('\t').map(c=>c.trim()).filter(c=>c!=='');
+  if(cols.length<2){ // sem tab: tenta pelos espaços
+    const m=l.trim().match(/^(.*?)\s+(\d{5,10}[Xx]?)(?:\s+(-?\d{1,3}[.,]\d+)\s+(-?\d{1,3}[.,]\d+))?\s*$/);
+    if(!m)return null;cols=[m[1],m[2],m[3],m[4]].filter(Boolean);
+  }
+  const pi=cols.findIndex(isPoste);if(pi<0)return null;
+  const poste=cols[pi].toUpperCase();
+  const coords=cols.filter(isCoord);
+  const anom=cols.filter((c,i)=>i!==pi&&!isCoord(c)).join(' ').trim();
+  if(!anom)return null;
+  return{anom:fixText(anom),poste,lat:coords[0]?num(coords[0]):null,lng:coords[1]?num(coords[1]):null};
+}
+
+function gerar(){
+  const todos=tab.value.split(/\r?\n/).map(parseLinha).filter(Boolean);
+  const chaves=new Set(),itens=[];
+  for(const it of todos){const k=it.poste+'|'+it.anom.toLowerCase();if(!chaves.has(k)){chaves.add(k);itens.push(it)}}
+  const removidos=todos.length-itens.length;
+  const linhas=[`OSI: ${osi.value.trim()}`,`DATA VISITA: ${fmtData(data.value)}`,''];
+  for(const it of itens)linhas.push(`${it.poste} ( ${it.anom})`);
+  const vistos=new Set(),loc=[];
+  for(const it of itens){if(it.lat&&it.lng&&!vistos.has(it.poste)){vistos.add(it.poste);loc.push(`${it.poste} ( https://maps.google.com/?q=${it.lat},${it.lng} )`)}}
+  if(loc.length){linhas.push('','LOCALIZAÇÃO DOS POSTES:','',...loc)}
+  const txt=itens.length?linhas.join('\n'):'';
+  saida.textContent=txt||'A mensagem aparece aqui assim que você colar a tabela.';
+  saida.style.opacity=txt?1:.55;
+  const postes=new Set(itens.map(i=>i.poste)).size;
+  const avisos=[];
+  if(itens.length&&!osi.value.trim())avisos.push('Falta a OSI');
+  if(itens.length&&!data.value)avisos.push('Falta a data');
+  const curtos=[...new Set(itens.filter(i=>/^\d{7}$/.test(i.poste)).map(i=>i.poste))];
+  if(curtos.length)avisos.push(`Poste com 7 dígitos: ${curtos.join(', ')}`);
+  $('stats').innerHTML=itens.length?[`${itens.length} anomalia${itens.length>1?'s':''}`,`${postes} poste${postes>1?'s':''}`,`${loc.length} com localização`,...(removidos?[`${removidos} duplicado${removidos>1?'s':''} removido${removidos>1?'s':''}`]:[])]
+    .map(t=>`<span class="chip">${t}</span>`).join('')+avisos.map(t=>`<span class="chip warn"></span>`).join(''):'';
+  [...document.querySelectorAll('.chip.warn')].forEach((c,i)=>c.textContent=avisos[i]);
+  $('lamp').classList.toggle('off',!itens.length||avisos.length>0&&avisos.some(a=>a.startsWith('Falta')));
+  $('lampTxt').textContent=!itens.length?'Aguardando dados':avisos.some(a=>a.startsWith('Falta'))?'Faltam campos':'Pronta para enviar';
+  $('whats').href=txt?'https://wa.me/?text='+encodeURIComponent(txt):'#';
+  store.set('osi',osi.value);store.set('tabela',tab.value);store.set('data',data.value);
+  return txt;
+}
+
+function toast(t){$('toast').textContent=t;clearTimeout(toast.t);toast.t=setTimeout(()=>$('toast').textContent='',3000)}
+
+async function copiar(){
+  const txt=gerar();if(!txt){toast('Cole a tabela primeiro.');return}
+  try{await navigator.clipboard.writeText(txt);toast('Mensagem copiada.')}
+  catch(e){const r=document.createRange();r.selectNodeContents(saida);const s=getSelection();s.removeAllRanges();s.addRange(r);
+    try{document.execCommand('copy');toast('Mensagem copiada.')}catch(e2){toast('Texto selecionado: use Copiar do seu aparelho.')}}
+  saida.classList.remove('flash');void saida.offsetWidth;saida.classList.add('flash');
+}
+
+osi.value=store.get('osi')||'';data.value=store.get('data')||hoje();tab.value=store.get('tabela')||'';
+[osi,data,tab].forEach(e=>e.addEventListener('input',gerar));
+$('copiar').addEventListener('click',copiar);
+$('exemplo').addEventListener('click',()=>{tab.value=EXEMPLO;gerar()});
+$('limpar').addEventListener('click',()=>{tab.value='';data.value=hoje();gerar();tab.focus()});
+$('whats').addEventListener('click',e=>{if(!gerar())e.preventDefault()});
+gerar();
+}
+</script>
+</body>
+</html>
